@@ -17,27 +17,74 @@ let groups = [];
 let homeGroupFilter = 'all';
 let selectedGroupId = null;
 
-// --- Elo ---
-function getElo(id)     { return eloData[id]?.elo      ?? 1500; }
-function getBattles(id) { return eloData[id]?.battles  ?? 0; }
-function getWins(id)    { return eloData[id]?.wins     ?? 0; }
+// --- Glicko-2 ---
+const G2_TAU   = 0.5;
+const G2_SCALE = 173.7178;
+
+function g2Init() {
+  return { rating: 1500, rd: 350, volatility: 0.06, wins: 0, battles: 0 };
+}
+
+function getRating(id)  { return eloData[id]?.rating   ?? 1500; }
+function getRd(id)      { return eloData[id]?.rd        ?? 350; }
+function getBattles(id) { return eloData[id]?.battles   ?? 0; }
+function getWins(id)    { return eloData[id]?.wins      ?? 0; }
+
+function g2Update(player, opponent, score) {
+  const mu    = (player.rating - 1500) / G2_SCALE;
+  const phi   = player.rd / G2_SCALE;
+  const sigma = player.volatility;
+  const muJ   = (opponent.rating - 1500) / G2_SCALE;
+  const phiJ  = opponent.rd / G2_SCALE;
+
+  const gPhiJ = 1 / Math.sqrt(1 + 3 * phiJ * phiJ / (Math.PI * Math.PI));
+  const E     = 1 / (1 + Math.exp(-gPhiJ * (mu - muJ)));
+  const v     = 1 / (gPhiJ * gPhiJ * E * (1 - E));
+  const delta = v * gPhiJ * (score - E);
+
+  // volatility update (Illinois algorithm)
+  const a = Math.log(sigma * sigma);
+  const f = x => {
+    const ex = Math.exp(x);
+    const d2 = phi * phi + v + ex;
+    return (ex * (delta * delta - d2)) / (2 * d2 * d2) - (x - a) / (G2_TAU * G2_TAU);
+  };
+  let A = a;
+  let B = delta * delta > phi * phi + v
+    ? Math.log(delta * delta - phi * phi - v)
+    : (() => { let k = 1; while (f(a - k * G2_TAU) < 0) k++; return a - k * G2_TAU; })();
+  let fA = f(A), fB = f(B);
+  for (let i = 0; Math.abs(B - A) > 1e-6 && i < 100; i++) {
+    const C = A + (A - B) * fA / (fB - fA);
+    const fC = f(C);
+    if (fC * fB <= 0) { A = B; fA = fB; } else { fA /= 2; }
+    B = C; fB = fC;
+  }
+  const sigmaPrime = Math.exp(A / 2);
+  const phiStar    = Math.sqrt(phi * phi + sigmaPrime * sigmaPrime);
+  const phiPrime   = 1 / Math.sqrt(1 / (phiStar * phiStar) + 1 / v);
+  const muPrime    = mu + phiPrime * phiPrime * gPhiJ * (score - E);
+
+  return {
+    rating:     G2_SCALE * muPrime + 1500,
+    rd:         G2_SCALE * phiPrime,
+    volatility: sigmaPrime,
+  };
+}
 
 function applyVote(winnerId, loserId) {
-  const we = getElo(winnerId), le = getElo(loserId);
-  const wb = getBattles(winnerId), lb = getBattles(loserId);
-  const kW = wb < 50 ? 64 : 32;
-  const kL = lb < 50 ? 64 : 32;
-  const expected = 1 / (1 + Math.pow(10, (le - we) / 400));
-  if (!eloData[winnerId]) eloData[winnerId] = { elo: 1500, wins: 0, battles: 0 };
-  if (!eloData[loserId])  eloData[loserId]  = { elo: 1500, wins: 0, battles: 0 };
-  eloData[winnerId].elo     = Math.round(we + kW * (1 - expected));
-  eloData[loserId].elo      = Math.round(le + kL * (0 - (1 - expected)));
-  eloData[winnerId].wins    += 1;
-  eloData[winnerId].battles += 1;
-  eloData[loserId].battles  += 1;
+  if (!eloData[winnerId]) eloData[winnerId] = g2Init();
+  if (!eloData[loserId])  eloData[loserId]  = g2Init();
+  const w = eloData[winnerId];
+  const l = eloData[loserId];
+  const wUp = g2Update(w, l, 1);
+  const lUp = g2Update(l, w, 0);
+  eloData[winnerId] = { ...wUp, wins: w.wins + 1, battles: w.battles + 1 };
+  eloData[loserId]  = { ...lUp, wins: l.wins,     battles: l.battles + 1 };
   saveElo();
   voteTotal++;
   document.getElementById('voteCount').textContent = voteTotal;
+  updatePaceGauge();
 }
 
 function saveElo() {
@@ -48,7 +95,12 @@ function loadElo() {
   const raw = localStorage.getItem(LS_ELO);
   if (!raw) return;
   const d = JSON.parse(raw);
-  eloData = d.eloData ?? {};
+  const raw2 = d.eloData ?? {};
+  // 旧Eloデータ（.elo フィールド）をGlicko-2形式に移行
+  eloData = Object.fromEntries(Object.entries(raw2).map(([id, v]) => [
+    id,
+    v.rating != null ? v : { ...g2Init(), rating: v.elo ?? 1500, wins: v.wins ?? 0, battles: v.battles ?? 0 },
+  ]));
   voteTotal = d.voteTotal ?? 0;
   document.getElementById('voteCount').textContent = voteTotal;
 }
@@ -108,6 +160,49 @@ function saveVideosForChannel(key, videos) {
 function loadVideosForChannel(key) {
   const raw = localStorage.getItem(LS_VIDEOS + '_' + key);
   return raw ? JSON.parse(raw) : null;
+}
+
+// --- DB エクスポート (ローカル開発用) ---
+function exportForDb() {
+  const chs = Object.values(channels).map(ch => ({
+    channel_id:    ch.key,
+    handle:        ch.handle ? '@' + ch.handle : null,
+    title:         ch.displayName ?? ch.handle ?? ch.key,
+    icon_url:      ch.avatar ?? '',
+    last_accessed: new Date().toISOString(),
+  }));
+
+  const vids = [];
+  for (const ch of Object.values(channels)) {
+    const stored = loadVideosForChannel(ch.key);
+    if (!stored) continue;
+    for (const v of stored) {
+      const g2 = eloData[v.id];
+      vids.push({
+        video_id:      v.id,
+        channel_id:    ch.key,
+        title:         v.title ?? '',
+        thumbnail_url: v.thumb ?? '',
+        category:      v.category ?? 'videos',
+        duration:      v.duration ?? 0,
+        view_count:    v.viewCount ?? 0,
+        published_at:  v.publishedAt ?? null,
+        rating:        g2?.rating    ?? 1500,
+        rd:            g2?.rd        ?? 350,
+        volatility:    g2?.volatility ?? 0.06,
+        wins:          g2?.wins      ?? 0,
+        battles:       g2?.battles   ?? 0,
+        rating_updated_at: g2 ? new Date().toISOString() : null,
+      });
+    }
+  }
+
+  const blob = new Blob([JSON.stringify({ exportedAt: new Date().toISOString(), channels: chs, videos: vids }, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `db-export-${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
 }
 
 // --- API helpers ---
@@ -270,13 +365,50 @@ function filteredVideos() {
 }
 
 // --- Vote ---
+// RDが高い（対戦数が少ない）サムネを優先的に選出
 function pickPair() {
   const pool = filteredVideos();
   if (pool.length < 2) return null;
-  const i = Math.floor(Math.random() * pool.length);
-  let j = Math.floor(Math.random() * (pool.length - 1));
-  if (j >= i) j++;
+  // 重み = rdの大きさ（対戦数が少ないほど高い）、最少値を1として正規化
+  const weights = pool.map(v => Math.max(1, getRd(v.id)));
+  const totalW  = weights.reduce((s, w) => s + w, 0);
+  function weightedPick(excludeIdx) {
+    let r = Math.random() * (totalW - (excludeIdx != null ? weights[excludeIdx] : 0));
+    for (let k = 0; k < pool.length; k++) {
+      if (k === excludeIdx) continue;
+      r -= weights[k];
+      if (r <= 0) return k;
+    }
+    return pool.length - 1 === excludeIdx ? pool.length - 2 : pool.length - 1;
+  }
+  const i = weightedPick(null);
+  const j = weightedPick(i);
   return [pool[i], pool[j]];
+}
+
+// --- 投票ペースゲージ ---
+const PACE_WINDOW_MS = 60 * 1000;
+const voteTimes = [];
+
+const PACE_LEVELS = [
+  { max: 5,        label: 'Stable',  cls: '' },
+  { max: 12,       label: 'Busy',    cls: 'pace-warm' },
+  { max: Infinity, label: 'Cooling', cls: 'pace-hot' },
+];
+
+function updatePaceGauge() {
+  const now = Date.now();
+  while (voteTimes.length && now - voteTimes[0] > PACE_WINDOW_MS) voteTimes.shift();
+  voteTimes.push(now);
+  const count = voteTimes.length;
+  const level = PACE_LEVELS.find(l => count <= l.max) ?? PACE_LEVELS[PACE_LEVELS.length - 1];
+  const pct = Math.min(100, Math.round(count / 12 * 100));
+  const fill = document.getElementById('paceFill');
+  const lbl  = document.getElementById('paceLabel');
+  if (!fill || !lbl) return;
+  fill.style.width = pct + '%';
+  fill.className = 'vote-pace-bar-fill' + (level.cls ? ' ' + level.cls : '');
+  lbl.textContent = level.label;
 }
 
 function renderVote() {
@@ -410,12 +542,13 @@ function renderRankingItems(sorted, maxElo, minElo, range, from, to) {
   const list = document.getElementById('rankList');
   sorted.slice(from, to).forEach((v, i) => {
     const idx = from + i;
-    const elo = getElo(v.id);
+    const rating = getRating(v.id);
+    const rd     = getRd(v.id);
     const wins = getWins(v.id);
     const battles = getBattles(v.id);
     const wr = battles > 0 ? Math.round(wins / battles * 100) : 0;
-    const barPct = Math.round((elo - minElo) / range * 100);
-    const lowBattles = battles < 5;
+    const barPct = Math.round((rating - minElo) / range * 100);
+    const lowRd = rd > 150;
     const videoUrl = v.url ?? `https://www.youtube.com/watch?v=${v.id}`;
     const medalEmoji = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : '';
     const medal = medalEmoji || (idx + 1);
@@ -431,13 +564,14 @@ function renderRankingItems(sorted, maxElo, minElo, range, from, to) {
         <div class="rank-num">${rankNum}</div>
       </div>
       <div class="rank-thumb-wrap">
-        <img src="${v.thumb}" alt="" loading="lazy" onerror="this.src='https://i.ytimg.com/vi/${v.id}/hqdefault.jpg'">
+        <img src="${v.thumb}" alt="" loading="lazy" class="${rd > 200 ? 'rd-high' : rd > 100 ? 'rd-mid' : 'rd-low'}" onerror="this.src='https://i.ytimg.com/vi/${v.id}/hqdefault.jpg'">
       </div>
       <div class="rank-meta">
         <div class="rank-title"><a href="${videoUrl}" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:none;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='inherit'">${v.title}</a></div>
         <div class="rank-stats">
-          <span class="elo${lowBattles ? ' low-battles' : ''}">${elo} pts</span>
+          <span class="elo${lowRd ? ' low-battles' : ''}">${Math.round(rating)} pts</span>
           <span>${wins}勝 / ${battles}戦${battles > 0 ? ' · ' + wr + '%' : ''}</span>
+          ${lowRd ? '<span style="font-size:10px;opacity:0.55">RD ' + Math.round(rd) + '</span>' : ''}
         </div>
         ${viewDate ? `<div class="rank-stats">${viewDate}</div>` : ''}
         <div class="rank-bar-bg"><div class="rank-bar-fill" style="width:${barPct}%"></div></div>
@@ -449,9 +583,9 @@ function renderRankingItems(sorted, maxElo, minElo, range, from, to) {
 
 function renderRanking() {
   const pool = filteredVideos();
-  const sorted = [...pool].sort((a, b) => getElo(b.id) - getElo(a.id));
-  const maxElo = sorted.length ? getElo(sorted[0].id) : 1500;
-  const minElo = sorted.length ? getElo(sorted[sorted.length - 1].id) : 1500;
+  const sorted = [...pool].sort((a, b) => getRating(b.id) - getRating(a.id));
+  const maxElo = sorted.length ? getRating(sorted[0].id) : 1500;
+  const minElo = sorted.length ? getRating(sorted[sorted.length - 1].id) : 1500;
   const range = maxElo - minElo || 1;
 
   rankShowCount = RANK_PAGE;
@@ -489,7 +623,7 @@ function getTopRankedVideo(key) {
   if (!videos?.length) return null;
   const active = videos.filter(v => v.category !== 'shorts');
   if (!active.length) return null;
-  return active.reduce((best, v) => getElo(v.id) >= getElo(best.id) ? v : best, active[0]);
+  return active.reduce((best, v) => getRating(v.id) >= getRating(best.id) ? v : best, active[0]);
 }
 
 // --- Home Screen ---
@@ -719,14 +853,14 @@ function selectChannel(key) {
 const SCREENS = { home: 'homeScreen', fetch: 'fetchScreen', vote: 'voteScreen', list: 'listScreen', ranking: 'rankingScreen' };
 
 // --- Thumb Modal ---
-function openThumbModal({ v, idx, elo, wins, battles, wr, barPct, videoUrl, medal }) {
+function openThumbModal({ v, idx, rating, wins, battles, wr, barPct, videoUrl, medal }) {
   const modal = document.getElementById('thumbModal');
   document.getElementById('modalImg').src = v.thumb;
   document.getElementById('modalImg').onerror = function() { this.src = `https://i.ytimg.com/vi/${v.id}/hqdefault.jpg`; };
   document.getElementById('modalBadge').textContent = medal;
   document.getElementById('modalTitle').textContent = v.title;
   document.getElementById('modalStats').innerHTML =
-    `<div><strong>${elo}</strong><br>Eloスコア</div>` +
+    `<div><strong>${Math.round(rating)}</strong><br>レーティング</div>` +
     `<div><strong>${battles}</strong><br>戦数</div>` +
     `<div><strong>${wins}</strong><br>勝利</div>` +
     (battles > 0 ? `<div><strong>${wr}%</strong><br>勝率</div>` : '') +
@@ -886,6 +1020,7 @@ document.getElementById('homeSearchBtn').addEventListener('click', () => {
   showView('fetch');
 });
 document.getElementById('homeAddBtn').addEventListener('click', () => showView('fetch'));
+document.getElementById('homeDbExportBtn').addEventListener('click', exportForDb);
 
 // --- Tab events ---
 document.getElementById('tabFetch').addEventListener('click', () => showView('fetch'));

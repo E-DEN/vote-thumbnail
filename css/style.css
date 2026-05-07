@@ -139,12 +139,38 @@ main {
   text-align: center;
   font-size: 13px;
   color: var(--text-muted);
-  margin-bottom: 16px;
+  margin-bottom: 10px;
 }
 .vote-counter span {
   color: var(--accent);
   font-weight: 700;
 }
+
+/* 投票ペースゲージ */
+.vote-pace-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 14px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.vote-pace-bar-bg {
+  width: 80px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--surface2);
+  overflow: hidden;
+}
+.vote-pace-bar-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.4s, background 0.4s;
+  background: var(--accent);
+}
+.vote-pace-bar-fill.pace-warm   { background: #e8a000; }
+.vote-pace-bar-fill.pace-hot    { background: #e05555; }
 
 .vote-pair-wrap {
   background: var(--surface2);
@@ -372,6 +398,9 @@ main {
   font-size: 13px;
 }
 .rank-stats .low-battles { opacity: 0.5; }
+.rank-thumb-wrap img.rd-low    { opacity: 1; }
+.rank-thumb-wrap img.rd-mid    { opacity: 0.72; }
+.rank-thumb-wrap img.rd-high   { opacity: 0.42; }
 .rank-bar-bg {
   background: var(--surface2);
   border-radius: 4px;
@@ -926,6 +955,21 @@ main {
   transition: border-color 0.15s, color 0.15s;
 }
 .home-add-btn:hover { border-color: var(--accent); color: var(--accent); }
+.home-db-export-btn {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 11px;
+  cursor: pointer;
+  opacity: 0.5;
+  transition: opacity 0.15s;
+}
+.home-db-export-btn:hover { opacity: 1; }
 .folder-card {
   background: var(--surface);
   border-radius: 10px;

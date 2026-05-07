@@ -28,3 +28,10 @@ desktop.ini
 # Build output
 dist/
 out/
+
+# SQLite database files (schema.sql is tracked; data files are not)
+db/vote
+db/vote-shm
+db/vote-wal
+db/*.db
+db/*.sqlite
