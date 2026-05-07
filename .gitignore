@@ -1,0 +1,30 @@
+﻿# Secrets
+config.js
+.dev.vars
+*.env
+.env
+.env.local
+
+# Cloudflare / Wrangler
+.wrangler/
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-error.log*
+package-lock.json
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor
+.vscode/
+.idea/
+*.suo
+*.user
+
+# Build output
+dist/
+out/
