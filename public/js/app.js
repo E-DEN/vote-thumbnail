@@ -6,15 +6,13 @@ const LS_CHANNELS = 'thumb-ranking-channels';
 const LS_GROUPS = 'thumb-ranking-groups';
 
 let allVideos = [];
-let fetchedVideos = [];
 let currentCat = 'videos';
-let currentView = 'home';
+let currentView = 'welcome';
 let eloData = {};
 let voteTotal = 0;
 let channels = {};
 let currentChannelKey = null;
 let groups = [];
-let homeGroupFilter = 'all';
 let selectedGroupId = null;
 
 // --- Glicko-2 ---
@@ -134,7 +132,7 @@ function getGroupPath(gid) {
     parts.unshift(cur.label);
     cur = cur.parentId ? groups.find(g => g.id === cur.parentId) : null;
   }
-  return parts.join(' › ');
+  return parts.join(' ? ');
 }
 function getAllDescendantLabels(label) {
   const root = groups.find(g => g.label === label);
@@ -151,8 +149,7 @@ function getAllDescendantLabels(label) {
   return result;
 }
 function renderGroupFilterBar() {
-  // Folders are now shown as cards in the channel grid
-  document.getElementById('homeGroupBar').innerHTML = '';
+  // グループフィルタはサイドバーで管理するため不要
 }
 function saveVideosForChannel(key, videos) {
   try { localStorage.setItem(LS_VIDEOS + '_' + key, JSON.stringify(videos)); } catch {}
@@ -287,66 +284,11 @@ async function getVideoDetails(apiKey, videoIds, onProgress) {
   return results;
 }
 
-// --- Save helpers ---
-function getChannelName(channelUrl) {
-  return (channelUrl.match(/@([\.\w-]+)/) ?? channelUrl.match(/UC[\w-]+/) ?? ['videos'])[0].replace('@', '');
-}
-
-function saveAsJson(videos, channelUrl) {
-  const blob = new Blob([JSON.stringify({ channelUrl, fetchedAt: new Date().toISOString(), videos }, null, 2)], { type: 'application/json' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `thumbs-${getChannelName(channelUrl)}.json`;
-  a.click();
-  URL.revokeObjectURL(a.href);
-}
-
-async function downloadAsZip(videos, channelUrl) {
-  const status = document.getElementById('fetchStatus');
-  const zip = new JSZip();
-  zip.file('videos.json', JSON.stringify({ channelUrl, fetchedAt: new Date().toISOString(), videos }, null, 2));
-  for (let i = 0; i < videos.length; i++) {
-    const v = videos[i];
-    status.textContent = `画像取得中: ${i + 1} / ${videos.length}`;
-    try {
-      const res = await fetch(v.thumb);
-      const buf = await res.arrayBuffer();
-      const ext = v.thumb.includes('.webp') ? 'webp' : 'jpg';
-      zip.file(`${v.category}/${v.id}.${ext}`, buf);
-    } catch { /* skip */ }
-  }
-  status.textContent = 'ZIP生成中...';
-  const blob = await zip.generateAsync({ type: 'blob' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `thumbs-${getChannelName(channelUrl)}.zip`;
-  a.click();
-  URL.revokeObjectURL(a.href);
-  status.textContent = 'ZIP保存完了';
-}
-
-// --- Set videos (load into app) ---
-function setVideos(videos, channelUrl, channelMeta) {
-  allVideos = videos.filter(v => v.category !== 'shorts');
-  if (channelUrl) {
-    const key = channelKeyFromUrl(channelUrl);
-    currentChannelKey = key;
-    const handleMatch = channelUrl.match(/@([\w.-]+)/);
-    const handle = handleMatch ? handleMatch[1] : (channelUrl.match(/UC[\w-]+/)?.[0] ?? 'チャンネル');
-    const displayName = channelMeta?.channelName || handle;
-    const avatar = channelMeta?.avatar || '';
-    const thumb = allVideos.find(v => v.thumb)?.thumb ?? '';
-    channels[key] = {
-      key, handle, displayName, avatar,
-      url: channelUrl,
-      videoCount: allVideos.length,
-      thumb,
-      addedAt: channels[key]?.addedAt ?? new Date().toISOString()
-    };
-    saveChannels();
-    saveVideosForChannel(key, allVideos);
-  }
-  // 最も件数の多いカテゴリを自動選択
+// --- チャンネルデータをアプリにロード ---
+function loadChannelVideos(key) {
+  const videos = loadVideosForChannel(key);
+  if (!videos?.length) return false;
+  allVideos = videos;
   const counts = { videos: 0, shorts: 0, live: 0 };
   allVideos.forEach(v => { if (counts[v.category] !== undefined) counts[v.category]++; });
   currentCat = counts.live >= counts.videos && counts.live >= counts.shorts ? 'live'
@@ -354,9 +296,7 @@ function setVideos(videos, channelUrl, channelMeta) {
   document.querySelectorAll('.cat-btn').forEach(b => {
     b.classList.toggle('active', b.dataset.cat === currentCat);
   });
-  ['tabVote', 'tabList', 'tabRanking'].forEach(id => {
-    document.getElementById(id).disabled = false;
-  });
+  return true;
 }
 
 // --- Category filter ---
@@ -387,7 +327,6 @@ function pickPair() {
 }
 
 // --- 投票ペースゲージ ---
-const PACE_WINDOW_MS = 60 * 1000;
 const voteTimes = [];
 
 const PACE_LEVELS = [
@@ -415,7 +354,7 @@ function renderVote() {
   const pair = pickPair();
   const container = document.getElementById('votePair');
   if (!pair) {
-    container.innerHTML = '<p style="color:var(--text-muted);text-align:center;grid-column:1/-1;padding:60px 0;font-size:14px;">データがありません。<br><br><button onclick="showView(\'fetch\')" style="margin-top:12px;padding:8px 20px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--accent);font-size:13px;cursor:pointer;">データを取得する</button></p>';
+    container.innerHTML = '<p style="color:var(--text-muted);text-align:center;grid-column:1/-1;padding:60px 0;font-size:14px;">このカテゴリには動画がありません。</p>';
     return;
   }
   const [pairA, pairB] = pair;
@@ -507,7 +446,7 @@ function renderList() {
         iframe.allow = 'autoplay';
         iframe.title = v.title;
         // エラー153（埋め込み禁止）検知: postMessage でプレーヤーエラーを受信
-        const onMsg = (e) => {
+        const onMsg = e => {
           try {
             const data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
             if (data?.event === 'infoDelivery' && data?.info?.playerState === -1) return;
@@ -550,13 +489,12 @@ function renderRankingItems(sorted, maxElo, minElo, range, from, to) {
     const barPct = Math.round((rating - minElo) / range * 100);
     const lowRd = rd > 150;
     const videoUrl = v.url ?? `https://www.youtube.com/watch?v=${v.id}`;
-    const medalEmoji = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : '';
+    const medalEmoji = idx === 0 ? '??' : idx === 1 ? '??' : idx === 2 ? '??' : '';
     const medal = medalEmoji || (idx + 1);
     const rankNum = idx < 3 ? medalEmoji : idx + 1;
     const views = v.viewCount ? fmtViews(v.viewCount) : '';
     const date  = v.publishedAt ? fmtRelTime(v.publishedAt) : '';
     const viewDate = [views, date].filter(Boolean).join(' · ');
-
     const item = document.createElement('div');
     item.className = `rank-item${idx < 3 ? ` rank-${idx+1}` : ''}`;
     item.innerHTML = `
@@ -571,7 +509,6 @@ function renderRankingItems(sorted, maxElo, minElo, range, from, to) {
         <div class="rank-stats">
           <span class="elo${lowRd ? ' low-battles' : ''}">${Math.round(rating)} pts</span>
           <span>${wins}勝 / ${battles}戦${battles > 0 ? ' · ' + wr + '%' : ''}</span>
-          ${lowRd ? '<span style="font-size:10px;opacity:0.55">RD ' + Math.round(rd) + '</span>' : ''}
         </div>
         ${viewDate ? `<div class="rank-stats">${viewDate}</div>` : ''}
         <div class="rank-bar-bg"><div class="rank-bar-fill" style="width:${barPct}%"></div></div>
@@ -626,231 +563,103 @@ function getTopRankedVideo(key) {
   return active.reduce((best, v) => getRating(v.id) >= getRating(best.id) ? v : best, active[0]);
 }
 
-// --- Home Screen ---
-function renderHomeScreen() {
-  // Section title / breadcrumb
-  const sectionTitle = document.querySelector('.home-section-title');
-  if (homeGroupFilter !== 'all') {
-    sectionTitle.innerHTML = '';
-    const backBtn = document.createElement('button');
-    backBtn.className = 'folder-back-btn';
-    backBtn.textContent = '← 戻る';
-    backBtn.addEventListener('click', () => { homeGroupFilter = 'all'; renderHomeScreen(); });
-    sectionTitle.appendChild(backBtn);
-    sectionTitle.appendChild(document.createTextNode('📁 ' + homeGroupFilter));
-  } else {
-    sectionTitle.textContent = 'チャンネル';
-  }
+// --- Sidebar ---
+// コンパクト状態を維持
 
-  document.getElementById('homeGroupBar').innerHTML = '';
-  const query = (document.getElementById('homeSearchInput')?.value ?? '').trim().toLowerCase();
-  const grid = document.getElementById('channelGrid');
-  grid.innerHTML = '';
+function buildChannelItem(ch) {
+  const item = document.createElement('div');
+  item.className = 'sidebar-channel-item' + (currentChannelKey === ch.key ? ' active' : '');
+  item.dataset.key = ch.key;
+  const avatarEl = ch.avatar
+    ? `<img class="sidebar-ch-avatar" src="${ch.avatar}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'">`
+    : `<div class="sidebar-ch-avatar"></div>`;
+  item.innerHTML = `${avatarEl}<span class="sidebar-ch-name">${ch.displayName || ch.handle || ch.key}</span>`;
+  item.addEventListener('click', () => selectChannel(ch.key));
+  return item;
+}
 
-  // --- Folder cards (inline in grid) ---
-  if (!query) {
-    const parentGroup = homeGroupFilter !== 'all' ? groups.find(g => g.label === homeGroupFilter) : null;
-    const visibleFolders = parentGroup
-      ? groups.filter(g => g.parentId === parentGroup.id)
-      : groups.filter(g => !g.parentId);
-    for (const g of visibleFolders) {
-      const allLabels = getAllDescendantLabels(g.label);
-      const chCount = Object.values(channels).filter(ch => (ch.tags || []).some(t => allLabels.has(t))).length;
-      const fCard = document.createElement('div');
-      fCard.className = 'folder-card';
-      fCard.innerHTML = `
-        <button class="folder-card-del" title="削除">&times;</button>
-        <button class="folder-card-edit" title="グループ管理">✏️</button>
-        <div class="folder-card-icon">🗂</div>
-        <div class="folder-card-name">${g.label}</div>
-        <div class="folder-card-count">${chCount}チャンネル</div>`;
-      fCard.addEventListener('click', e => {
-        if (e.target.closest('.folder-card-del') || e.target.closest('.folder-card-edit')) return;
-        homeGroupFilter = g.label;
-        renderHomeScreen();
-      });
-      fCard.querySelector('.folder-card-edit').addEventListener('click', e => {
-        e.stopPropagation();
-        selectedGroupId = g.id;
-        openGroupModal();
-      });
-      fCard.querySelector('.folder-card-del').addEventListener('click', e => {
-        e.stopPropagation();
-        if (!confirm(`「${g.label}」を削除しますか？`)) return;
-        const toDelete = new Set();
-        const queue = [g.id];
-        while (queue.length) {
-          const id = queue.shift();
-          toDelete.add(id);
-          groups.filter(g2 => g2.parentId === id).forEach(c => queue.push(c.id));
-        }
-        groups = groups.filter(g2 => !toDelete.has(g2.id));
-        saveGroups();
-        if (homeGroupFilter !== 'all') homeGroupFilter = 'all';
-        renderHomeScreen();
-      });
-      grid.appendChild(fCard);
+function renderSidebar() {
+  const nav = document.getElementById('sidebarNav');
+  nav.innerHTML = '';
+
+  const allChs = Object.values(channels).sort((a, b) => (b.addedAt > a.addedAt ? 1 : -1));
+  const topLevelGroups = groups.filter(g => !g.parentId);
+
+  topLevelGroups.forEach(g => {
+    const chsInGroup = allChs.filter(ch => (ch.tags || []).includes(g.label));
+    if (chsInGroup.length === 0) return;
+    const collapsed = !!_sidebarCollapsed[g.id];
+    const header = document.createElement('div');
+    header.className = 'sidebar-group-header';
+    const toggle = document.createElement('span');
+    toggle.className = 'sidebar-group-toggle' + (collapsed ? ' collapsed' : '');
+    toggle.textContent = '▾';
+    header.appendChild(document.createTextNode(g.label));
+    header.addEventListener('click', () => {
+      _sidebarCollapsed[g.id] = !_sidebarCollapsed[g.id];
+      renderSidebar();
+    });
+    nav.appendChild(header);
+    if (!collapsed) {
+      chsInGroup.forEach(ch => nav.appendChild(buildChannelItem(ch)));
     }
-    // Add-folder card
-    const addFolderCard = document.createElement('div');
-    addFolderCard.className = 'folder-card folder-card-add';
-    addFolderCard.innerHTML = `<div class="folder-card-icon" style="opacity:0.4">�</div><div class="folder-card-name" style="opacity:0.5">グループを追加</div>`;
-    addFolderCard.addEventListener('click', () => {
-      selectedGroupId = null;
-      openGroupModal();
-    });
-    grid.appendChild(addFolderCard);
-  }
+  });
 
-  const chList = Object.values(channels).sort((a, b) => (b.addedAt > a.addedAt ? 1 : -1));
-  let filtered = query
-    ? chList.filter(ch => {
-        const n = (ch.displayName || ch.handle || ch.name || '').toLowerCase();
-        return n.includes(query) || ch.url.toLowerCase().includes(query);
-      })
-    : chList;
-  if (homeGroupFilter !== 'all') {
-    const allowedLabels = getAllDescendantLabels(homeGroupFilter);
-    filtered = filtered.filter(ch => (ch.tags || []).some(t => allowedLabels.has(t)));
-  }
-  if (filtered.length === 0) {
-    const msg = chList.length === 0
-      ? 'まだチャンネルが登録されていません。<br>下のボタンからチャンネルを追加してください。'
-      : `「${homeGroupFilter !== 'all' ? homeGroupFilter : query}」に一致するチャンネルはありません。`;
-    const hint = document.createElement('div');
-    hint.className = 'home-empty';
-    hint.innerHTML = msg;
-    grid.appendChild(hint);
-    return;
-  }
-  for (const ch of filtered) {
-    const card = document.createElement('div');
-    card.className = 'channel-card';
-    const topVideo = getTopRankedVideo(ch.key);
-    const heroThumb = topVideo?.thumb || ch.thumb || '';
-    const avatarHtml = ch.avatar
-      ? `<img class="channel-card-avatar" src="${ch.avatar}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none'">`
-      : `<div class="channel-card-avatar-placeholder"></div>`;
-    const tagChips = (ch.tags || []).map(t => `<span class="channel-tag-chip">${t}</span>`).join('');
-    card.innerHTML = `
-      <div style="position:relative">
-        <img class="channel-card-thumb" src="${heroThumb}" alt="" loading="lazy" onerror="this.style.background='var(--surface2)'">
-        <button class="channel-card-more-btn" title="メニュー">⋮</button>
-        <div class="channel-card-dropdown">
-          <button class="cmf-open-btn">URL / タグ編集</button>
-          <button class="danger cmf-del-btn">削除</button>
-        </div>
-      </div>
-      <div class="channel-card-info">
-        <div class="channel-card-name">${ch.displayName || ch.handle || ch.name || ch.key}</div>
-        <div class="channel-card-meta">${ch.videoCount.toLocaleString()} 動画</div>
-        ${tagChips ? `<div class="channel-card-tags" style="margin-top:6px">${tagChips}</div>` : ''}
-      </div>
-      <div class="channel-meta-form">
-        <div style="display:flex;gap:6px">
-          <input class="cmf-url" type="text" placeholder="チャンネルURL (@handle または /channel/UC...)" value="${ch.url || ''}">
-          <button class="cmf-url-btn">更新</button>
-        </div>
-        <div style="display:flex;gap:6px">
-          <input class="cmf-tags" type="text" placeholder="タグ（カンマ区切り）例：にじさんじ, VOLTACTION" value="${(ch.tags || []).join(', ')}">
-          <button class="cmf-tags-btn">タグ保存</button>
-        </div>
-      </div>`;
-    card.addEventListener('click', () => selectChannel(ch.key));
-    // ⋮ dropdown
-    const moreBtn = card.querySelector('.channel-card-more-btn');
-    const dropdown = card.querySelector('.channel-card-dropdown');
-    moreBtn.addEventListener('click', e => {
-      e.stopPropagation();
-      dropdown.classList.toggle('open');
-    });
-    document.addEventListener('click', () => dropdown.classList.remove('open'), { once: false });
-    dropdown.addEventListener('click', e => e.stopPropagation());
-    card.querySelector('.cmf-del-btn').addEventListener('click', e => {
-      e.stopPropagation();
-      if (!confirm(`「${ch.displayName || ch.handle || ch.key}」を削除しますか？`)) return;
-      delete channels[ch.key];
-      saveChannels();
-      localStorage.removeItem(LS_VIDEOS + '_' + ch.key);
-      renderHomeScreen();
-    });
-    card.querySelector('.cmf-open-btn').addEventListener('click', e => {
-      e.stopPropagation();
-      dropdown.classList.remove('open');
-      card.querySelector('.channel-meta-form').classList.toggle('open');
-    });
-    ['.cmf-url', '.cmf-tags'].forEach(sel => {
-      card.querySelector(sel).addEventListener('click', e => e.stopPropagation());
-      card.querySelector(sel).addEventListener('keydown', e => e.stopPropagation());
-    });
-    card.querySelector('.cmf-tags-btn').addEventListener('click', e => {
-      e.stopPropagation();
-      channels[ch.key].tags = card.querySelector('.cmf-tags').value.split(',').map(t => t.trim()).filter(Boolean);
-      saveChannels();
-      renderHomeScreen();
-    });
-    card.querySelector('.cmf-url-btn').addEventListener('click', async e => {
-      e.stopPropagation();
-      const url = card.querySelector('.cmf-url').value.trim();
-      if (!url) return;
-      const apiKey = (typeof CONFIG !== 'undefined' ? CONFIG.youtubeApiKey : '');
-      if (!apiKey || apiKey === 'YOUR_API_KEY_HERE') {
-        const handleMatch = url.match(/@([\w.-]+)/);
-        channels[ch.key].url = url;
-        if (handleMatch) { channels[ch.key].handle = handleMatch[1]; channels[ch.key].displayName = channels[ch.key].displayName || handleMatch[1]; }
-        saveChannels();
-        renderHomeScreen();
-        return;
+  // グループに属していないチャンネル
+  const ungrouped = allChs.filter(ch =>
+    !(ch.tags || []).some(t => topLevelGroups.some(g => g.label === t))
+  );
+  if (ungrouped.length > 0) {
+    if (topLevelGroups.length > 0) {
+      const header = document.createElement('div');
+      header.className = 'sidebar-group-header';
+      const collapsed = !!_sidebarCollapsed['_ungrouped'];
+      const toggle = document.createElement('span');
+      toggle.className = 'sidebar-group-toggle' + (collapsed ? ' collapsed' : '');
+      toggle.textContent = '▾';
+      header.appendChild(document.createTextNode('チャンネル'));
+      header.addEventListener('click', () => {
+        _sidebarCollapsed['_ungrouped'] = !_sidebarCollapsed['_ungrouped'];
+        renderSidebar();
+      });
+      nav.appendChild(header);
+      if (!collapsed) {
+        ungrouped.forEach(ch => nav.appendChild(buildChannelItem(ch)));
       }
-      const btn = e.currentTarget;
-      btn.textContent = '…';
-      btn.disabled = true;
-      try {
-        const parsed = parseChannel(url);
-        if (!parsed) throw new Error('URLの形式が不正です');
-        const meta = await getUploadsPlaylistId(apiKey, parsed);
-        channels[ch.key].url = url;
-        channels[ch.key].displayName = meta.channelName;
-        channels[ch.key].avatar = meta.avatar;
-        channels[ch.key].handle = url.match(/@([\w.-]+)/)?.[1] ?? channels[ch.key].handle ?? '';
-        saveChannels();
-        renderHomeScreen();
-      } catch(err) {
-        btn.textContent = 'エラー';
-        btn.disabled = false;
-        setTimeout(() => { btn.textContent = '更新'; btn.disabled = false; }, 2000);
-      }
-    });
-    grid.appendChild(card);
+    } else {
+      ungrouped.forEach(ch => nav.appendChild(buildChannelItem(ch)));
+    }
   }
 }
 
+// --- チャンネル選択 ---
 function selectChannel(key) {
   const ch = channels[key];
   if (!ch) return;
   currentChannelKey = key;
-  const videos = loadVideosForChannel(key);
-  if (!videos?.length) {
-    document.getElementById('channelUrl').value = ch.url;
-    showView('fetch');
+
+  // サイドバーのアクティブ状態を更新
+  document.querySelectorAll('.sidebar-channel-item').forEach(el => {
+    el.classList.toggle('active', el.dataset.key === key);
+  });
+
+  // チャンネルヘッダーを表示
+  const header = document.getElementById('channelHeader');
+  header.style.display = 'flex';
+  const avatarEl = document.getElementById('chAvatar');
+  avatarEl.src = ch.avatar || '';
+  avatarEl.style.display = ch.avatar ? '' : 'none';
+  document.getElementById('chName').textContent = ch.displayName || ch.handle || ch.key;
+
+  if (!loadChannelVideos(key)) {
+    // データなし: ウェルカム画面でメッセージ表示
     return;
   }
-  allVideos = videos;
-  const counts2 = { videos: 0, shorts: 0, live: 0 };
-  allVideos.forEach(v => { if (counts2[v.category] !== undefined) counts2[v.category]++; });
-  currentCat = counts2.live >= counts2.videos && counts2.live >= counts2.shorts ? 'live'
-             : counts2.shorts > counts2.videos ? 'shorts' : 'videos';
-  document.querySelectorAll('.cat-btn').forEach(b => {
-    b.classList.toggle('active', b.dataset.cat === currentCat);
-  });
-  ['tabVote', 'tabList', 'tabRanking'].forEach(id => {
-    document.getElementById(id).disabled = false;
-  });
-  showView('list');
+  showView('vote');
 }
 
 // --- View switch ---
-const SCREENS = { home: 'homeScreen', fetch: 'fetchScreen', vote: 'voteScreen', list: 'listScreen', ranking: 'rankingScreen' };
+const SCREENS = ['welcome', 'vote', 'list', 'ranking'];
 
 // --- Thumb Modal ---
 function openThumbModal({ v, idx, rating, wins, battles, wr, barPct, videoUrl, medal }) {
@@ -865,7 +674,6 @@ function openThumbModal({ v, idx, rating, wins, battles, wr, barPct, videoUrl, m
     `<div><strong>${wins}</strong><br>勝利</div>` +
     (battles > 0 ? `<div><strong>${wr}%</strong><br>勝率</div>` : '') +
     `<div><strong>#${idx + 1}</strong><br>順位</div>`;
-  document.getElementById('modalBarFill').style.width = barPct + '%';
   document.getElementById('modalYtBtn').href = videoUrl;
   modal.classList.add('open');
   document.body.style.overflow = 'hidden';
@@ -884,159 +692,133 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape') closeThumbModal();
 });
 
-const TAB_IDS  = { fetch: 'tabFetch', vote: 'tabVote', list: 'tabList', ranking: 'tabRanking' };
+const TAB_IDS  = {};
 const CAT_VIEWS = ['vote', 'list', 'ranking'];
 
 function showView(view) {
   currentView = view;
-  Object.entries(SCREENS).forEach(([k, id]) => {
-    document.getElementById(id).style.display = k === view ? 'block' : 'none';
+  SCREENS.forEach(s => {
+    const el = document.getElementById(s + 'Screen');
+    if (el) el.style.display = s === view ? '' : 'none';
   });
-  Object.entries(TAB_IDS).forEach(([k, id]) => {
-    document.getElementById(id).classList.toggle('active', k === view);
+  document.querySelectorAll('.ch-tab').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.view === view);
   });
-  document.getElementById('catFilterBar').classList.toggle('visible', CAT_VIEWS.includes(view));
-  // Channel info bar: show in vote/list/ranking
-  const showCib = CAT_VIEWS.includes(view) && currentChannelKey;
-  document.getElementById('channelInfoBar').classList.toggle('visible', !!showCib);
-  if (showCib) {
-    const ch = channels[currentChannelKey];
-    const avatar = ch?.avatar || '';
-    const cibAvatar = document.getElementById('cibAvatar');
-    cibAvatar.src = avatar;
-    cibAvatar.style.display = avatar ? '' : 'none';
-    document.getElementById('cibName').textContent = ch?.displayName || ch?.handle || currentChannelKey;
-    document.getElementById('cibSub').textContent = ch?.videoCount ? ch.videoCount.toLocaleString() + ' 動画' : '';
-  }
-  if (view === 'home') renderHomeScreen();
-  else if (view === 'vote') renderVote();
+  if (view === 'vote') renderVote();
   else if (view === 'list') renderList();
   else if (view === 'ranking') renderRanking();
 }
 
-document.getElementById('cibBackBtn').addEventListener('click', () => showView('home'));
+// --- サイドバー検索・チャンネル追加 ---
+async function addChannelFromSidebarInput() {
+  const raw = document.getElementById('sidebarSearchInput').value.trim();
+  if (!raw) return;
+
+  const statusEl = document.getElementById('sidebarSearchStatus');
+  const url = raw.startsWith('http') ? raw
+    : `https://www.youtube.com/${raw.startsWith('@') ? raw : '@' + raw}`;
+  const key = channelKeyFromUrl(url);
+
+  // 既登録の場合はそのまま選択
+  if (channels[key]) {
+    statusEl.textContent = '';
+    statusEl.className = 'sidebar-search-status';
+    renderSidebar();
+    selectChannel(key);
+    return;
+  }
+
+  const apiKey = (typeof CONFIG !== 'undefined' ? CONFIG.youtubeApiKey : '');
+  if (!apiKey || apiKey === 'YOUR_API_KEY_HERE') {
+    // APIキーなし: メタデータなしで仮登録
+    const handle = handleMatch ? handleMatch[1] : key;
+    channels[key] = {
+      key, url, handle, displayName: handle,
+      avatar: '', thumb: '', videoCount: 0,
+      tags: [], addedAt: new Date().toISOString()
+    };
+    saveChannels();
+    document.getElementById('sidebarSearchInput').value = '';
+    statusEl.textContent = '追加しました (APIキーなし)';
+    renderSidebar();
+    selectChannel(key);
+    setTimeout(() => { statusEl.textContent = ''; statusEl.className = 'sidebar-search-status'; }, 3000);
+    return;
+  }
+
+  const parsed = parseChannel(url);
+  if (!parsed) {
+    statusEl.textContent = 'URLの形式が不正です';
+    return;
+  }
+
+  const searchBtn = document.getElementById('sidebarSearchBtn');
+  searchBtn.disabled = true;
+  statusEl.className = 'sidebar-search-status';
+
+  try {
+    statusEl.textContent = 'チャンネル情報を取得中...';
+
+    const videoIds = await getAllVideoIds(apiKey, playlistId, (cur, total) => {
+      statusEl.textContent = `動画ID取得中: ${cur}/${total}`;
+    });
+
+    statusEl.textContent = '動画詳細を取得中...';
+    const videos = await getVideoDetails(apiKey, videoIds, (cur, total) => {
+      statusEl.textContent = `詳細取得中: ${cur}/${total}`;
+    });
+
+    const handleMatch = url.match(/@([\w.-]+)/);
+    channels[key] = {
+      key, url,
+      handle: handleMatch?.[1] || '',
+      displayName: channelName || handleMatch?.[1] || key,
+      avatar: avatar || '',
+      thumb: videos.find(v => v.thumb)?.thumb || '',
+      videoCount: videos.length,
+      tags: [],
+      addedAt: new Date().toISOString()
+    };
+    saveChannels();
+    saveVideosForChannel(key, videos);
+
+    statusEl.textContent = `追加: ${channelName} (${videos.length}件)`;
+    document.getElementById('sidebarSearchInput').value = '';
+    renderSidebar();
+    selectChannel(key);
+    setTimeout(() => { statusEl.textContent = ''; statusEl.className = 'sidebar-search-status'; }, 4000);
+  } catch (err) {
+    statusEl.textContent = `エラー: ${err.message}`;
+  } finally {
+    searchBtn.disabled = false;
+  }
+}
 
 // --- Init ---
 function init() {
   loadElo();
   loadChannels();
   loadGroups();
-  showView('home');
+  renderSidebar();
+  showView('welcome');
 }
 
-// --- Fetch screen events ---
-document.getElementById('fetchApiBtn').addEventListener('click', async () => {
-  const apiKey = (typeof CONFIG !== 'undefined' ? CONFIG.youtubeApiKey : '');
-  const channelUrl = document.getElementById('channelUrl').value.trim();
-  const status = document.getElementById('fetchStatus');
-  const btn = document.getElementById('fetchApiBtn');
-
-  if (!apiKey || apiKey === 'YOUR_API_KEY_HERE') {
-    status.textContent = 'config.js に APIキーを設定してください';
-    return;
-  }
-  if (!channelUrl) { status.textContent = 'チャンネルURLを入力してください'; return; }
-  const channel = parseChannel(channelUrl);
-  if (!channel) { status.textContent = 'URLの形式が不正です'; return; }
-
-  btn.disabled = true;
-  document.getElementById('fetchBtns').style.display = 'none';
-  fetchedVideos = [];
-
-  try {
-    status.textContent = 'チャンネル情報を取得中...';
-    const { playlistId, channelName, channelId, avatar } = await getUploadsPlaylistId(apiKey, channel);
-
-    const videoIds = await getAllVideoIds(apiKey, playlistId, (cur, total) => {
-      status.textContent = `動画ID取得中: ${cur} / ${total}`;
-    });
-
-    status.textContent = '動画詳細を取得中...';
-    fetchedVideos = await getVideoDetails(apiKey, videoIds, (cur, total) => {
-      status.textContent = `詳細取得中: ${cur} / ${total}`;
-    });
-
-    // チャンネル情報を fetchedChannelMeta に保存（loadToAppBtn で使用）
-    window._fetchedChannelMeta = { channelName, channelId, avatar };
-
-    status.textContent = `取得完了: ${fetchedVideos.length} 件${channelName ? ' · ' + channelName : ''}`;
-    document.getElementById('fetchBtns').style.display = 'flex';
-  } catch (err) {
-    status.textContent = `エラー: ${err.message}`;
-  } finally {
-    btn.disabled = false;
-  }
+// --- サイドバーイベント ---
+document.getElementById('sidebarSearchInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') addChannelFromSidebarInput();
+});
+document.getElementById('sidebarManageBtn').addEventListener('click', () => {
+  selectedGroupId = null;
+  openGroupModal();
 });
 
-document.getElementById('zipImport').addEventListener('change', async e => {
-  const file = e.target.files[0];
-  if (!file) return;
-  const status = document.getElementById('fetchStatus');
-  status.textContent = 'ZIPを読み込み中...';
-  try {
-    const zip = await JSZip.loadAsync(file);
-    const jsonFile = zip.file('videos.json');
-    if (!jsonFile) throw new Error('ZIPにvideos.jsonが見つかりません');
-    const json = JSON.parse(await jsonFile.async('string'));
-    setVideos(json.videos, json.channelUrl ?? '');
-    status.textContent = `読み込み完了: ${allVideos.length} 件`;
-    showView('vote');
-  } catch (err) {
-    status.textContent = `エラー: ${err.message}`;
-  }
-  e.target.value = '';
+// --- チャンネルヘッダーのタブ ---
+document.getElementById('channelHeader').addEventListener('click', e => {
+  const tab = e.target.closest('.ch-tab');
+  if (tab) showView(tab.dataset.view);
 });
 
-document.getElementById('saveJsonBtn').addEventListener('click', () => {
-  saveAsJson(fetchedVideos, document.getElementById('channelUrl').value.trim());
-});
-
-document.getElementById('saveZipBtn').addEventListener('click', async () => {
-  const btn = document.getElementById('saveZipBtn');
-  btn.disabled = true;
-  await downloadAsZip(fetchedVideos, document.getElementById('channelUrl').value.trim());
-  btn.disabled = false;
-});
-
-document.getElementById('loadToAppBtn').addEventListener('click', () => {
-  if (!fetchedVideos.length) return;
-  setVideos(fetchedVideos, document.getElementById('channelUrl').value.trim(), window._fetchedChannelMeta ?? null);
-  window._fetchedChannelMeta = null;
-  showView('vote');
-});
-
-// --- Logo → Home ---
-document.getElementById('logoBtn').addEventListener('click', () => showView('home'));
-
-// --- Home screen ---
-document.getElementById('homeSearchInput').addEventListener('input', renderHomeScreen);
-document.getElementById('homeSearchInput').addEventListener('keydown', e => {
-  if (e.key === 'Enter') document.getElementById('homeSearchBtn').click();
-});
-document.getElementById('homeSearchBtn').addEventListener('click', () => {
-  const q = document.getElementById('homeSearchInput').value.trim();
-  if (!q) return;
-  document.getElementById('channelUrl').value = q;
-  showView('fetch');
-});
-document.getElementById('homeAddBtn').addEventListener('click', () => showView('fetch'));
-document.getElementById('homeDbExportBtn').addEventListener('click', exportForDb);
-
-// --- Tab events ---
-document.getElementById('tabFetch').addEventListener('click', () => showView('fetch'));
-document.getElementById('tabVote').addEventListener('click', () => showView('vote'));
-document.getElementById('tabList').addEventListener('click', () => showView('list'));
-document.getElementById('tabRanking').addEventListener('click', () => showView('ranking'));
-document.getElementById('skipBtn').addEventListener('click', renderVote);
-
-document.getElementById('resetBtn').addEventListener('click', () => {
-  if (!confirm('全投票データをリセットしますか？')) return;
-  eloData = {}; voteTotal = 0;
-  saveElo();
-  document.getElementById('voteCount').textContent = 0;
-  renderRanking();
-});
-
+// --- カテゴリフィルタ ---
 document.getElementById('catFilter').addEventListener('click', e => {
   const btn = e.target.closest('.cat-btn');
   if (!btn) return;
@@ -1047,16 +829,16 @@ document.getElementById('catFilter').addEventListener('click', e => {
   else if (currentView === 'ranking') renderRanking();
 });
 
-// --- Group bar events ---
-document.getElementById('homeGroupBar').addEventListener('click', e => {
-  const tab = e.target.closest('.group-tab');
-  if (tab) {
-    homeGroupFilter = tab.dataset.gid;
-    renderHomeScreen();
-    return;
-  }
-  if (e.target.closest('.group-manage-btn')) openGroupModal();
+// --- スキップ・リセット ---
+
+document.getElementById('resetBtn').addEventListener('click', () => {
+  if (!confirm('全投票データをリセットしますか？')) return;
+  saveElo();
+  document.getElementById('voteCount').textContent = 0;
+  renderRanking();
 });
+
+
 
 // --- Group modal ---
 function openGroupModal() {
@@ -1079,12 +861,11 @@ function renderGroupModal() {
     item.className = 'gm-group-item' + (g.id === selectedGroupId ? ' active' : '');
     const nameEl = document.createElement('span');
     nameEl.style.cssText = 'flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
-    nameEl.textContent = '🗂 ' + g.label;
+    nameEl.textContent = '?? ' + g.label;
     const delBtn = document.createElement('button');
     delBtn.className = 'gm-gdel';
     delBtn.title = '削除';
     delBtn.textContent = '×';
-    item.appendChild(nameEl);
     item.appendChild(delBtn);
     item.addEventListener('click', e => {
       if (e.target === delBtn) return;
@@ -1093,7 +874,6 @@ function renderGroupModal() {
     });
     delBtn.addEventListener('click', () => {
       if (!confirm(`「${g.label}」を削除しますか？`)) return;
-      const toDelete = new Set();
       const q = [g.id];
       while (q.length) {
         const id = q.shift(); toDelete.add(id);
@@ -1102,9 +882,8 @@ function renderGroupModal() {
       groups = groups.filter(g2 => !toDelete.has(g2.id));
       saveGroups();
       if (toDelete.has(selectedGroupId)) selectedGroupId = null;
-      if (homeGroupFilter !== 'all' && toDelete.has(groups.find(g2 => g2.label === homeGroupFilter)?.id)) homeGroupFilter = 'all';
       renderGroupModal();
-      renderHomeScreen();
+      renderSidebar();
     });
     listEl.appendChild(item);
   });
@@ -1119,7 +898,7 @@ function renderGroupModal() {
   const inGroup = Object.values(channels).filter(ch => (ch.tags || []).includes(g.label));
   const notInGroup = Object.values(channels).filter(ch => !(ch.tags || []).includes(g.label));
   detail.innerHTML = `
-    <div class="gm-detail-header"><div class="gm-detail-name">🗂 ${g.label} &mdash; <span style="font-size:12px;font-weight:400;color:var(--text-muted)">${inGroup.length}チャンネル</span></div></div>
+    <div class="gm-detail-header"><div class="gm-detail-name">${g.label} &mdash; <span style="font-size:12px;font-weight:400;color:var(--text-muted)">${inGroup.length}チャンネル</span></div></div>
     <div class="gm-section-label">グループ内のチャンネル</div>
     <div class="gm-channel-scroll" id="gmChList"></div>
     <div class="gm-section-label" style="border-top:1px solid var(--border);padding-top:10px">追加できるチャンネル</div>
@@ -1127,11 +906,10 @@ function renderGroupModal() {
     <div class="gm-url-add">
       <input id="gmUrlInput" type="text" placeholder="URLまたは@handleで新規登録（Enterで連続追加）" autocomplete="off">
       <button id="gmUrlAddBtn">登録</button>
-    </div>`;
-
+    </div>` 
   const chScroll = detail.querySelector('#gmChList');
   if (inGroup.length === 0) {
-    chScroll.innerHTML = '<div style="padding:8px 10px;font-size:12px;color:var(--text-muted)">まだチャンネルがいません</div>';
+    chScroll.innerHTML = '<div style="padding:8px 10px;font-size:12px;color:var(--text-muted)">まだチャンネルがありません</div>';
   }
   inGroup.forEach(ch => {
     const item = document.createElement('div');
@@ -1160,7 +938,7 @@ function renderGroupModal() {
       channels[ch.key].tags = (channels[ch.key].tags || []).filter(t => t !== g.label);
       saveChannels();
       renderGroupModal();
-      renderHomeScreen();
+      renderSidebar();
     });
     item.appendChild(delBtn);
     chScroll.appendChild(item);
@@ -1184,7 +962,7 @@ function renderGroupModal() {
       channels[ch.key].tags = [...(channels[ch.key].tags || []), g.label];
       saveChannels();
       renderGroupModal();
-      renderHomeScreen();
+      renderSidebar();
     });
     item.appendChild(nameEl);
     item.appendChild(addBtn);
@@ -1213,7 +991,7 @@ function renderGroupModal() {
     urlInput.value = '';
     urlInput.focus();
     renderGroupModal();
-    renderHomeScreen();
+    renderSidebar();
   };
   detail.querySelector('#gmUrlAddBtn').addEventListener('click', addUrl);
   urlInput.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); addUrl(); } });
@@ -1229,7 +1007,7 @@ document.getElementById('groupAddConfirmBtn').addEventListener('click', () => {
   selectedGroupId = ng.id;
   document.getElementById('groupLabelInput').value = '';
   renderGroupModal();
-  renderHomeScreen();
+  renderSidebar();
 });
 document.getElementById('groupLabelInput').addEventListener('keydown', e => {
   if (e.key === 'Enter') document.getElementById('groupAddConfirmBtn').click();
@@ -1238,5 +1016,34 @@ document.getElementById('groupModalCloseBtn').addEventListener('click', closeGro
 document.getElementById('groupModal').addEventListener('click', e => {
   if (e.target === document.getElementById('groupModal')) closeGroupModal();
 });
+
+// --- サイドバーリサイズ ---
+(function() {
+  const handle = document.getElementById('sidebarResizeHandle');
+  const sidebar = document.getElementById('sidebar');
+  const STORAGE_KEY = 'sidebar-width';
+  const saved = localStorage.getItem(STORAGE_KEY);
+  if (saved) sidebar.style.width = saved + 'px';
+
+  let startX, startW;
+  handle.addEventListener('mousedown', e => {
+    e.preventDefault();
+    startX = e.clientX;
+    startW = sidebar.offsetWidth;
+    handle.classList.add('dragging');
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+  function onMove(e) {
+    const w = Math.min(400, Math.max(140, startW + e.clientX - startX));
+    sidebar.style.width = w + 'px';
+  }
+  function onUp() {
+    handle.classList.remove('dragging');
+    localStorage.setItem(STORAGE_KEY, sidebar.offsetWidth);
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onUp);
+  }
+})();
 
 init();

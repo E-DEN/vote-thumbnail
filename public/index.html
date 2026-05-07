@@ -6,104 +6,99 @@
   <title>みんなの推しサムネ</title>
   <meta name="referrer" content="no-referrer">
   <script src="config.js" onerror="void 0"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-  <header>
-    <div class="logo" id="logoBtn" role="button" tabindex="0">みんなの推しサムネ</div>
-    <div class="tabs">
-      <button class="tab-btn active" id="tabVote">投票</button>
-      <button class="tab-btn" id="tabList">一覧</button>
-      <button class="tab-btn" id="tabRanking">ランキング</button>
-    </div>
-    <button class="tab-btn fetch-tab" id="tabFetch"><svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:4px"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>取得</button>
-  </header>
+  <div class="app-layout">
 
-  <div id="catFilterBar">
-    <div class="cat-filter" id="catFilter">
-      <button class="cat-btn active" data-cat="videos">動画</button>
-      <button class="cat-btn" data-cat="shorts">ショート</button>
-      <button class="cat-btn" data-cat="live">ライブ</button>
+    <!-- サイドバー -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <span class="sidebar-logo">推しサムネ</span>
+      </div>
+
+      <!-- チャンネル検索・追加 -->
+      <div class="sidebar-search-wrap">
+        <input class="sidebar-search-input" id="sidebarSearchInput" type="text" placeholder="URL / @handle を追加" autocomplete="off">
+        <button class="sidebar-search-btn" id="sidebarSearchBtn" aria-label="追加">
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        </button>
+      </div>
+      <div class="sidebar-search-status" id="sidebarSearchStatus"></div>
+
+      <!-- チャンネルリスト（グループ別） -->
+      <nav class="sidebar-nav" id="sidebarNav"></nav>
+
+      <!-- リサイズハンドル -->
+      <div class="sidebar-resize-handle" id="sidebarResizeHandle"></div>
+
+      <!-- フッター -->
+      <div class="sidebar-footer">
+        <button class="sidebar-manage-btn" id="sidebarManageBtn" title="グループ管理">グループ管理</button>
+      </div>
+    </aside>
+
+    <!-- メインエリア -->
+    <div class="main-area">
+
+      <!-- チャンネル選択後のサブヘッダ -->
+      <div class="channel-header" id="channelHeader" style="display:none">
+        <img class="ch-avatar" id="chAvatar" src="" alt="" referrerpolicy="no-referrer">
+        <span class="ch-name" id="chName"></span>
+        <div class="ch-tabs">
+          <button class="ch-tab active" data-view="vote">投票</button>
+          <button class="ch-tab" data-view="list">一覧</button>
+          <button class="ch-tab" data-view="ranking">ランキング</button>
+        </div>
+        <div class="cat-filter" id="catFilter">
+          <button class="cat-btn active" data-cat="videos">動画</button>
+          <button class="cat-btn" data-cat="shorts">ショート</button>
+          <button class="cat-btn" data-cat="live">ライブ</button>
+        </div>
+      </div>
+
+      <!-- ウェルカム画面（チャンネル未選択時） -->
+      <div id="welcomeScreen" class="screen">
+        <div class="welcome-inner">
+          <div class="welcome-title">チャンネルを選択してください</div>
+          <div class="welcome-sub">左のサイドバーからチャンネルを選ぶか、URLを入力して追加してください。</div>
+        </div>
+      </div>
+
+      <!-- 投票画面 -->
+      <div id="voteScreen" class="screen" style="display:none">
+        <div class="vote-counter">これまでの投票: <span id="voteCount">0</span> 回</div>
+        <div class="vote-pace-wrap">
+          <div class="vote-pace-bar-bg"><div class="vote-pace-bar-fill" id="paceFill" style="width:0%"></div></div>
+          <span id="paceLabel">-</span>
+        </div>
+        <div class="vote-pair-wrap">
+          <div class="vote-pair" id="votePair"></div>
+        </div>
+        <div class="vote-skip"><button id="skipBtn">スキップ</button></div>
+      </div>
+
+      <!-- 一覧画面 -->
+      <div id="listScreen" class="screen" style="display:none">
+        <div id="listGrid"></div>
+      </div>
+
+      <!-- ランキング画面 -->
+      <div id="rankingScreen" class="screen" style="display:none">
+        <div class="ranking-header">
+          <div>
+            <h2>ランキング</h2>
+            <small id="rankSubtitle"></small>
+          </div>
+          <button class="reset-btn" id="resetBtn">データリセット</button>
+        </div>
+        <div class="rank-list" id="rankList"></div>
+      </div>
+
     </div>
   </div>
-  <div id="channelInfoBar">
-    <img class="cib-avatar" id="cibAvatar" src="" alt="" referrerpolicy="no-referrer">
-    <span class="cib-name" id="cibName"></span>
-    <span class="cib-sub" id="cibSub"></span>
-    <button class="cib-back" id="cibBackBtn">← チャンネル一覧</button>
-  </div>
 
-  <main>
-    <!-- Home Screen -->
-    <div id="homeScreen" style="display:none">
-      <div class="home-hero">
-        <div class="home-search-wrap">
-          <input id="homeSearchInput" type="text" placeholder="@ハンドル または チャンネルURLで検索・追加" autocomplete="off">
-          <button class="home-search-btn" id="homeSearchBtn" aria-label="検索">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-          </button>
-        </div>
-      </div>
-      <div class="home-group-bar" id="homeGroupBar"></div>
-      <div class="home-section-title">チャンネル</div>
-      <div id="channelGrid" class="channel-grid"></div>
-      <button class="home-add-btn" id="homeAddBtn">
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-        チャンネルを追加
-      </button>
-      <button class="home-db-export-btn" id="homeDbExportBtn" title="全チャンネルのデータをJSONに書き出す (db/import.js 用)">DB エクスポート</button>
-    </div>
-
-    <!-- Fetch Screen -->
-    <div id="fetchScreen">
-      <div class="fetch-form">
-        <input id="channelUrl" type="text" placeholder="チャンネルURL（@handle または /channel/UC...）">
-        <div class="fetch-actions">
-          <button id="fetchApiBtn">取得</button>
-          <label class="zip-label">ZIP読み込み<input type="file" id="zipImport" accept=".zip"></label>
-        </div>
-        <div id="fetchStatus"></div>
-        <div class="fetch-result-btns" id="fetchBtns" style="display:none">
-          <button id="saveJsonBtn">JSONで保存</button>
-          <button id="saveZipBtn">ZIPでDL</button>
-          <button class="primary-btn" id="loadToAppBtn">このデータで使う</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Vote Screen -->
-    <div id="voteScreen" style="display:none">
-      <div class="vote-counter">これまでの投票: <span id="voteCount">0</span> 回</div>
-      <div class="vote-pace-wrap">
-        <div class="vote-pace-bar-bg"><div class="vote-pace-bar-fill" id="paceFill" style="width:0%"></div></div>
-        <span id="paceLabel">-</span>
-      </div>
-      <div class="vote-pair-wrap">
-        <div class="vote-pair" id="votePair"></div>
-      </div>
-      <div class="vote-skip"><button id="skipBtn">スキップ</button></div>
-    </div>
-
-    <!-- List Screen -->
-    <div id="listScreen" style="display:none">
-      <div id="listGrid"></div>
-    </div>
-
-    <!-- Ranking Screen -->
-    <div id="rankingScreen" style="display:none">
-      <div class="ranking-header">
-        <div>
-          <h2>ランキング</h2>
-          <small id="rankSubtitle"></small>
-        </div>
-        <button class="reset-btn" id="resetBtn">データリセット</button>
-      </div>
-      <div class="rank-list" id="rankList"></div>
-    </div>
-  </main>
-
-  <!-- Group Modal -->
+  <!-- グループ管理モーダル -->
   <div id="groupModal">
     <div class="group-modal-inner">
       <div class="group-modal-header">
@@ -125,7 +120,7 @@
     </div>
   </div>
 
-  <!-- Thumb Modal -->
+  <!-- サムネモーダル -->
   <div id="thumbModal" role="dialog" aria-modal="true">
     <div class="modal-inner">
       <button class="modal-close" id="modalClose" aria-label="閉じる">✕</button>
