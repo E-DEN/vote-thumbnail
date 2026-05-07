@@ -1,5 +1,5 @@
 ﻿# Secrets
-config.js
+public/config.js
 .dev.vars
 *.env
 .env

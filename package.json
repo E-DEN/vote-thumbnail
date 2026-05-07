@@ -1,0 +1,21 @@
+{
+  "name": "vote-thumbnail",
+  "version": "1.0.0",
+  "description": "",
+  "main": "config.example.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "dev":    "wrangler dev --port 8787",
+    "db:init": "wrangler d1 execute vote-thumbnail --local --file=db/schema.sql",
+    "db:seed": "wrangler d1 execute vote-thumbnail --local --file=db/seed.sql",
+    "deploy": "wrangler deploy"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "wrangler": "^4.88.0"
+  }
+}

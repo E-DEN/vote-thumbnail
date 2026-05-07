@@ -1,0 +1,19 @@
+﻿name = "vote-thumbnail"
+main = "server/index.js"
+compatibility_date = "2025-01-01"
+
+# 静的ファイルを / で配信する
+[assets]
+directory = "./public"
+not_found_handling = "single-page-application"
+
+# D1 データベース
+[[d1_databases]]
+binding = "DB"
+database_name = "vote-thumbnail"
+database_id = "local"   # wrangler dev ではローカルSQLiteが使われるためダミー値でOK
+
+# KV (レート制限・一時BAN用)
+[[kv_namespaces]]
+binding = "RATE_LIMIT_KV"
+id = "local"             # 同上

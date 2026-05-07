@@ -1,9 +1,7 @@
 ﻿-- vote-thumbnail DB schema
 -- SQLite (ローカル開発 / Cloudflare D1 共用)
 -- 文字列の日時は ISO 8601 (UTC): datetime('now') -> "2026-05-08T00:00:00"
-
-PRAGMA foreign_keys = ON;
-PRAGMA journal_mode = WAL;
+-- 注意: PRAGMA foreign_keys / journal_mode は D1 非対応のため省略
 
 -- ---------------------------------------------------------------------------
 -- channels
