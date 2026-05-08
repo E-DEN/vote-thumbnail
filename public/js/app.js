@@ -468,7 +468,7 @@ var _GALLERY_PATTERNS = [
 ];
 
 function renderList() {
-  if (_listMode === 'grid') { renderListGrid(); return; }
+  if (_listMode === 'grid') { _renderGrid(); return; }
   // ギャラリーモード
   var grid = document.getElementById('listGrid');
   grid.innerHTML = '';
@@ -480,7 +480,7 @@ function renderList() {
   // 無限スクロール observer リセット
   if (_listScrollObserver) { _listScrollObserver.disconnect(); }
   _listScrollObserver = new IntersectionObserver(function(entries) {
-    if (entries[0].isIntersecting) { _appendListPage(); }
+    if (entries[0].isIntersecting) { _appendGalleryPage(); }
   }, { rootMargin: '200px' });
   var sentinel = document.getElementById('shortsSentinel');
   if (sentinel) { _listScrollObserver.observe(sentinel); }
@@ -498,7 +498,7 @@ function renderList() {
     grid.classList.remove('mode-shorts');
   }
   // 初回ロード
-  _appendListPage();
+  _appendGalleryPage();
 }
 
 // 全カテゴリ共通: ソート済み全件プールを構築する
@@ -523,7 +523,7 @@ function _buildSortedPool() {
 }
 
 // 全カテゴリ共通: 次ページ分のセルをグリッドに追記する
-function _appendListPage() {
+function _appendGalleryPage() {
   var grid = document.getElementById('listGrid');
   if (!grid) return;
   var start = _listPage * _LIST_PAGE_SIZE;
@@ -636,7 +636,7 @@ function _normalizeSortBtnWidths() {
 }
 
 // グリッドモード（カード一覧）
-function renderListGrid() {
+function _renderGrid() {
   var grid = document.getElementById('listGrid');
   grid.innerHTML = '';
   grid.classList.add('mode-grid');
@@ -646,14 +646,14 @@ function renderListGrid() {
   // 無限スクロール observer リセット
   if (_listScrollObserver) { _listScrollObserver.disconnect(); }
   _listScrollObserver = new IntersectionObserver(function(entries) {
-    if (entries[0].isIntersecting) { _appendListGridPage(); }
+    if (entries[0].isIntersecting) { _appendGridPage(); }
   }, { rootMargin: '200px' });
   var sentinel = document.getElementById('shortsSentinel');
   if (sentinel) { _listScrollObserver.observe(sentinel); }
-  _appendListGridPage();
+  _appendGridPage();
 }
 
-function _appendListGridPage() {
+function _appendGridPage() {
   var grid = document.getElementById('listGrid');
   if (!grid) return;
   var start = _listPage * _LIST_PAGE_SIZE;
@@ -1283,7 +1283,7 @@ function init() {
       document.querySelectorAll('.shorts-sort-btn').forEach(function(b) {
         b.classList.toggle('active', b === btn);
       });
-      if (_listMode === 'grid') { renderListGrid(); } else { renderList(); }
+      if (_listMode === 'grid') { _renderGrid(); } else { renderList(); }
     });
   });
 
