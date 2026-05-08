@@ -471,13 +471,19 @@ header {
   flex-shrink: 0;
 }
 .ch-tab {
-  padding: 4px 12px;
+  padding: 0 12px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border-radius: 5px;
   border: none;
   background: transparent;
   color: var(--text-muted);
   font-size: 12px;
   font-weight: 600;
+  white-space: nowrap;
+  box-sizing: border-box;
   transition: background 0.15s, color 0.15s;
 }
 .ch-tab.active {
@@ -497,13 +503,19 @@ header {
   margin-left: auto;
 }
 .cat-btn {
-  padding: 3px 9px;
+  padding: 0 9px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border-radius: 20px;
   border: 1px solid var(--border);
   background: transparent;
   color: var(--text-muted);
   font-size: 11px;
-  transition: all 0.15s;
+  white-space: nowrap;
+  box-sizing: border-box;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
 }
 .cat-btn.active {
   border-color: var(--accent);
@@ -685,13 +697,19 @@ header {
   margin-top: 16px;
 }
 .vote-skip button {
-  padding: 7px 20px;
+  padding: 0 20px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border-radius: 6px;
   border: 1px solid var(--border);
   background: transparent;
   color: var(--text-muted);
   font-size: 13px;
-  transition: all 0.15s;
+  white-space: nowrap;
+  box-sizing: border-box;
+  transition: border-color 0.15s, color 0.15s;
 }
 .vote-skip button:hover {
   border-color: var(--accent);
@@ -1048,19 +1066,20 @@ header {
 
 /* ショートソートボタン */
 .shorts-sort-btn {
-  padding: 3px 0;
-  width: 4.5em;
-  text-align: center;
+  padding: 0 10px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border-radius: 20px;
   border: 1px solid var(--border);
   background: transparent;
   color: var(--text-muted);
   font-size: 11px;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  box-sizing: border-box;
 }
 .shorts-sort-btn:hover { border-color: var(--accent); color: var(--accent); }
 .shorts-sort-btn.active {

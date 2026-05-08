@@ -39,6 +39,7 @@ function rebuildLangDialog() {
         } catch (err) {}
         unregisterLang(delCode);
         if (_lang === delCode) applyLang('ja');
+        if (typeof _normalizeSortBtnWidths === 'function') { _normalizeSortBtnWidths(); }
         if (typeof renderList === 'function') {
           if (typeof _listMode !== 'undefined' && _listMode === 'grid') { renderListGrid(); } else { renderList(); }
         }
@@ -46,6 +47,7 @@ function rebuildLangDialog() {
         return;
       }
       applyLang(code);
+      if (typeof _normalizeSortBtnWidths === 'function') { _normalizeSortBtnWidths(); }
       if (typeof renderList === 'function') {
         if (typeof _listMode !== 'undefined' && _listMode === 'grid') { renderListGrid(); } else { renderList(); }
       }
@@ -176,6 +178,7 @@ function closePopover() {
         loadLangJSON(text);
         rebuildLangDialog();
         applyLang(_lang);
+        if (typeof _normalizeSortBtnWidths === 'function') { _normalizeSortBtnWidths(); }
         if (typeof renderList === 'function') {
           if (typeof _listMode !== 'undefined' && _listMode === 'grid') { renderListGrid(); } else { renderList(); }
         }

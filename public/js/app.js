@@ -542,6 +542,54 @@ function _appendListPage() {
   }
 }
 
+// ソートボタン・カテゴリボタン: 全登録言語で計測し最大幅を min-width に設定する
+var _sortBtnMaxWidths = {};
+var _catBtnMaxWidths  = {};
+var _tabBtnMaxWidths  = {};
+function _normalizeSortBtnWidths() {
+  var codes = Object.keys(_I18N_DICTS);
+
+  function _measureGroup(btns, maxMap, keyAttr, i18nAttr) {
+    codes.forEach(function(code) {
+      var dict = _I18N_DICTS[code] || {};
+      btns.forEach(function(b) {
+        var key     = b.dataset[keyAttr];
+        var i18nKey = b.dataset[i18nAttr];
+        var origMin = b.style.minWidth;
+        var origTxt = b.textContent;
+        b.style.minWidth = '';
+        b.textContent    = dict[i18nKey] || b.textContent;
+        var w = b.offsetWidth;
+        b.textContent    = origTxt;
+        b.style.minWidth = origMin;
+        if (!maxMap[key] || w > maxMap[key]) { maxMap[key] = w; }
+      });
+    });
+    btns.forEach(function(b) {
+      var key = b.dataset[keyAttr];
+      if (maxMap[key]) { b.style.minWidth = maxMap[key] + 'px'; }
+    });
+  }
+
+  _measureGroup(
+    Array.from(document.querySelectorAll('.shorts-sort-btn[data-i18n]')),
+    _sortBtnMaxWidths, 'sort', 'i18n'
+  );
+  _measureGroup(
+    Array.from(document.querySelectorAll('.cat-btn[data-i18n]')),
+    _catBtnMaxWidths, 'cat', 'i18n'
+  );
+  _measureGroup(
+    Array.from(document.querySelectorAll('.ch-tab[data-i18n]')),
+    _tabBtnMaxWidths, 'view', 'i18n'
+  );
+  // スキップボタン（単独）
+  var skipBtn = document.getElementById('skipBtn');
+  if (skipBtn && skipBtn.dataset.i18n) {
+    _measureGroup([skipBtn], {}, 'id', 'i18n');
+  }
+}
+
 // グリッドモード（カード一覧）
 function renderListGrid() {
   var grid = document.getElementById('listGrid');
@@ -1268,6 +1316,7 @@ function init() {
 
   applyTheme(_theme);
   applyLang(_lang);
+  _normalizeSortBtnWidths();
   if (typeof lucide !== 'undefined') lucide.createIcons();
   loadRating();
   loadChannels();
