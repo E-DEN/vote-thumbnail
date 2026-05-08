@@ -91,10 +91,10 @@ header {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: transparent;
+  background: var(--surface2);
   border: 1px solid var(--border);
   border-radius: 50%;
-  color: var(--text-muted);
+  color: var(--text);
   font-size: 11px;
   font-weight: 600;
   transition: color 0.15s, border-color 0.15s, background 0.15s;
@@ -103,7 +103,7 @@ header {
 }
 .header-btn:hover { color: var(--accent); border-color: var(--accent); }
 .header-btn:active { background: var(--surface2); transform: scale(0.93); transition: transform 0.07s, color 0.15s, border-color 0.15s; }
-.header-btn svg { width: 16px; height: 16px; }
+.header-btn svg.lucide { width: 14px; height: 14px; }
 
 /* =====================
    APP LAYOUT (sidebar + main)
