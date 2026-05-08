@@ -113,6 +113,36 @@ async function handleApi(request, env, url) {
       return json({ ok: true, winner: newW, loser: newL });
     }
 
+    // --- GET /api/pins/:videoId/seeds ---
+    const mPinSeeds = path.match(/^\/pins\/([\w-]{11})\/seeds$/);
+    if (method === 'GET' && mPinSeeds) {
+      const videoId = mPinSeeds[1];
+      const rows = await env.DB.prepare(
+        'SELECT x, y FROM reactions WHERE video_id = ?'
+      ).bind(videoId).all();
+      return json({ seeds: aggregateToSeeds(rows.results) });
+    }
+
+    // --- POST /api/pins ---
+    if (method === 'POST' && path === '/pins') {
+      const body = await request.json().catch(() => null);
+      if (!body?.video_id || !body?.session_id || body.x == null || body.y == null) {
+        return err('video_id, session_id, x, y は必須です');
+      }
+      const x = parseFloat(body.x);
+      const y = parseFloat(body.y);
+      if (x < 0 || x > 1 || y < 0 || y > 1) return err('x, y は 0.0–1.0 の範囲です');
+      // session_id は最大64文字に制限
+      const sessionId = String(body.session_id).slice(0, 64);
+      const videoId   = String(body.video_id).slice(0, 20);
+      await env.DB.prepare(
+        `INSERT INTO reactions (video_id, session_id, x, y, updated_at)
+         VALUES (?, ?, ?, ?, datetime('now'))
+         ON CONFLICT(video_id, session_id) DO UPDATE SET x = excluded.x, y = excluded.y, updated_at = excluded.updated_at`
+      ).bind(videoId, sessionId, x, y).run();
+      return json({ ok: true });
+    }
+
     return err('Not Found', 404);
   } catch (e) {
     console.error(e);
@@ -171,4 +201,33 @@ function hashSimple(ip) {
   let h = 0;
   for (let i = 0; i < ip.length; i++) h = (Math.imul(31, h) + ip.charCodeAt(i)) | 0;
   return 'h' + Math.abs(h).toString(16);
+}
+
+// ---------------------------------------------------------------------------
+// pin を 10×10 グリッドでクラスタリングし、密度付きシードを返す
+// ---------------------------------------------------------------------------
+function aggregateToSeeds(pins) {
+  if (!pins || pins.length === 0) return [];
+  const GRID = 10;
+  const cells = new Map();
+  for (const p of pins) {
+    const gx  = Math.min(GRID - 1, Math.floor(p.x * GRID));
+    const gy  = Math.min(GRID - 1, Math.floor(p.y * GRID));
+    const key = `${gx},${gy}`;
+    const c   = cells.get(key) || { sumX: 0, sumY: 0, count: 0 };
+    c.sumX += p.x;
+    c.sumY += p.y;
+    c.count++;
+    cells.set(key, c);
+  }
+  const arr = Array.from(cells.values())
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 12);
+  if (arr.length === 0) return [];
+  const maxCount = arr[0].count;
+  return arr.map(c => ({
+    x:       +(c.sumX / c.count).toFixed(4),
+    y:       +(c.sumY / c.count).toFixed(4),
+    density: +(c.count / maxCount).toFixed(3),
+  }));
 }

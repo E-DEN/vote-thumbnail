@@ -1450,3 +1450,214 @@ header {
   align-items: center;
 }
 .lang-import-actions svg.lucide { width: 14px; height: 14px; }
+
+/* --- ReactionPin --- */
+.reactions-heatmap-layer,
+.reactions-pins-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  display: none;
+}
+
+.modal-img-wrap.reactions-active .reactions-pins-layer,
+.modal-img-wrap.reactions-active .reactions-heatmap-layer {
+  display: block;
+}
+
+.reactions-heatmap-blob {
+  position: absolute;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  mix-blend-mode: screen;
+  background: radial-gradient(circle, rgba(255,0,80,0.28) 0%, rgba(255,0,80,0.12) 35%, rgba(255,0,80,0) 70%);
+  filter: blur(10px);
+}
+
+/* pin アニメーション */
+.reactions-pin {
+  position: absolute;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transform-origin: bottom center;
+  animation: reactionsPinFloat 24s linear forwards;
+}
+
+.reactions-pin-glow {
+  position: absolute;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 50%;
+  background: rgba(236, 72, 153, 0.25);
+  filter: blur(0.8rem);
+}
+
+.reactions-pin-body {
+  position: relative;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.reactions-pin-body svg { fill: #ec4899; }
+
+.reactions-pin-tail {
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 8px solid #fff;
+}
+
+@keyframes reactionsPinFloat {
+  0%   { opacity: 0; translate: 0 8%; }
+  4%   { opacity: 1; translate: 0 0%; }
+  92%  { opacity: 1; translate: 0 -2%; }
+  100% { opacity: 0.06; translate: 0 -4%; }
+}
+
+/* ピンカーソル（ホバー追従） */
+.reactions-cursor {
+  position: absolute;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transform: translate(-50%, -100%);
+  opacity: 0;
+  transition: opacity 0.2s;
+  z-index: 40;
+}
+
+.modal-img-wrap.reactions-active { cursor: crosshair; }
+.modal-img-wrap.reactions-active:hover .reactions-cursor { opacity: 1; }
+
+.reactions-cursor-glow {
+  position: absolute;
+  width: 3rem;
+  height: 3rem;
+  border-radius: 50%;
+  background: rgba(236, 72, 153, 0.25);
+  filter: blur(1rem);
+}
+
+.reactions-cursor-body {
+  position: relative;
+  width: 2.2rem;
+  height: 2.2rem;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,0.4);
+  background: rgba(255,255,255,0.92);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+}
+
+.reactions-cursor-body svg { fill: #ec4899; }
+
+.reactions-cursor-tail {
+  width: 0;
+  height: 0;
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-top: 9px solid rgba(255,255,255,0.92);
+}
+
+/* 自分のピン（固定表示） */
+.reactions-my-pin {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transform: translate(-50%, -100%);
+  z-index: 30;
+  pointer-events: none;
+}
+
+.reactions-my-pin-body {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 0 3px rgba(0,176,244,0.3), 0 4px 16px rgba(0,0,0,0.5);
+}
+
+.reactions-my-pin-body svg { fill: var(--accent); }
+
+.reactions-my-pin-tail {
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 8px solid #fff;
+}
+
+/* リアクションボタン（modal-actions 内） */
+.modal-reactions-btn {
+  flex: 1;
+  padding: 9px 0;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--text);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.modal-reactions-btn:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+/* ReactionPin コントロールバー */
+.modal-reactions-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: var(--surface2);
+  border-top: 1px solid var(--border);
+}
+
+.modal-reactions-controls[hidden] { display: none !important; }
+
+.modal-reactions-mode-btn {
+  padding: 5px 14px;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.modal-reactions-mode-btn.active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+.modal-reactions-back-btn {
+  padding: 5px 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+
+.modal-reactions-back-btn:hover { color: var(--text); }

@@ -81,3 +81,17 @@ CREATE TABLE IF NOT EXISTS daily_votes (
 
 CREATE INDEX IF NOT EXISTS idx_daily_votes_date ON daily_votes(vote_date);
 -- cleanup cron: DELETE FROM daily_votes WHERE vote_date < date('now', '-2 days');
+
+-- ---------------------------------------------------------------------------
+-- reactions  (1 ユーザー 1 動画に付き 1 pin。UPSERT で更新)
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS reactions (
+  video_id    TEXT    NOT NULL REFERENCES videos(video_id),
+  session_id  TEXT    NOT NULL,  -- localStorage で生成した匿名 UUID
+  x           REAL    NOT NULL,  -- 画像内相対 X 座標 (0.0–1.0)
+  y           REAL    NOT NULL,  -- 画像内相対 Y 座標 (0.0–1.0)
+  updated_at  TEXT    NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (video_id, session_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_reactions_video ON reactions(video_id);

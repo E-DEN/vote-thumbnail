@@ -140,11 +140,16 @@ registerLang('ja', '日本語', {
   // モーダル
   'modal-close': '閉じる',
   'yt-btn':      'YouTube で見る',
+  // リアクション
+  'reactions-open':    'リアクション',
+  'reactions-pins':    'Pins',
+  'reactions-heatmap': 'Heatmap',
+  'reactions-back':    '戻る',
   // 表示フォーマット
-  'views-oku': '{n}億回視聴',
-  'views-man': '{n}万回視聴',
-  'views-sen': '{n}千回視聴',
-  'views-n':   '{n}回視聴',
+  'views-100m': '{n}億回視聴',
+  'views-10k':  '{n}万回視聴',
+  'views-1k':   '{n}千回視聴',
+  'views-raw':  '{n}回視聴',
   'time-now':   'たった今',
   'time-min':   '{n}分前',
   'time-hour':  '{n}時間前',
@@ -242,11 +247,16 @@ registerLang('en', 'English', {
   // Modal
   'modal-close': 'Close',
   'yt-btn':      'Watch on YouTube',
+  // リアクション
+  'reactions-open':    'Reaction',
+  'reactions-pins':    'Pins',
+  'reactions-heatmap': 'Heatmap',
+  'reactions-back':    'Back',
   // Format
-  'views-oku': '{n}B views',
-  'views-man': '{n}0K views',
-  'views-sen': '{n}K views',
-  'views-n':   '{n} views',
+  'views-100m': '{n}B views',
+  'views-10k':  '{n}0K views',
+  'views-1k':   '{n}K views',
+  'views-raw':  '{n} views',
   'time-now':   'just now',
   'time-min':   '{n}m ago',
   'time-hour':  '{n}h ago',

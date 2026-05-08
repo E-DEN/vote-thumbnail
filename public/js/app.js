@@ -17,6 +17,24 @@ let selectedGroupId = null;
 const _sidebarCollapsed = {};
 let _chTooltip = null;
 
+// --- ReactionPin グローバル状態 ---
+var _reactionsSessionId = (function() {
+  let id = localStorage.getItem('thumb-session-id');
+  if (!id) {
+    id = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+      const r = Math.random() * 16 | 0;
+      return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+    });
+    localStorage.setItem('thumb-session-id', id);
+  }
+  return id;
+})();
+let _reactionsCurrentVideoId = null;
+let _reactionsMode = 'pins';
+let _reactionsTimer = null;
+let _reactionsSeeds = [];
+let _reactionsMyPins = {};  // videoId → { x, y }
+
 // --- Glicko-2 レーティング ---
 const G2_TAU   = 0.5;
 const G2_SCALE = 173.7178;
@@ -337,10 +355,10 @@ function renderVote() {
 // --- フォーマットユーティリティ ---
 function fmtViews(n) {
   if (!n) return '';
-  if (n >= 100000000) return t('views-oku', { n: (n / 100000000).toFixed(1).replace(/\.0$/, '') });
-  if (n >= 10000)     return t('views-man', { n: Math.floor(n / 10000) });
-  if (n >= 1000)      return t('views-sen', { n: (n / 1000).toFixed(1).replace(/\.0$/, '') });
-  return t('views-n', { n: n.toLocaleString() });
+  if (n >= 100000000) return t('views-100m', { n: (n / 100000000).toFixed(1).replace(/\.0$/, '') });
+  if (n >= 10000)     return t('views-10k',  { n: Math.floor(n / 10000) });
+  if (n >= 1000)      return t('views-1k',   { n: (n / 1000).toFixed(1).replace(/\.0$/, '') });
+  return t('views-raw', { n: n.toLocaleString() });
 }
 function fmtRelTime(isoStr) {
   if (!isoStr) return '';
@@ -629,7 +647,189 @@ function selectChannel(key) {
 const SCREENS = ['welcome', 'vote', 'list', 'ranking'];
 
 // --- サムネモーダル ---
+// --- ReactionPin ---
+function reactionsClamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+function reactionsRandGauss() {
+  let u = 0, g = 0;
+  while (u === 0) u = Math.random();
+  while (g === 0) g = Math.random();
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * g);
+}
+
+async function loadReactionSeeds(videoId) {
+  try {
+    const resp = await fetch('/api/pins/' + videoId + '/seeds');
+    if (!resp.ok) return [];
+    const data = await resp.json();
+    return data.seeds || [];
+  } catch { return []; }
+}
+
+async function postReaction(videoId, x, y) {
+  try {
+    await fetch('/api/pins', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ video_id: videoId, session_id: _reactionsSessionId, x, y }),
+    });
+  } catch { /* サイレント失敗 */ }
+}
+
+function renderReactionsHeatmap(seeds) {
+  const layer = document.getElementById('reactionsHeatmapLayer');
+  layer.innerHTML = '';
+  for (const p of seeds) {
+    const blob = document.createElement('div');
+    blob.className = 'reactions-heatmap-blob';
+    const size = 100 * p.density + 60;
+    blob.style.cssText = 'left:' + (p.x * 100) + '%;top:' + (p.y * 100) + '%;width:' + size + 'px;height:' + size + 'px;';
+    layer.appendChild(blob);
+  }
+}
+
+const REACTIONS_MAX_PINS = 48;
+
+function startReactionsLoop(seeds) {
+  clearTimeout(_reactionsTimer);
+  const pinsLayer = document.getElementById('reactionsPinsLayer');
+  if (!pinsLayer) return;
+  pinsLayer.innerHTML = '';
+  if (seeds.length === 0) return;
+
+  const totalDuration = 9000;
+  const clusters = seeds.map(function(seed) {
+    const targetCount = Math.max(3, Math.floor(4 + seed.density * 14));
+    return {
+      seed,
+      targetCount,
+      avgInterval: totalDuration / targetCount,
+      emitted: 0,
+      nextFire: performance.now() + (1 - seed.density) * 1400 + Math.random() * 1200,
+    };
+  });
+
+  function tick() {
+    const now = performance.now();
+    let allDone = true;
+    for (const cluster of clusters) {
+      if (cluster.emitted >= cluster.targetCount) continue;
+      allDone = false;
+      if (cluster.nextFire > now) continue;
+      const { seed } = cluster;
+      const spread = 0.012 + (1 - seed.density) * 0.03;
+      const x = reactionsClamp(seed.x + reactionsRandGauss() * spread, 0.04, 0.96);
+      const y = reactionsClamp(seed.y + reactionsRandGauss() * spread, 0.04, 0.96);
+      const existing = pinsLayer.querySelectorAll('.reactions-pin');
+      let nearbyCount = 0;
+      for (const el of existing) {
+        const dx = parseFloat(el.dataset.x) - x;
+        const dy = parseFloat(el.dataset.y) - y;
+        if (Math.sqrt(dx * dx + dy * dy) < 0.04) nearbyCount++;
+      }
+      const skipChance = Math.min(0.78, nearbyCount * 0.06 * (1 - seed.density * 0.55));
+      if (Math.random() > skipChance) {
+        while (pinsLayer.children.length >= REACTIONS_MAX_PINS) pinsLayer.removeChild(pinsLayer.firstChild);
+        const scale = 0.8 + seed.density * 0.8;
+        const sz = Math.round(28 * scale);
+        const iconSz = Math.round(sz * 0.52);
+        const pin = document.createElement('div');
+        pin.className = 'reactions-pin';
+        pin.dataset.x = x;
+        pin.dataset.y = y;
+        pin.style.cssText = 'left:' + (x * 100) + '%;top:' + (y * 100) + '%;translate:-50% -100%;scale:' + scale + ';';
+        pin.innerHTML =
+          '<div class="reactions-pin-glow"></div>' +
+          '<div class="reactions-pin-body" style="width:' + sz + 'px;height:' + sz + 'px">' +
+            '<svg viewBox="0 0 24 24" fill="#ec4899" style="width:' + iconSz + 'px;height:' + iconSz + 'px">' +
+              '<path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>' +
+            '</svg>' +
+          '</div>' +
+          '<div class="reactions-pin-tail"></div>';
+        pinsLayer.appendChild(pin);
+      }
+      cluster.emitted++;
+      const progress = cluster.emitted / cluster.targetCount;
+      cluster.nextFire = now + cluster.avgInterval * (0.9 + progress * 0.55) * (0.7 + Math.random() * 0.6);
+    }
+    if (allDone) {
+      _reactionsTimer = setTimeout(function() { startReactionsLoop(seeds); }, 1800);
+      return;
+    }
+    _reactionsTimer = setTimeout(tick, 70);
+  }
+  tick();
+}
+
+function setReactionsMode(mode) {
+  _reactionsMode = mode;
+  const heatmapLayer = document.getElementById('reactionsHeatmapLayer');
+  const pinsLayer    = document.getElementById('reactionsPinsLayer');
+  if (!heatmapLayer) return;
+  heatmapLayer.style.display = mode === 'heatmap' ? '' : 'none';
+  pinsLayer.style.display    = mode === 'pins' ? '' : 'none';
+  document.getElementById('reactionsPinsModeBtn').classList.toggle('active', mode === 'pins');
+  document.getElementById('reactionsHeatmapModeBtn').classList.toggle('active', mode === 'heatmap');
+  if (mode === 'heatmap') {
+    clearTimeout(_reactionsTimer);
+    renderReactionsHeatmap(_reactionsSeeds);
+  } else {
+    startReactionsLoop(_reactionsSeeds);
+  }
+}
+
+function showMyReactionsPin(x, y) {
+  const pin = document.getElementById('reactionsMyPin');
+  pin.style.left = (x * 100) + '%';
+  pin.style.top  = (y * 100) + '%';
+  pin.hidden = false;
+}
+
+function openReactionsMode(videoId) {
+  if (!videoId) return;
+  _reactionsCurrentVideoId = videoId;
+  _reactionsMode = 'pins';
+  const imgWrap    = document.getElementById('modalImgWrap');
+  const info       = document.getElementById('modalInfo');
+  const actions    = document.getElementById('modalActions');
+  const rpControls = document.getElementById('modalReactionsControls');
+  imgWrap.classList.add('reactions-active');
+  info.hidden       = true;
+  actions.hidden    = true;
+  rpControls.hidden = false;
+  document.getElementById('reactionsPinsModeBtn').classList.add('active');
+  document.getElementById('reactionsHeatmapModeBtn').classList.remove('active');
+  document.getElementById('reactionsHeatmapLayer').style.display = 'none';
+  document.getElementById('reactionsPinsLayer').style.display    = '';
+  document.getElementById('reactionsMyPin').hidden = true;
+  // 自分の保存済みピンを復元
+  const saved = _reactionsMyPins[videoId];
+  if (saved) showMyReactionsPin(saved.x, saved.y);
+  // seeds 取得してアニメーション開始
+  loadReactionSeeds(videoId).then(function(seeds) {
+    _reactionsSeeds = seeds;
+    startReactionsLoop(seeds);
+  });
+}
+
+function closeReactionsMode() {
+  clearTimeout(_reactionsTimer);
+  const imgWrap    = document.getElementById('modalImgWrap');
+  const info       = document.getElementById('modalInfo');
+  const actions    = document.getElementById('modalActions');
+  const rpControls = document.getElementById('modalReactionsControls');
+  if (!imgWrap) return;
+  imgWrap.classList.remove('reactions-active');
+  info.hidden       = false;
+  actions.hidden    = false;
+  rpControls.hidden = true;
+  document.getElementById('reactionsPinsLayer').innerHTML = '';
+  document.getElementById('reactionsMyPin').hidden = true;
+}
+
 function openThumbModal({ v, idx, rating, wins, battles, wr, barPct, videoUrl, medal }) {
+  _reactionsCurrentVideoId = v.id;
+  closeReactionsMode();
   const modal = document.getElementById('thumbModal');
   document.getElementById('modalImg').src = v.thumb;
   document.getElementById('modalImg').onerror = function() { this.src = `https://i.ytimg.com/vi/${v.id}/hqdefault.jpg`; };
@@ -647,6 +847,7 @@ function openThumbModal({ v, idx, rating, wins, battles, wr, barPct, videoUrl, m
 }
 
 function closeThumbModal() {
+  closeReactionsMode();
   document.getElementById('thumbModal').classList.remove('open');
   document.body.style.overflow = '';
 }
@@ -889,6 +1090,35 @@ function init() {
   loadGroups();
   renderSidebar();
   showView('welcome');
+
+  // ReactionPin: モード切り替え・戻る
+  document.getElementById('modalReactionsBtn').addEventListener('click', function() {
+    openReactionsMode(_reactionsCurrentVideoId);
+  });
+  document.getElementById('reactionsPinsModeBtn').addEventListener('click', function() { setReactionsMode('pins'); });
+  document.getElementById('reactionsHeatmapModeBtn').addEventListener('click', function() { setReactionsMode('heatmap'); });
+  document.getElementById('reactionsBackBtn').addEventListener('click', closeReactionsMode);
+
+  // ReactionPin: imgWrap ホバー追従 & クリックで pin 配置
+  const _modalImgWrap = document.getElementById('modalImgWrap');
+  _modalImgWrap.addEventListener('mousemove', function(e) {
+    if (!_modalImgWrap.classList.contains('reactions-active')) return;
+    const rect = _modalImgWrap.getBoundingClientRect();
+    const xp = (e.clientX - rect.left) / rect.width;
+    const yp = (e.clientY - rect.top)  / rect.height;
+    const cursor = document.getElementById('reactionsCursor');
+    cursor.style.left = (xp * 100) + '%';
+    cursor.style.top  = (yp * 100) + '%';
+  });
+  _modalImgWrap.addEventListener('click', function(e) {
+    if (!_modalImgWrap.classList.contains('reactions-active') || _reactionsMode !== 'pins') return;
+    const rect = _modalImgWrap.getBoundingClientRect();
+    const xp = reactionsClamp((e.clientX - rect.left) / rect.width,  0.02, 0.98);
+    const yp = reactionsClamp((e.clientY - rect.top)  / rect.height, 0.02, 0.98);
+    _reactionsMyPins[_reactionsCurrentVideoId] = { x: xp, y: yp };
+    showMyReactionsPin(xp, yp);
+    if (_reactionsCurrentVideoId) postReaction(_reactionsCurrentVideoId, xp, yp);
+  });
 }
 
 // --- サイドバーイベント ---
