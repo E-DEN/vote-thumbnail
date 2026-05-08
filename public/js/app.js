@@ -335,10 +335,55 @@ function renderVote() {
     const card = document.createElement('div');
     card.className = 'vote-card';
     card.dataset.id = v.id;
-    const ch = channels[currentChannelKey];
-    card.innerHTML = `
-      <img class="card-banner" src="${v.thumb}" alt="" loading="lazy" onerror="this.src='https://i.ytimg.com/vi/${v.id}/hqdefault.jpg'">
-      <div class="card-body"><div class="card-title">${v.title}</div></div>`;
+    card.innerHTML =
+      '<figure class="tilter__figure">' +
+        '<img class="card-banner" src="' + v.thumb + '" alt="" loading="lazy"' +
+        ' onerror="this.src=\'https://i.ytimg.com/vi/' + v.id + '/hqdefault.jpg\'">' +
+        '<div class="tilter__deco tilter__deco--shine"><div></div></div>' +
+        '<figcaption class="tilter__caption">' + v.title + '</figcaption>' +
+      '</figure>';
+
+    var fig     = card.querySelector('.tilter__figure');
+    var caption = card.querySelector('.tilter__caption');
+    var shine   = card.querySelector('.tilter__deco--shine > div');
+
+    card.addEventListener('mouseenter', function() {
+      // 戻りアニメが進行中ならキャンセルし、CSS transitionを有効化
+      anime.remove([fig, caption, shine]);
+      fig.classList.add('tilt-smooth');
+      caption.classList.add('tilt-smooth');
+      shine.classList.add('tilt-smooth');
+    });
+
+    card.addEventListener('mousemove', function(e) {
+      var rect = card.getBoundingClientRect();
+      // -0.5〜0.5に正規化（CSS transitionが滑らかに追いつく）
+      var nx = (e.clientX - rect.left) / rect.width  - 0.5;
+      var ny = (e.clientY - rect.top)  / rect.height - 0.5;
+      fig.style.transform     = 'rotateX(' + (-ny * 12) + 'deg) rotateY(' + (nx * 16) + 'deg)';
+      caption.style.transform = 'translateX(' + (nx * 28) + 'px) translateY(' + (ny * 28) + 'px)';
+      shine.style.transform   = 'translateX(' + (nx * 100) + 'px) translateY(' + (ny * 100) + 'px)';
+    });
+
+    card.addEventListener('mouseleave', function() {
+      // CSS transitionを無効化してからanime.jsのelasticで戻す
+      fig.classList.remove('tilt-smooth');
+      caption.classList.remove('tilt-smooth');
+      shine.classList.remove('tilt-smooth');
+      // figureの傾きをelasticで戻す
+      anime({ targets: fig,
+        rotateX: 0, rotateY: 0,
+        duration: 1200, easing: 'easeOutElastic', elasticity: 600 });
+      // captionの視差をelasticで戻す
+      anime({ targets: caption,
+        translateX: 0, translateY: 0,
+        duration: 1500, easing: 'easeOutElastic', elasticity: 600 });
+      // shineをelasticで中心に戻す
+      anime({ targets: shine,
+        translateX: 0, translateY: 0,
+        duration: 1200, easing: 'easeOutElastic', elasticity: 600 });
+    });
+
     card.addEventListener('click', () => {
       const winner = idx === 0 ? pairA : pairB;
       const loser  = idx === 0 ? pairB : pairA;

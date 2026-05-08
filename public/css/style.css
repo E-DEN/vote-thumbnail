@@ -603,84 +603,89 @@ header {
 .vote-pace-bar-fill.pace-hot    { background: var(--err); }
 
 .vote-pair-wrap {
-  background: var(--surface2);
-  border-radius: 20px;
-  padding: 24px 20px 20px;
   margin-bottom: 16px;
 }
 .vote-pair {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 14px;
+  gap: 24px;
   align-items: start;
 }
 
 .vote-card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  overflow: hidden;
   cursor: pointer;
   position: relative;
-  transition: transform 0.2s cubic-bezier(0.18, 0.89, 0.32, 1.28), box-shadow 0.2s;
-  box-shadow:
-    0 1px 3px rgba(0,0,0,0.08),
-    0 5px 18px rgba(0,80,160,0.14),
-    0 10px 36px rgba(0,60,120,0.08);
+  perspective: 1000px;
+  /* drop shadow で立体感 */
+  filter: drop-shadow(0 8px 24px rgba(0,0,0,0.65));
+  transition: filter 0.2s;
 }
 .vote-card:hover {
-  transform: translateY(-7px) scale(1.02);
-  box-shadow:
-    0 2px 6px rgba(0,0,0,0.10),
-    0 14px 38px rgba(0,100,180,0.22),
-    0 26px 54px rgba(0,60,120,0.12);
+  filter: drop-shadow(0 16px 40px rgba(0,0,0,0.80));
 }
-/* banner: thumbnail fills top of card */
+/* tilter__figure: TiltFxが回転させる対象 */
+.vote-card .tilter__figure {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  position: relative;
+  overflow: hidden;
+  border-radius: 8px;
+}
+/* banner */
 .vote-card .card-banner {
   width: 100%;
   aspect-ratio: 16/9;
   object-fit: cover;
   display: block;
-  background: var(--surface2);
 }
-/* avatar peeks out from banner bottom (CodePen Morgan style) */
-.vote-card-avatar-row {
-  display: flex;
-  justify-content: center;
-  margin-top: -22px;
-  position: relative;
+/* shine グラデーションオーバーレイ */
+.vote-card .tilter__deco--shine {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  pointer-events: none;
   z-index: 1;
+}
+.vote-card .tilter__deco--shine > div {
+  position: absolute;
+  width: 200%;
+  height: 200%;
+  top: -50%;
+  left: -50%;
+  background-image: linear-gradient(45deg, rgba(0,0,0,0.45) 0%, rgba(255,255,255,0.15) 50%, transparent 100%);
+}
+/* ホバー中はCSS transitionでtiltを滑らかに追従（カード間移動時の急な傾きを防ぐ） */
+.vote-card .tilter__figure.tilt-smooth,
+.vote-card .tilter__caption.tilt-smooth,
+.vote-card .tilter__deco--shine > div.tilt-smooth {
+  transition: transform 0.2s ease-out;
+}
+/* タイトルをサムネ下部に重ねる */
+.vote-card .tilter__caption {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 2;
+  padding: 28px 12px 10px;
+  margin: 0;
+  font-size: clamp(11px, 1.5vw, 14px);
+  font-weight: 700;
+  line-height: 1.35;
+  color: #fff;
+  text-shadow:
+    0 1px 3px rgba(0,0,0,1),
+    0 2px 8px rgba(0,0,0,0.95),
+    0 4px 16px rgba(0,0,0,0.8);
   pointer-events: none;
 }
-.vote-card-avatar {
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  border: 3px solid var(--surface);
-  box-shadow: 0 2px 8px rgba(0,0,0,0.18);
-  background: var(--surface2);
-  object-fit: cover;
-  transition: transform 0.2s cubic-bezier(0.18, 0.89, 0.32, 1.28);
-}
-.vote-card:hover .vote-card-avatar {
-  transform: scale(1.2);
-}
-.vote-card .card-body {
-  padding: 6px 12px 14px;
-}
-.vote-card .card-title {
-  font-size: 12px;
-  color: var(--text);
-  line-height: 1.45;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  min-height: 36px;
-  text-align: center;
-}
 .vote-card.winner {
-  box-shadow: 0 0 0 2.5px var(--ok), 0 8px 28px var(--drop-ok);
+  filter: drop-shadow(0 0 8px var(--ok)) drop-shadow(0 8px 24px var(--drop-ok));
   animation: flash 0.35s ease;
 }
 .vote-card.loser {
