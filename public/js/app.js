@@ -383,65 +383,46 @@ function fmtDuration(sec) {
 // --- 一覧 ---
 let _listHoverTimer = null;
 
+// 行パターン: [列数, flex-grow 重みの配列]
+var _GALLERY_PATTERNS = [
+  [3, [3, 2, 3]],
+  [4, [2, 3, 2, 3]],
+  [3, [2, 4, 2]],
+  [4, [3, 2, 3, 2]],
+];
+
 function renderList() {
-  const pool = filteredVideos();
-  const grid = document.getElementById('listGrid');
+  var pool = filteredVideos();
+  var grid = document.getElementById('listGrid');
   grid.innerHTML = '';
-  for (const v of pool) {
-    const a = document.createElement('a');
-    a.className = 'list-card';
-    a.href = v.url ?? `https://www.youtube.com/watch?v=${v.id}`;
-    a.target = '_blank';
-    a.rel = 'noopener noreferrer';
-    const durHtml = v.duration ? `<span class="list-duration">${fmtDuration(v.duration)}</span>` : '';
-    const views = v.viewCount ? fmtViews(v.viewCount) : '';
-    const date  = v.publishedAt ? fmtRelTime(v.publishedAt) : '';
-    const meta  = [views, date].filter(Boolean).join(' · ');
-    a.innerHTML = `
-      <div class="list-thumb-wrap">
-        <img src="${v.thumb}" alt="" loading="lazy" onerror="this.src='https://i.ytimg.com/vi/${v.id}/hqdefault.jpg'">
-        ${durHtml}
-      </div>
-      <div class="list-info">
-        <div class="list-info-text">
-          <div class="list-info-title">${v.title}</div>
-          ${meta ? `<div class="list-info-meta">${meta}</div>` : ''}
-        </div>
-      </div>`;
-    const wrap = a.querySelector('.list-thumb-wrap');
-    a.addEventListener('mouseenter', () => {
-      _listHoverTimer = setTimeout(() => {
-        if (a.querySelector('.list-preview-iframe')) return;
-        const iframe = document.createElement('iframe');
-        iframe.className = 'list-preview-iframe';
-        iframe.src = `https://www.youtube.com/embed/${v.id}?autoplay=1&mute=1&start=15&controls=0&modestbranding=1&loop=1&playlist=${v.id}&rel=0&enablejsapi=1&origin=${location.origin}`;
-        iframe.allow = 'autoplay';
-        iframe.title = v.title;
-        // エラー153（埋め込み禁止）検知: postMessage でプレーヤーエラーを受信
-        const onMsg = e => {
-          try {
-            const data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
-            if (data?.event === 'infoDelivery' && data?.info?.playerState === -1) return;
-            if (data?.event === 'onError') {
-              iframe.remove();
-              window.removeEventListener('message', onMsg);
-            }
-          } catch {}
-        };
-        window.addEventListener('message', onMsg);
-        iframe._msgHandler = onMsg;
-        wrap.appendChild(iframe);
-      }, 700);
+  var pat = 0;
+  var i = 0;
+  while (i < pool.length) {
+    var conf    = _GALLERY_PATTERNS[pat % _GALLERY_PATTERNS.length];
+    var count   = conf[0];
+    var weights = conf[1];
+    var row     = document.createElement('div');
+    row.className = 'gallery-row';
+    pool.slice(i, i + count).forEach(function(v, j) {
+      var cell = document.createElement('div');
+      cell.className  = 'gallery-cell';
+      cell.style.flexGrow  = weights[j] || 1;
+      cell.style.flexBasis = (weights[j] || 1) * 80 + 'px';
+      cell.innerHTML =
+        '<div class="gallery-img-wrap">' +
+          '<img src="' + v.thumb + '" alt="" loading="lazy"' +
+          ' onerror="this.src=\'https://i.ytimg.com/vi/' + v.id + '/hqdefault.jpg\'"' +
+          ' referrerpolicy="no-referrer">' +
+          '<div class="gallery-overlay"><div class="gallery-title">' + v.title + '</div></div>' +
+        '</div>';
+      cell.addEventListener('click', (function(vid) {
+        return function() { openModalReactions(vid); };
+      }(v)));
+      row.appendChild(cell);
     });
-    a.addEventListener('mouseleave', () => {
-      clearTimeout(_listHoverTimer);
-      const iframe = a.querySelector('.list-preview-iframe');
-      if (iframe) {
-        if (iframe._msgHandler) window.removeEventListener('message', iframe._msgHandler);
-        iframe.remove();
-      }
-    });
-    grid.appendChild(a);
+    grid.appendChild(row);
+    i += Math.min(count, pool.length - i);
+    pat++;
   }
 }
 
@@ -789,21 +770,16 @@ function openReactionsMode(videoId) {
   if (!videoId) return;
   _reactionsCurrentVideoId = videoId;
   _reactionsMode = 'pins';
-  const imgWrap    = document.getElementById('modalImgWrap');
-  const info       = document.getElementById('modalInfo');
-  const actions    = document.getElementById('modalActions');
-  const rpControls = document.getElementById('modalReactionsControls');
-  imgWrap.classList.add('reactions-active');
-  info.hidden       = true;
-  actions.hidden    = true;
-  rpControls.hidden = false;
+  var screen = document.getElementById('reactionsScreen');
+  screen.hidden = false;
+  document.body.style.overflow = 'hidden';
   document.getElementById('reactionsPinsModeBtn').classList.add('active');
   document.getElementById('reactionsHeatmapModeBtn').classList.remove('active');
   document.getElementById('reactionsHeatmapLayer').style.display = 'none';
   document.getElementById('reactionsPinsLayer').style.display    = '';
   document.getElementById('reactionsMyPin').hidden = true;
   // 自分の保存済みピンを復元
-  const saved = _reactionsMyPins[videoId];
+  var saved = _reactionsMyPins[videoId];
   if (saved) showMyReactionsPin(saved.x, saved.y);
   // seeds 取得してアニメーション開始
   loadReactionSeeds(videoId).then(function(seeds) {
@@ -814,15 +790,10 @@ function openReactionsMode(videoId) {
 
 function closeReactionsMode() {
   clearTimeout(_reactionsTimer);
-  const imgWrap    = document.getElementById('modalImgWrap');
-  const info       = document.getElementById('modalInfo');
-  const actions    = document.getElementById('modalActions');
-  const rpControls = document.getElementById('modalReactionsControls');
-  if (!imgWrap) return;
-  imgWrap.classList.remove('reactions-active');
-  info.hidden       = false;
-  actions.hidden    = false;
-  rpControls.hidden = true;
+  var screen = document.getElementById('reactionsScreen');
+  if (!screen) return;
+  screen.hidden = true;
+  document.body.style.overflow = '';
   document.getElementById('reactionsPinsLayer').innerHTML = '';
   document.getElementById('reactionsMyPin').hidden = true;
 }
@@ -852,12 +823,24 @@ function closeThumbModal() {
   document.body.style.overflow = '';
 }
 
+// ギャラリーからリアクション全画面で開く
+function openModalReactions(v) {
+  var img = document.getElementById('reactionsImg');
+  img.src = v.thumb;
+  img.onerror = function() { this.src = 'https://i.ytimg.com/vi/' + v.id + '/hqdefault.jpg'; };
+  document.getElementById('reactionsYtBtn').href = v.url || 'https://www.youtube.com/watch?v=' + v.id;
+  openReactionsMode(v.id);
+}
+
 document.getElementById('modalClose').addEventListener('click', closeThumbModal);
 document.getElementById('thumbModal').addEventListener('click', e => {
   if (e.target === document.getElementById('thumbModal')) closeThumbModal();
 });
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') closeThumbModal();
+  if (e.key === 'Escape') {
+    if (!document.getElementById('reactionsScreen').hidden) { closeReactionsMode(); return; }
+    closeThumbModal();
+  }
 });
 
 const TAB_IDS  = {};
@@ -1092,29 +1075,28 @@ function init() {
   showView('welcome');
 
   // ReactionPin: モード切り替え・戻る
-  document.getElementById('modalReactionsBtn').addEventListener('click', function() {
-    openReactionsMode(_reactionsCurrentVideoId);
-  });
   document.getElementById('reactionsPinsModeBtn').addEventListener('click', function() { setReactionsMode('pins'); });
   document.getElementById('reactionsHeatmapModeBtn').addEventListener('click', function() { setReactionsMode('heatmap'); });
   document.getElementById('reactionsBackBtn').addEventListener('click', closeReactionsMode);
 
   // ReactionPin: imgWrap ホバー追従 & クリックで pin 配置
-  const _modalImgWrap = document.getElementById('modalImgWrap');
-  _modalImgWrap.addEventListener('mousemove', function(e) {
-    if (!_modalImgWrap.classList.contains('reactions-active')) return;
-    const rect = _modalImgWrap.getBoundingClientRect();
-    const xp = (e.clientX - rect.left) / rect.width;
-    const yp = (e.clientY - rect.top)  / rect.height;
-    const cursor = document.getElementById('reactionsCursor');
+  var _rsImgWrap = document.getElementById('reactionsImgWrap');
+  _rsImgWrap.addEventListener('mousemove', function(e) {
+    var screen = document.getElementById('reactionsScreen');
+    if (screen.hidden) return;
+    var rect = _rsImgWrap.getBoundingClientRect();
+    var xp = (e.clientX - rect.left) / rect.width;
+    var yp = (e.clientY - rect.top)  / rect.height;
+    var cursor = document.getElementById('reactionsCursor');
     cursor.style.left = (xp * 100) + '%';
     cursor.style.top  = (yp * 100) + '%';
   });
-  _modalImgWrap.addEventListener('click', function(e) {
-    if (!_modalImgWrap.classList.contains('reactions-active') || _reactionsMode !== 'pins') return;
-    const rect = _modalImgWrap.getBoundingClientRect();
-    const xp = reactionsClamp((e.clientX - rect.left) / rect.width,  0.02, 0.98);
-    const yp = reactionsClamp((e.clientY - rect.top)  / rect.height, 0.02, 0.98);
+  _rsImgWrap.addEventListener('click', function(e) {
+    var screen = document.getElementById('reactionsScreen');
+    if (screen.hidden || _reactionsMode !== 'pins') return;
+    var rect = _rsImgWrap.getBoundingClientRect();
+    var xp = reactionsClamp((e.clientX - rect.left) / rect.width,  0.02, 0.98);
+    var yp = reactionsClamp((e.clientY - rect.top)  / rect.height, 0.02, 0.98);
     _reactionsMyPins[_reactionsCurrentVideoId] = { x: xp, y: yp };
     showMyReactionsPin(xp, yp);
     if (_reactionsCurrentVideoId) postReaction(_reactionsCurrentVideoId, xp, yp);
