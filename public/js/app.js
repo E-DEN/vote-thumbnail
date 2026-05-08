@@ -664,9 +664,7 @@ function _appendListGridPage() {
     var durHtml = v.duration
       ? '<span class="list-duration">' + fmtDuration(v.duration) + '</span>'
       : '';
-    var views   = v.viewCount   ? fmtViews(v.viewCount)      : '';
-    var relTime = v.publishedAt ? fmtRelTime(v.publishedAt)  : '';
-    var meta    = [views, relTime].filter(Boolean).join(' - ');
+    var metaHtml = _buildGalleryMeta(v);
     var card = document.createElement('div');
     card.className = 'list-card' + (v.category === 'shorts' ? ' list-card--short' : '');
     card.innerHTML =
@@ -679,7 +677,7 @@ function _appendListGridPage() {
       '<div class="list-info">' +
         '<div class="list-info-text">' +
           '<div class="list-info-title">' + v.title + '</div>' +
-          (meta ? '<div class="list-info-meta">' + meta + '</div>' : '') +
+          (metaHtml ? '<div class="list-info-meta gallery-meta">' + metaHtml + '</div>' : '') +
         '</div>' +
       '</div>';
     card.addEventListener('click', (function(vid) {

@@ -1038,6 +1038,10 @@ header {
   font-size: 10px;
   letter-spacing: 0.02em;
 }
+/* ギャラリーグリッドカード内では白固定ではなくテーマ色を使う */
+.list-info-meta .gallery-meta-item {
+  color: var(--text-muted);
+}
 .gallery-meta-item svg {
   width: 10px;
   height: 10px;
