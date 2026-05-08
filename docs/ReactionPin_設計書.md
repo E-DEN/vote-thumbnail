@@ -1,4 +1,4 @@
-﻿# Reaction Pin / Attention Map 設計書
+# Reaction Pin / Attention Map 設計書
 
 ## 概要
 

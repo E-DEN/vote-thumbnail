@@ -1,4 +1,4 @@
-﻿// ---
+// ---
 const BASE = 'https://www.googleapis.com/youtube/v3';
 const LS_RATING = 'thumb-ranking-elo';
 const LS_VIDEOS = 'thumb-ranking-videos';

@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env node
+#!/usr/bin/env node
 // db/import.js
 // ブラウザの「DBエクスポート」で保存した JSON を SQLite に投入する
 //

@@ -1,4 +1,4 @@
-﻿// db/fetch-channel.js
+// db/fetch-channel.js
 // YouTube API でチャンネル情報・動画一覧を取得して SQLite に登録する
 //
 // 使い方:

@@ -1,4 +1,4 @@
-﻿// eslint.config.js — vote-thumbnail コードスタイルルール
+// eslint.config.js — vote-thumbnail コードスタイルルール
 // 使い方: npx eslint public/js/
 export default [
   {

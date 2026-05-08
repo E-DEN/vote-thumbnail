@@ -1,4 +1,4 @@
-﻿// worker/index.js
+// worker/index.js
 // Cloudflare Worker エントリーポイント
 // ローカル開発: npx wrangler dev
 // 本番デプロイ: npx wrangler deploy
