@@ -1051,9 +1051,7 @@ header {
   position: relative;
   /* clip-path でblurの枠外はみ出しをクリップする */
   clip-path: inset(0);
-  /* 初期状態: グレースケール・暗い・ぼかし */
-  filter: saturate(0) brightness(0.15) blur(3px);
-  transition: filter 0.5s, box-shadow 0.3s;
+  transition: filter 0.5s, opacity 0.5s, box-shadow 0.3s;
 }
 #listGrid.mode-shorts .gallery-cell--short img {
   width: 100%;
@@ -1065,10 +1063,6 @@ header {
   transition: transform 0.45s;
 }
 /* 視野に完全に入ったセル */
-#listGrid.mode-shorts .gallery-cell--short.inbound {
-  filter: saturate(1) brightness(1) blur(0px);
-  box-shadow: 0 4px 18px rgba(0,0,0,0.4);
-}
 #listGrid.mode-shorts .gallery-cell--short.inbound img {
   transform: scale(1);
 }
@@ -1082,6 +1076,24 @@ header {
 #listGrid.mode-shorts .gallery-cell--short .gallery-title {
   font-size: 11px;
   -webkit-line-clamp: 3;
+}
+/* ダークモード */
+:root[data-theme="dark"] #listGrid.mode-shorts .gallery-cell--short {
+  filter: saturate(0) blur(3px);
+  opacity: 0.02;
+}
+:root[data-theme="dark"] #listGrid.mode-shorts .gallery-cell--short.inbound {
+  filter: saturate(1) blur(0px);
+  opacity: 1;
+}
+/* ライトモード */
+:root[data-theme="light"] #listGrid.mode-shorts .gallery-cell--short {
+  filter: saturate(0) blur(3px);
+  opacity: 0.08;
+}
+:root[data-theme="light"] #listGrid.mode-shorts .gallery-cell--short.inbound {
+  filter: saturate(1) blur(0px);
+  opacity: 1;
 }
 .list-card {
   background: transparent;
