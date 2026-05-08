@@ -41,16 +41,18 @@ function rebuildLangDialog() {
         if (_lang === delCode) applyLang('ja');
         if (typeof _normalizeSortBtnWidths === 'function') { _normalizeSortBtnWidths(); }
         if (typeof renderList === 'function') {
-          if (typeof _listMode !== 'undefined' && _listMode === 'grid') { renderListGrid(); } else { renderList(); }
+          if (typeof _listMode !== 'undefined' && _listMode === 'grid') { _renderGrid(); } else { renderList(); }
         }
+        if (typeof renderRanking === 'function' && typeof currentView !== 'undefined' && currentView === 'ranking') { renderRanking(); }
         rebuildLangDialog();
         return;
       }
       applyLang(code);
       if (typeof _normalizeSortBtnWidths === 'function') { _normalizeSortBtnWidths(); }
       if (typeof renderList === 'function') {
-        if (typeof _listMode !== 'undefined' && _listMode === 'grid') { renderListGrid(); } else { renderList(); }
+        if (typeof _listMode !== 'undefined' && _listMode === 'grid') { _renderGrid(); } else { renderList(); }
       }
+      if (typeof renderRanking === 'function' && typeof currentView !== 'undefined' && currentView === 'ranking') { renderRanking(); }
       const addSec = document.getElementById('langAddSection');
       if (addSec) addSec.hidden = true;
       closePopover();

@@ -1039,7 +1039,8 @@ header {
   letter-spacing: 0.02em;
 }
 /* ギャラリーグリッドカード内では白固定ではなくテーマ色を使う */
-.list-info-meta .gallery-meta-item {
+.list-info-meta .gallery-meta-item,
+.rank-meta-gallery .gallery-meta-item {
   color: var(--text-muted);
 }
 .gallery-meta-item svg {

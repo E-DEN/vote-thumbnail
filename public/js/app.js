@@ -409,7 +409,7 @@ function fmtViews(n) {
 var _SVG_EYE  = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
 var _SVG_CLK  = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>';
 var _SVG_STAR = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>';
-function _buildGalleryMeta(v) {
+function _buildVideoMeta(v) {
   var items = [];
   if (v.viewCount) {
     items.push('<span class="gallery-meta-item">' + _SVG_EYE + fmtViewsShort(v.viewCount) + '</span>');
@@ -535,7 +535,7 @@ function _appendGalleryPage() {
     slice.forEach(function(v) {
       var cell = document.createElement('div');
       cell.className = 'gallery-cell--short';
-      var _meta = _buildGalleryMeta(v);
+      var _meta = _buildVideoMeta(v);
       cell.innerHTML =
         '<img src="' + v.thumb + '" alt="" loading="lazy"' +
         ' onerror="this.src=\'https://i.ytimg.com/vi/' + v.id + '/hqdefault.jpg\'"' +
@@ -572,7 +572,7 @@ function _appendGalleryPage() {
             ' referrerpolicy="no-referrer">' +
             '<div class="gallery-overlay">' +
               '<div class="gallery-title">' + v.title + '</div>' +
-              (function(){ var m = _buildGalleryMeta(v); return m ? '<div class="gallery-meta">' + m + '</div>' : ''; }()) +
+              (function(){ var m = _buildVideoMeta(v); return m ? '<div class="gallery-meta">' + m + '</div>' : ''; }()) +
             '</div>' +
           '</div>';
         cell.addEventListener('click', (function(vid) {
@@ -664,7 +664,7 @@ function _appendGridPage() {
     var durHtml = v.duration
       ? '<span class="list-duration">' + fmtDuration(v.duration) + '</span>'
       : '';
-    var metaHtml = _buildGalleryMeta(v);
+    var metaHtml = _buildVideoMeta(v);
     var card = document.createElement('div');
     card.className = 'list-card' + (v.category === 'shorts' ? ' list-card--short' : '');
     card.innerHTML =
@@ -707,6 +707,7 @@ function renderRankingItems(sorted, maxRating, minRating, range, from, to) {
     const views = v.viewCount ? fmtViews(v.viewCount) : '';
     const date  = v.publishedAt ? fmtRelTime(v.publishedAt) : '';
     const viewDate = [views, date].filter(Boolean).join(' · ');
+    const metaHtml = _buildVideoMeta(v);
     const item = document.createElement('div');
     item.className = `rank-item${idx < 3 ? ` rank-${idx+1}` : ''}`;
     item.innerHTML = `
@@ -719,10 +720,9 @@ function renderRankingItems(sorted, maxRating, minRating, range, from, to) {
       <div class="rank-meta">
         <div class="rank-title"><a href="${videoUrl}" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:none;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='inherit'">${v.title}</a></div>
         <div class="rank-stats">
-          <span class="rating${lowRd ? ' low-battles' : ''}">${Math.round(rating)} ${t('pts')}</span>
           <span>${t('wins-fmt', { w: wins, b: battles })}${battles > 0 ? t('winrate-fmt', { r: wr }) : ''}</span>
         </div>
-        ${viewDate ? `<div class="rank-stats">${viewDate}</div>` : ''}
+        ${metaHtml ? `<div class="rank-stats gallery-meta rank-meta-gallery">${metaHtml}</div>` : ''}
         <div class="rank-bar-bg"><div class="rank-bar-fill" style="width:${barPct}%"></div></div>
       </div>
     `;
