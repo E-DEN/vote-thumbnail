@@ -1,6 +1,6 @@
 ﻿// ---
 const BASE = 'https://www.googleapis.com/youtube/v3';
-const LS_ELO = 'thumb-ranking-elo';
+const LS_RATING = 'thumb-ranking-elo';
 const LS_VIDEOS = 'thumb-ranking-videos';
 const LS_CHANNELS = 'thumb-ranking-channels';
 const LS_GROUPS = 'thumb-ranking-groups';
@@ -8,14 +8,15 @@ const LS_GROUPS = 'thumb-ranking-groups';
 let allVideos = [];
 let currentCat = 'videos';
 let currentView = 'welcome';
-let eloData = {};
+let ratingData = {};
 let voteTotal = 0;
 let channels = {};
 let currentChannelKey = null;
 let groups = [];
 let selectedGroupId = null;
+const _sidebarCollapsed = {};
 
-// --- Glicko-2 ---
+// --- Glicko-2 レーティング ---
 const G2_TAU   = 0.5;
 const G2_SCALE = 173.7178;
 
@@ -23,10 +24,10 @@ function g2Init() {
   return { rating: 1500, rd: 350, volatility: 0.06, wins: 0, battles: 0 };
 }
 
-function getRating(id)  { return eloData[id]?.rating   ?? 1500; }
-function getRd(id)      { return eloData[id]?.rd        ?? 350; }
-function getBattles(id) { return eloData[id]?.battles   ?? 0; }
-function getWins(id)    { return eloData[id]?.wins      ?? 0; }
+function getRating(id)  { return ratingData[id]?.rating   ?? 1500; }
+function getRd(id)      { return ratingData[id]?.rd        ?? 350; }
+function getBattles(id) { return ratingData[id]?.battles   ?? 0; }
+function getWins(id)    { return ratingData[id]?.wins      ?? 0; }
 
 function g2Update(player, opponent, score) {
   const mu    = (player.rating - 1500) / G2_SCALE;
@@ -40,7 +41,7 @@ function g2Update(player, opponent, score) {
   const v     = 1 / (gPhiJ * gPhiJ * E * (1 - E));
   const delta = v * gPhiJ * (score - E);
 
-  // volatility update (Illinois algorithm)
+  // ボラティリティ更新（Illinois アルゴリズム）
   const a = Math.log(sigma * sigma);
   const f = x => {
     const ex = Math.exp(x);
@@ -71,31 +72,31 @@ function g2Update(player, opponent, score) {
 }
 
 function applyVote(winnerId, loserId) {
-  if (!eloData[winnerId]) eloData[winnerId] = g2Init();
-  if (!eloData[loserId])  eloData[loserId]  = g2Init();
-  const w = eloData[winnerId];
-  const l = eloData[loserId];
+  if (!ratingData[winnerId]) ratingData[winnerId] = g2Init();
+  if (!ratingData[loserId])  ratingData[loserId]  = g2Init();
+  const w = ratingData[winnerId];
+  const l = ratingData[loserId];
   const wUp = g2Update(w, l, 1);
   const lUp = g2Update(l, w, 0);
-  eloData[winnerId] = { ...wUp, wins: w.wins + 1, battles: w.battles + 1 };
-  eloData[loserId]  = { ...lUp, wins: l.wins,     battles: l.battles + 1 };
-  saveElo();
+  ratingData[winnerId] = { ...wUp, wins: w.wins + 1, battles: w.battles + 1 };
+  ratingData[loserId]  = { ...lUp, wins: l.wins,     battles: l.battles + 1 };
+  saveRating();
   voteTotal++;
   document.getElementById('voteCount').textContent = voteTotal;
   updatePaceGauge();
 }
 
-function saveElo() {
-  localStorage.setItem(LS_ELO, JSON.stringify({ eloData, voteTotal }));
+function saveRating() {
+  localStorage.setItem(LS_RATING, JSON.stringify({ ratingData, voteTotal }));
 }
 
-function loadElo() {
-  const raw = localStorage.getItem(LS_ELO);
+function loadRating() {
+  const raw = localStorage.getItem(LS_RATING);
   if (!raw) return;
   const d = JSON.parse(raw);
-  const raw2 = d.eloData ?? {};
+  const raw2 = d.ratingData ?? d['eloData'] ?? {};
   // 旧Eloデータ（.elo フィールド）をGlicko-2形式に移行
-  eloData = Object.fromEntries(Object.entries(raw2).map(([id, v]) => [
+  ratingData = Object.fromEntries(Object.entries(raw2).map(([id, v]) => [
     id,
     v.rating != null ? v : { ...g2Init(), rating: v.elo ?? 1500, wins: v.wins ?? 0, battles: v.battles ?? 0 },
   ]));
@@ -103,7 +104,7 @@ function loadElo() {
   document.getElementById('voteCount').textContent = voteTotal;
 }
 
-// --- Channel storage ---
+// --- チャンネルストレージ ---
 function channelKeyFromUrl(url) {
   const m = url.match(/@([\w.-]+)/);
   if (m) return m[1].toLowerCase();
@@ -125,32 +126,6 @@ function loadGroups() {
 function saveGroups() {
   try { localStorage.setItem(LS_GROUPS, JSON.stringify(groups)); } catch {}
 }
-function getGroupPath(gid) {
-  const parts = [];
-  let cur = groups.find(g => g.id === gid);
-  while (cur) {
-    parts.unshift(cur.label);
-    cur = cur.parentId ? groups.find(g => g.id === cur.parentId) : null;
-  }
-  return parts.join(' ? ');
-}
-function getAllDescendantLabels(label) {
-  const root = groups.find(g => g.label === label);
-  if (!root) return new Set([label]);
-  const result = new Set();
-  const queue = [root.id];
-  while (queue.length) {
-    const id = queue.shift();
-    const g = groups.find(g => g.id === id);
-    if (!g) continue;
-    result.add(g.label);
-    groups.filter(g2 => g2.parentId === id).forEach(c => queue.push(c.id));
-  }
-  return result;
-}
-function renderGroupFilterBar() {
-  // グループフィルタはサイドバーで管理するため不要
-}
 function saveVideosForChannel(key, videos) {
   try { localStorage.setItem(LS_VIDEOS + '_' + key, JSON.stringify(videos)); } catch {}
 }
@@ -159,50 +134,7 @@ function loadVideosForChannel(key) {
   return raw ? JSON.parse(raw) : null;
 }
 
-// --- DB エクスポート (ローカル開発用) ---
-function exportForDb() {
-  const chs = Object.values(channels).map(ch => ({
-    channel_id:    ch.key,
-    handle:        ch.handle ? '@' + ch.handle : null,
-    title:         ch.displayName ?? ch.handle ?? ch.key,
-    icon_url:      ch.avatar ?? '',
-    last_accessed: new Date().toISOString(),
-  }));
-
-  const vids = [];
-  for (const ch of Object.values(channels)) {
-    const stored = loadVideosForChannel(ch.key);
-    if (!stored) continue;
-    for (const v of stored) {
-      const g2 = eloData[v.id];
-      vids.push({
-        video_id:      v.id,
-        channel_id:    ch.key,
-        title:         v.title ?? '',
-        thumbnail_url: v.thumb ?? '',
-        category:      v.category ?? 'videos',
-        duration:      v.duration ?? 0,
-        view_count:    v.viewCount ?? 0,
-        published_at:  v.publishedAt ?? null,
-        rating:        g2?.rating    ?? 1500,
-        rd:            g2?.rd        ?? 350,
-        volatility:    g2?.volatility ?? 0.06,
-        wins:          g2?.wins      ?? 0,
-        battles:       g2?.battles   ?? 0,
-        rating_updated_at: g2 ? new Date().toISOString() : null,
-      });
-    }
-  }
-
-  const blob = new Blob([JSON.stringify({ exportedAt: new Date().toISOString(), channels: chs, videos: vids }, null, 2)], { type: 'application/json' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `db-export-${new Date().toISOString().slice(0,10)}.json`;
-  a.click();
-  URL.revokeObjectURL(a.href);
-}
-
-// --- API helpers ---
+// --- API ヘルパー ---
 async function apiFetch(url) {
   const res = await fetch(url);
   if (!res.ok) {
@@ -299,12 +231,12 @@ function loadChannelVideos(key) {
   return true;
 }
 
-// --- Category filter ---
+// --- カテゴリフィルタ ---
 function filteredVideos() {
   return allVideos.filter(v => v.category === currentCat);
 }
 
-// --- Vote ---
+// --- 投票 ---
 // RDが高い（対戦数が少ない）サムネを優先的に選出
 function pickPair() {
   const pool = filteredVideos();
@@ -329,10 +261,11 @@ function pickPair() {
 // --- 投票ペースゲージ ---
 const voteTimes = [];
 
+const PACE_WINDOW_MS = 10000;
 const PACE_LEVELS = [
-  { max: 5,        label: 'Stable',  cls: '' },
-  { max: 12,       label: 'Busy',    cls: 'pace-warm' },
-  { max: Infinity, label: 'Cooling', cls: 'pace-hot' },
+  { max: 5,        label: '安定',  cls: '' },
+  { max: 12,       label: '速い',    cls: 'pace-warm' },
+  { max: Infinity, label: '猛速', cls: 'pace-hot' },
 ];
 
 function updatePaceGauge() {
@@ -380,7 +313,7 @@ function renderVote() {
   });
 }
 
-// --- Helpers: format ---
+// --- フォーマットユーティリティ ---
 function fmtViews(n) {
   if (!n) return '';
   if (n >= 100000000) return (n / 100000000).toFixed(1).replace(/\.0$/, '') + '億回視聴';
@@ -408,7 +341,7 @@ function fmtDuration(sec) {
   return `${m}:${String(s).padStart(2,'0')}`;
 }
 
-// --- List ---
+// --- 一覧 ---
 let _listHoverTimer = null;
 
 function renderList() {
@@ -473,11 +406,11 @@ function renderList() {
   }
 }
 
-// --- Ranking ---
+// --- ランキング ---
 const RANK_PAGE = 50;
 let rankShowCount = RANK_PAGE;
 
-function renderRankingItems(sorted, maxElo, minElo, range, from, to) {
+function renderRankingItems(sorted, maxRating, minRating, range, from, to) {
   const list = document.getElementById('rankList');
   sorted.slice(from, to).forEach((v, i) => {
     const idx = from + i;
@@ -486,7 +419,7 @@ function renderRankingItems(sorted, maxElo, minElo, range, from, to) {
     const wins = getWins(v.id);
     const battles = getBattles(v.id);
     const wr = battles > 0 ? Math.round(wins / battles * 100) : 0;
-    const barPct = Math.round((rating - minElo) / range * 100);
+    const barPct = Math.round((rating - minRating) / range * 100);
     const lowRd = rd > 150;
     const videoUrl = v.url ?? `https://www.youtube.com/watch?v=${v.id}`;
     const medalEmoji = idx === 0 ? '??' : idx === 1 ? '??' : idx === 2 ? '??' : '';
@@ -507,7 +440,7 @@ function renderRankingItems(sorted, maxElo, minElo, range, from, to) {
       <div class="rank-meta">
         <div class="rank-title"><a href="${videoUrl}" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:none;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='inherit'">${v.title}</a></div>
         <div class="rank-stats">
-          <span class="elo${lowRd ? ' low-battles' : ''}">${Math.round(rating)} pts</span>
+          <span class="rating${lowRd ? ' low-battles' : ''}">${Math.round(rating)} pts</span>
           <span>${wins}勝 / ${battles}戦${battles > 0 ? ' · ' + wr + '%' : ''}</span>
         </div>
         ${viewDate ? `<div class="rank-stats">${viewDate}</div>` : ''}
@@ -521,16 +454,16 @@ function renderRankingItems(sorted, maxElo, minElo, range, from, to) {
 function renderRanking() {
   const pool = filteredVideos();
   const sorted = [...pool].sort((a, b) => getRating(b.id) - getRating(a.id));
-  const maxElo = sorted.length ? getRating(sorted[0].id) : 1500;
-  const minElo = sorted.length ? getRating(sorted[sorted.length - 1].id) : 1500;
-  const range = maxElo - minElo || 1;
+  const maxRating = sorted.length ? getRating(sorted[0].id) : 1500;
+  const minRating = sorted.length ? getRating(sorted[sorted.length - 1].id) : 1500;
+  const range = maxRating - minRating || 1;
 
   rankShowCount = RANK_PAGE;
   document.getElementById('rankSubtitle').textContent = `${pool.length} 件 / ${currentCat}`;
   const list = document.getElementById('rankList');
   list.innerHTML = '';
 
-  renderRankingItems(sorted, maxElo, minElo, range, 0, Math.min(rankShowCount, sorted.length));
+  renderRankingItems(sorted, maxRating, minRating, range, 0, Math.min(rankShowCount, sorted.length));
 
   // もっと見るボタン
   if (sorted.length > rankShowCount) {
@@ -544,7 +477,7 @@ function renderRanking() {
       const prev = rankShowCount;
       rankShowCount = Math.min(rankShowCount + RANK_PAGE, sorted.length);
       btn.remove();
-      renderRankingItems(sorted, maxElo, minElo, range, prev, rankShowCount);
+      renderRankingItems(sorted, maxRating, minRating, range, prev, rankShowCount);
       if (rankShowCount < sorted.length) {
         btn.textContent = `もっと見る（あと ${sorted.length - rankShowCount} 件）`;
         list.appendChild(btn);
@@ -554,7 +487,7 @@ function renderRanking() {
   }
 }
 
-// --- Top-ranked video helper ---
+// --- 最高レート動画ヘルパー ---
 function getTopRankedVideo(key) {
   const videos = loadVideosForChannel(key);
   if (!videos?.length) return null;
@@ -563,7 +496,7 @@ function getTopRankedVideo(key) {
   return active.reduce((best, v) => getRating(v.id) >= getRating(best.id) ? v : best, active[0]);
 }
 
-// --- Sidebar ---
+// --- サイドバー ---
 // コンパクト状態を維持
 
 function buildChannelItem(ch) {
@@ -658,10 +591,10 @@ function selectChannel(key) {
   showView('vote');
 }
 
-// --- View switch ---
+// --- 画面切り替え ---
 const SCREENS = ['welcome', 'vote', 'list', 'ranking'];
 
-// --- Thumb Modal ---
+// --- サムネモーダル ---
 function openThumbModal({ v, idx, rating, wins, battles, wr, barPct, videoUrl, medal }) {
   const modal = document.getElementById('thumbModal');
   document.getElementById('modalImg').src = v.thumb;
@@ -794,9 +727,9 @@ async function addChannelFromSidebarInput() {
   }
 }
 
-// --- Init ---
+// --- 初期化 ---
 function init() {
-  loadElo();
+  loadRating();
   loadChannels();
   loadGroups();
   renderSidebar();
@@ -833,14 +766,12 @@ document.getElementById('catFilter').addEventListener('click', e => {
 
 document.getElementById('resetBtn').addEventListener('click', () => {
   if (!confirm('全投票データをリセットしますか？')) return;
-  saveElo();
+  saveRating();
   document.getElementById('voteCount').textContent = 0;
   renderRanking();
 });
 
-
-
-// --- Group modal ---
+// --- グループモーダル ---
 function openGroupModal() {
   renderGroupModal();
   document.getElementById('groupModal').classList.add('open');
@@ -850,7 +781,7 @@ function closeGroupModal() {
 }
 
 function renderGroupModal() {
-  // Left panel: group list
+  // 左パネル: グループリスト
   const listEl = document.getElementById('gmGroupList');
   listEl.innerHTML = '';
   if (groups.length === 0) {
@@ -888,7 +819,7 @@ function renderGroupModal() {
     listEl.appendChild(item);
   });
 
-  // Right panel: selected group detail
+  // 右パネル: 選択グループ詳細
   const detail = document.getElementById('gmDetail');
   const g = selectedGroupId ? groups.find(g2 => g2.id === selectedGroupId) : null;
   if (!g) {
@@ -944,7 +875,7 @@ function renderGroupModal() {
     chScroll.appendChild(item);
   });
 
-  // "Add" list: channels not yet in this group
+  // 追加候補: グループ未所属チャンネル
   const addScroll = detail.querySelector('#gmAddList');
   if (notInGroup.length === 0) {
     addScroll.innerHTML = '<div style="padding:6px 10px;font-size:12px;color:var(--text-muted)">全チャンネルが追加済みです</div>';
