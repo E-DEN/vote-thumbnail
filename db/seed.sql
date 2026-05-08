@@ -1,4 +1,4 @@
-﻿-- Mock seed data for local development
+-- Mock seed data for local development
 -- Usage: sqlite3 db/vote ".read db/seed.sql"
 
 -- ---------------------------------------------------------------------------

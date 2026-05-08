@@ -1,4 +1,4 @@
-﻿name = "vote-thumbnail"
+name = "vote-thumbnail"
 main = "server/index.js"
 compatibility_date = "2025-01-01"
 
