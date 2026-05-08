@@ -15,6 +15,7 @@ let currentChannelKey = null;
 let groups = [];
 let selectedGroupId = null;
 const _sidebarCollapsed = {};
+let _chTooltip = null;
 
 // --- Glicko-2 レーティング ---
 const G2_TAU   = 0.5;
@@ -503,11 +504,24 @@ function buildChannelItem(ch) {
   const item = document.createElement('div');
   item.className = 'sidebar-channel-item' + (currentChannelKey === ch.key ? ' active' : '');
   item.dataset.key = ch.key;
+  const name = ch.displayName || ch.handle || ch.key;
   const avatarEl = ch.avatar
     ? `<img class="sidebar-ch-avatar" src="${ch.avatar}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'">`
     : `<div class="sidebar-ch-avatar"></div>`;
-  item.innerHTML = `${avatarEl}<span class="sidebar-ch-name">${ch.displayName || ch.handle || ch.key}</span>`;
+  item.innerHTML = `${avatarEl}<span class="sidebar-ch-name">${name}</span>`;
   item.addEventListener('click', () => selectChannel(ch.key));
+  // コンパクト時のチャンネル名ツールチップ
+  item.addEventListener('mouseenter', () => {
+    if (!_chTooltip || !document.getElementById('sidebar').classList.contains('sidebar--compact')) return;
+    const rect = item.getBoundingClientRect();
+    _chTooltip.textContent = name;
+    _chTooltip.style.top = (rect.top + rect.height / 2) + 'px';
+    _chTooltip.style.left = (rect.right + 10) + 'px';
+    _chTooltip.classList.add('visible');
+  });
+  item.addEventListener('mouseleave', () => {
+    if (_chTooltip) _chTooltip.classList.remove('visible');
+  });
   return item;
 }
 
@@ -692,6 +706,8 @@ async function addChannelFromSidebarInput() {
   try {
     statusEl.textContent = t('fetching-channel');
 
+    const { playlistId, channelName, avatar } = await getUploadsPlaylistId(apiKey, parsed);
+
     const videoIds = await getAllVideoIds(apiKey, playlistId, (cur, total) => {
       statusEl.textContent = t('fetching-videos', { cur, total });
     });
@@ -744,6 +760,76 @@ function applyTheme(theme) {
 
 // --- 初期化 ---
 function init() {
+  // チャンネル名ツールチップ要素を一度だけ生成
+  _chTooltip = document.createElement('div');
+  _chTooltip.className = 'ch-tooltip';
+  document.body.appendChild(_chTooltip);
+
+  // コンパクトモード: チャンネル追加ポップオーバーを生成
+  const _compactAddBtn = document.getElementById('sidebarCompactAddBtn');
+  const _compactAddPop = document.createElement('div');
+  _compactAddPop.className = 'sidebar-compact-add-pop';
+  _compactAddPop.hidden = true;
+  _compactAddPop.innerHTML =
+    '<div class="sidebar-compact-add-input-row">' +
+    '<input class="sidebar-compact-add-input" id="sidebarCompactInput" type="text" autocomplete="off" placeholder="URL / @handle">' +
+    '<button class="sidebar-compact-add-submit" id="sidebarCompactSubmit">' +
+    '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>' +
+    '</button></div>' +
+    '<div class="sidebar-compact-add-status" id="sidebarCompactStatus"></div>';
+  document.body.appendChild(_compactAddPop);
+
+  // sidebarSearchStatus の変化をコンパクトステータスに転写
+  new MutationObserver(function() {
+    const cst = document.getElementById('sidebarCompactStatus');
+    if (!cst || _compactAddPop.hidden) return;
+    const src = document.getElementById('sidebarSearchStatus');
+    cst.textContent = src.textContent;
+    cst.className = 'sidebar-compact-add-status' +
+      (src.classList.contains('error') ? ' error' : src.classList.contains('ok') ? ' ok' : '');
+  }).observe(document.getElementById('sidebarSearchStatus'), { childList: true, characterData: true, subtree: true });
+
+  function _openCompactPop() {
+    const rect = _compactAddBtn.getBoundingClientRect();
+    _compactAddPop.hidden = false;
+    _compactAddPop.style.top  = rect.top + 'px';
+    _compactAddPop.style.left = (rect.right + 8) + 'px';
+    requestAnimationFrame(function() { _compactAddPop.classList.add('visible'); });
+    const inp = document.getElementById('sidebarCompactInput');
+    inp.value = '';
+    document.getElementById('sidebarCompactStatus').textContent = '';
+    inp.focus();
+  }
+  function _closeCompactPop() {
+    _compactAddPop.classList.remove('visible');
+    setTimeout(function() { _compactAddPop.hidden = true; }, 160);
+  }
+  async function _submitCompactAdd() {
+    const inp = document.getElementById('sidebarCompactInput');
+    const val = inp.value.trim();
+    if (!val) return;
+    inp.value = '';
+    document.getElementById('sidebarSearchInput').value = val;
+    await addChannelFromSidebarInput();
+    setTimeout(_closeCompactPop, 2500);
+  }
+
+  _compactAddBtn.addEventListener('click', function(e) {
+    e.stopPropagation();
+    if (_compactAddPop.hidden) _openCompactPop();
+    else _closeCompactPop();
+  });
+  document.getElementById('sidebarCompactInput').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') _submitCompactAdd();
+    if (e.key === 'Escape') { e.stopPropagation(); _closeCompactPop(); }
+  });
+  document.getElementById('sidebarCompactSubmit').addEventListener('click', _submitCompactAdd);
+  document.addEventListener('click', function(e) {
+    if (!_compactAddPop.hidden && !_compactAddPop.contains(e.target) && e.target !== _compactAddBtn) {
+      _closeCompactPop();
+    }
+  });
+
   applyTheme(_theme);
   applyLang(_lang);
   if (typeof lucide !== 'undefined') lucide.createIcons();
@@ -757,6 +843,9 @@ function init() {
 // --- サイドバーイベント ---
 document.getElementById('sidebarSearchInput').addEventListener('keydown', e => {
   if (e.key === 'Enter') addChannelFromSidebarInput();
+});
+document.getElementById('sidebarSearchBtn').addEventListener('click', () => {
+  addChannelFromSidebarInput();
 });
 document.getElementById('sidebarManageBtn').addEventListener('click', () => {
   selectedGroupId = null;
@@ -973,8 +1062,19 @@ document.getElementById('groupModal').addEventListener('click', e => {
   const handle = document.getElementById('sidebarResizeHandle');
   const sidebar = document.getElementById('sidebar');
   const STORAGE_KEY = 'sidebar-width';
+  const COMPACT_THRESHOLD = 100;
+  const COMPACT_WIDTH = 72;
+
+  function applyCompact(w) {
+    sidebar.classList.toggle('sidebar--compact', w <= COMPACT_WIDTH);
+  }
+
   const saved = localStorage.getItem(STORAGE_KEY);
-  if (saved) sidebar.style.width = saved + 'px';
+  if (saved) {
+    const w = parseInt(saved);
+    sidebar.style.width = w + 'px';
+    applyCompact(w);
+  }
 
   let startX, startW;
   handle.addEventListener('mousedown', e => {
@@ -986,8 +1086,11 @@ document.getElementById('groupModal').addEventListener('click', e => {
     document.addEventListener('mouseup', onUp);
   });
   function onMove(e) {
-    const w = Math.min(400, Math.max(140, startW + e.clientX - startX));
+    let w = startW + e.clientX - startX;
+    if (w < COMPACT_THRESHOLD) w = COMPACT_WIDTH;
+    w = Math.min(400, Math.max(COMPACT_WIDTH, w));
     sidebar.style.width = w + 'px';
+    applyCompact(w);
   }
   function onUp() {
     handle.classList.remove('dragging');

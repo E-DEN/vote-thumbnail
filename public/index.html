@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title data-i18n="app-title">みんなの推しサムネ</title>
+  <title data-i18n="app-title">ラブ❤ねいる</title>
   <meta name="referrer" content="no-referrer">
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
   <script src="config.js" onerror="void 0"></script>
@@ -13,7 +13,7 @@
 
   <!-- ヘッダー -->
   <header>
-    <div class="app-logo" data-i18n="sidebar-logo">推しサムネ</div>
+    <div class="app-logo" data-i18n="sidebar-logo">ラブ❤ねいる</div>
     <div class="header-controls">
       <!-- 言語ポップオーバー -->
       <div class="lang-popover-anchor">
@@ -67,6 +67,13 @@
         </button>
       </div>
       <div class="sidebar-search-status" id="sidebarSearchStatus"></div>
+
+      <!-- コンパクトモード: チャンネル追加ボタン -->
+      <div class="sidebar-compact-add-wrap" id="sidebarCompactAddWrap">
+        <button class="sidebar-compact-add-btn" id="sidebarCompactAddBtn" aria-label="追加">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+        </button>
+      </div>
 
       <!-- チャンネルリスト（グループ別） -->
       <nav class="sidebar-nav" id="sidebarNav"></nav>
