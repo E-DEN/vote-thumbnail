@@ -39,10 +39,16 @@ function rebuildLangDialog() {
         } catch (err) {}
         unregisterLang(delCode);
         if (_lang === delCode) applyLang('ja');
+        if (typeof renderList === 'function') {
+          if (typeof _listMode !== 'undefined' && _listMode === 'grid') { renderListGrid(); } else { renderList(); }
+        }
         rebuildLangDialog();
         return;
       }
       applyLang(code);
+      if (typeof renderList === 'function') {
+        if (typeof _listMode !== 'undefined' && _listMode === 'grid') { renderListGrid(); } else { renderList(); }
+      }
       const addSec = document.getElementById('langAddSection');
       if (addSec) addSec.hidden = true;
       closePopover();
@@ -170,6 +176,9 @@ function closePopover() {
         loadLangJSON(text);
         rebuildLangDialog();
         applyLang(_lang);
+        if (typeof renderList === 'function') {
+          if (typeof _listMode !== 'undefined' && _listMode === 'grid') { renderListGrid(); } else { renderList(); }
+        }
         closePopover();
       } catch (e) {
         alert(t('lang-import-err'));

@@ -136,8 +136,16 @@
           <button class="list-mode-btn" id="listModeGridBtn" title="グリッド">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
           </button>
+          <!-- ソートボタン群 -->
+          <div id="shortsSortBar" style="gap:4px; align-items:center; margin-left:auto; display:flex;">
+            <button class="shorts-sort-btn active" data-sort="views"  data-i18n="sort-views"></button>
+            <button class="shorts-sort-btn" data-sort="date"   data-i18n="sort-date"></button>
+            <button class="shorts-sort-btn" data-sort="rating" data-i18n="sort-rating"></button>
+            <button class="shorts-sort-btn" data-sort="random" data-i18n="sort-random"></button>
+          </div>
         </div>
         <div id="listGrid"></div>
+        <div id="shortsSentinel" style="height:1px;"></div>
       </div>
 
       <!-- ランキング画面 -->
