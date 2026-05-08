@@ -1,26 +1,68 @@
 ﻿<!DOCTYPE html>
-<html lang="ja">
+<html lang="ja" data-theme="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>みんなの推しサムネ</title>
+  <title data-i18n="app-title">みんなの推しサムネ</title>
   <meta name="referrer" content="no-referrer">
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
   <script src="config.js" onerror="void 0"></script>
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
+
+  <!-- ヘッダー -->
+  <header>
+    <div class="app-logo" data-i18n="sidebar-logo">推しサムネ</div>
+    <div class="header-controls">
+      <!-- 言語ポップオーバー -->
+      <div class="lang-popover-anchor">
+        <button class="header-btn" id="langImportBtn" data-i18n-title="lang-switch">
+          <i data-lucide="globe"></i>
+        </button>
+        <div id="langImportDialog" class="lang-popover" hidden>
+          <div id="langOptionList" class="lang-option-list"></div>
+          <div id="langAddSection" hidden>
+            <hr class="lang-dialog-sep">
+            <div class="lang-add-form">
+              <div id="langImportDrop" class="lang-import-drop">
+                <i data-lucide="file-json" style="width:22px;height:22px;opacity:0.5;flex-shrink:0"></i>
+                <div class="drop-text">
+                  <span data-i18n="lang-import-drop"></span>
+                  <span style="font-size:10px;" data-i18n="drop-hint"></span>
+                </div>
+              </div>
+              <p class="lang-import-or" data-i18n="lang-import-or"></p>
+              <textarea id="langImportText" class="lang-import-textarea" rows="4" data-i18n-ph="lang-import-ph"></textarea>
+              <div class="lang-import-actions">
+                <button class="popover-btn popover-btn-primary" id="langImportApply" data-i18n="lang-import-apply"></button>
+                <span style="flex:1"></span>
+                <button class="popover-btn" id="langTemplateDownload" data-i18n-title="lang-template-dl" style="min-width:0;width:32px;height:32px;padding:0;display:flex;align-items:center;justify-content:center"><i data-lucide="download"></i></button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- テーマ切り替え -->
+      <button class="header-btn" id="themeBtn" onclick="applyTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark')">
+        <i data-lucide="moon"></i>
+      </button>
+      <!-- GitHub リンク（仮置き） -->
+      <a class="header-btn" href="https://github.com/E-DEN/vote-thumbnail" target="_blank" rel="noopener" title="GitHub">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+      </a>
+    </div>
+  </header>
+
   <div class="app-layout">
 
     <!-- サイドバー -->
     <aside class="sidebar" id="sidebar">
-      <div class="sidebar-header">
-        <span class="sidebar-logo">推しサムネ</span>
-      </div>
 
       <!-- チャンネル検索・追加 -->
       <div class="sidebar-search-wrap">
-        <input class="sidebar-search-input" id="sidebarSearchInput" type="text" placeholder="URL / @handle を追加" autocomplete="off">
-        <button class="sidebar-search-btn" id="sidebarSearchBtn" aria-label="追加">
+        <input class="sidebar-search-input" id="sidebarSearchInput" type="text" placeholder="URL / @handle を追加" data-i18n-ph="search-ph" autocomplete="off">
+        <button class="sidebar-search-btn" id="sidebarSearchBtn" aria-label="追加" data-i18n-aria="search-add">
           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         </button>
       </div>
@@ -34,7 +76,7 @@
 
       <!-- フッター -->
       <div class="sidebar-footer">
-        <button class="sidebar-manage-btn" id="sidebarManageBtn" title="グループ管理">グループ管理</button>
+        <button class="sidebar-manage-btn" id="sidebarManageBtn" title="グループ管理" data-i18n="group-manage" data-i18n-title="group-manage">グループ管理</button>
       </div>
     </aside>
 
@@ -46,28 +88,28 @@
         <img class="ch-avatar" id="chAvatar" src="" alt="" referrerpolicy="no-referrer">
         <span class="ch-name" id="chName"></span>
         <div class="ch-tabs">
-          <button class="ch-tab active" data-view="vote">投票</button>
-          <button class="ch-tab" data-view="list">一覧</button>
-          <button class="ch-tab" data-view="ranking">ランキング</button>
+          <button class="ch-tab active" data-view="vote" data-i18n="tab-vote">投票</button>
+          <button class="ch-tab" data-view="list" data-i18n="tab-list">一覧</button>
+          <button class="ch-tab" data-view="ranking" data-i18n="tab-ranking">ランキング</button>
         </div>
         <div class="cat-filter" id="catFilter">
-          <button class="cat-btn active" data-cat="videos">動画</button>
-          <button class="cat-btn" data-cat="shorts">ショート</button>
-          <button class="cat-btn" data-cat="live">ライブ</button>
+          <button class="cat-btn active" data-cat="videos" data-i18n="cat-videos">動画</button>
+          <button class="cat-btn" data-cat="shorts" data-i18n="cat-shorts">ショート</button>
+          <button class="cat-btn" data-cat="live" data-i18n="cat-live">ライブ</button>
         </div>
       </div>
 
       <!-- ウェルカム画面（チャンネル未選択時） -->
       <div id="welcomeScreen" class="screen">
         <div class="welcome-inner">
-          <div class="welcome-title">チャンネルを選択してください</div>
-          <div class="welcome-sub">左のサイドバーからチャンネルを選ぶか、URLを入力して追加してください。</div>
+          <div class="welcome-title" data-i18n="welcome-title">チャンネルを選択してください</div>
+          <div class="welcome-sub" data-i18n="welcome-sub">左のサイドバーからチャンネルを選ぶか、URLを入力して追加してください。</div>
         </div>
       </div>
 
       <!-- 投票画面 -->
       <div id="voteScreen" class="screen" style="display:none">
-        <div class="vote-counter">これまでの投票: <span id="voteCount">0</span> 回</div>
+        <div class="vote-counter"><span data-i18n="vote-counter-pre">これまでの投票: </span><span id="voteCount">0</span><span data-i18n="vote-counter-post"> 回</span></div>
         <div class="vote-pace-wrap">
           <div class="vote-pace-bar-bg"><div class="vote-pace-bar-fill" id="paceFill" style="width:0%"></div></div>
           <span id="paceLabel">-</span>
@@ -75,7 +117,7 @@
         <div class="vote-pair-wrap">
           <div class="vote-pair" id="votePair"></div>
         </div>
-        <div class="vote-skip"><button id="skipBtn">スキップ</button></div>
+        <div class="vote-skip"><button id="skipBtn" data-i18n="skip">スキップ</button></div>
       </div>
 
       <!-- 一覧画面 -->
@@ -87,10 +129,10 @@
       <div id="rankingScreen" class="screen" style="display:none">
         <div class="ranking-header">
           <div>
-            <h2>ランキング</h2>
+            <h2 data-i18n="ranking-h2">ランキング</h2>
             <small id="rankSubtitle"></small>
           </div>
-          <button class="reset-btn" id="resetBtn">データリセット</button>
+          <button class="reset-btn" id="resetBtn" data-i18n="reset-btn">データリセット</button>
         </div>
         <div class="rank-list" id="rankList"></div>
       </div>
@@ -102,19 +144,19 @@
   <div id="groupModal">
     <div class="group-modal-inner">
       <div class="group-modal-header">
-        <div class="group-modal-title">グループ管理</div>
+        <div class="group-modal-title" data-i18n="group-modal-title">グループ管理</div>
         <button class="group-modal-close-btn" id="groupModalCloseBtn">&times;</button>
       </div>
       <div class="group-modal-body">
         <div class="gm-left">
           <div class="gm-left-scroll" id="gmGroupList"></div>
           <div class="gm-left-add">
-            <input id="groupLabelInput" type="text" placeholder="グループ名">
-            <button id="groupAddConfirmBtn">作成</button>
+            <input id="groupLabelInput" type="text" placeholder="グループ名" data-i18n-ph="group-name-ph">
+            <button id="groupAddConfirmBtn" data-i18n="group-create">作成</button>
           </div>
         </div>
         <div class="gm-right" id="gmDetail">
-          <div class="gm-right-empty">&larr; グループを選択してください</div>
+          <div class="gm-right-empty" data-i18n="group-select">← グループを選択してください</div>
         </div>
       </div>
     </div>
@@ -123,7 +165,7 @@
   <!-- サムネモーダル -->
   <div id="thumbModal" role="dialog" aria-modal="true">
     <div class="modal-inner">
-      <button class="modal-close" id="modalClose" aria-label="閉じる">✕</button>
+      <button class="modal-close" id="modalClose" aria-label="閉じる" data-i18n-aria="modal-close">✕</button>
       <div class="modal-img-wrap">
         <img id="modalImg" src="" alt="">
         <div class="modal-badge" id="modalBadge"></div>
@@ -134,11 +176,13 @@
         <div class="modal-bar-bg"><div class="modal-bar-fill" id="modalBarFill" style="width:0%"></div></div>
       </div>
       <div class="modal-actions">
-        <a id="modalYtBtn" class="modal-yt-btn" href="#" target="_blank" rel="noopener noreferrer">YouTube で見る</a>
+        <a id="modalYtBtn" class="modal-yt-btn" href="#" target="_blank" rel="noopener noreferrer" data-i18n="yt-btn">YouTube で見る</a>
       </div>
     </div>
   </div>
 
+  <script src="js/i18n.js"></script>
+  <script src="js/lang.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

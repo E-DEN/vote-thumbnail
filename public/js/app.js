@@ -263,9 +263,9 @@ const voteTimes = [];
 
 const PACE_WINDOW_MS = 10000;
 const PACE_LEVELS = [
-  { max: 5,        label: '安定',  cls: '' },
-  { max: 12,       label: '速い',    cls: 'pace-warm' },
-  { max: Infinity, label: '猛速', cls: 'pace-hot' },
+  { max: 5,        labelKey: 'pace-stable',  cls: '' },
+  { max: 12,       labelKey: 'pace-fast',    cls: 'pace-warm' },
+  { max: Infinity, labelKey: 'pace-blazing', cls: 'pace-hot' },
 ];
 
 function updatePaceGauge() {
@@ -280,14 +280,14 @@ function updatePaceGauge() {
   if (!fill || !lbl) return;
   fill.style.width = pct + '%';
   fill.className = 'vote-pace-bar-fill' + (level.cls ? ' ' + level.cls : '');
-  lbl.textContent = level.label;
+  lbl.textContent = t(level.labelKey);
 }
 
 function renderVote() {
   const pair = pickPair();
   const container = document.getElementById('votePair');
   if (!pair) {
-    container.innerHTML = '<p style="color:var(--text-muted);text-align:center;grid-column:1/-1;padding:60px 0;font-size:14px;">このカテゴリには動画がありません。</p>';
+    container.innerHTML = `<p style="color:var(--text-muted);text-align:center;grid-column:1/-1;padding:60px 0;font-size:14px;">${t('no-videos-in-cat')}</p>`;
     return;
   }
   const [pairA, pairB] = pair;
@@ -316,21 +316,21 @@ function renderVote() {
 // --- フォーマットユーティリティ ---
 function fmtViews(n) {
   if (!n) return '';
-  if (n >= 100000000) return (n / 100000000).toFixed(1).replace(/\.0$/, '') + '億回視聴';
-  if (n >= 10000)     return Math.floor(n / 10000) + '万回視聴';
-  if (n >= 1000)      return (n / 1000).toFixed(1).replace(/\.0$/, '') + '千回視聴';
-  return n.toLocaleString() + '回視聴';
+  if (n >= 100000000) return t('views-oku', { n: (n / 100000000).toFixed(1).replace(/\.0$/, '') });
+  if (n >= 10000)     return t('views-man', { n: Math.floor(n / 10000) });
+  if (n >= 1000)      return t('views-sen', { n: (n / 1000).toFixed(1).replace(/\.0$/, '') });
+  return t('views-n', { n: n.toLocaleString() });
 }
 function fmtRelTime(isoStr) {
   if (!isoStr) return '';
   const diff = (Date.now() - new Date(isoStr).getTime()) / 1000;
-  if (diff < 60)         return 'たった今';
-  if (diff < 3600)       return Math.floor(diff / 60) + '分前';
-  if (diff < 86400)      return Math.floor(diff / 3600) + '時間前';
-  if (diff < 86400 * 7)  return Math.floor(diff / 86400) + '日前';
-  if (diff < 86400 * 30) return Math.floor(diff / (86400 * 7)) + '週間前';
-  if (diff < 86400 * 365)return Math.floor(diff / (86400 * 30)) + 'ヶ月前';
-  return Math.floor(diff / (86400 * 365)) + '年前';
+  if (diff < 60)         return t('time-now');
+  if (diff < 3600)       return t('time-min',   { n: Math.floor(diff / 60) });
+  if (diff < 86400)      return t('time-hour',  { n: Math.floor(diff / 3600) });
+  if (diff < 86400 * 7)  return t('time-day',   { n: Math.floor(diff / 86400) });
+  if (diff < 86400 * 30) return t('time-week',  { n: Math.floor(diff / (86400 * 7)) });
+  if (diff < 86400 * 365)return t('time-month', { n: Math.floor(diff / (86400 * 30)) });
+  return t('time-year', { n: Math.floor(diff / (86400 * 365)) });
 }
 function fmtDuration(sec) {
   if (!sec) return '';
@@ -440,8 +440,8 @@ function renderRankingItems(sorted, maxRating, minRating, range, from, to) {
       <div class="rank-meta">
         <div class="rank-title"><a href="${videoUrl}" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:none;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='inherit'">${v.title}</a></div>
         <div class="rank-stats">
-          <span class="rating${lowRd ? ' low-battles' : ''}">${Math.round(rating)} pts</span>
-          <span>${wins}勝 / ${battles}戦${battles > 0 ? ' · ' + wr + '%' : ''}</span>
+          <span class="rating${lowRd ? ' low-battles' : ''}">${Math.round(rating)} ${t('pts')}</span>
+          <span>${t('wins-fmt', { w: wins, b: battles })}${battles > 0 ? t('winrate-fmt', { r: wr }) : ''}</span>
         </div>
         ${viewDate ? `<div class="rank-stats">${viewDate}</div>` : ''}
         <div class="rank-bar-bg"><div class="rank-bar-fill" style="width:${barPct}%"></div></div>
@@ -459,7 +459,7 @@ function renderRanking() {
   const range = maxRating - minRating || 1;
 
   rankShowCount = RANK_PAGE;
-  document.getElementById('rankSubtitle').textContent = `${pool.length} 件 / ${currentCat}`;
+  document.getElementById('rankSubtitle').textContent = t('rank-subtitle', { count: pool.length, cat: currentCat });
   const list = document.getElementById('rankList');
   list.innerHTML = '';
 
@@ -469,7 +469,7 @@ function renderRanking() {
   if (sorted.length > rankShowCount) {
     const btn = document.createElement('button');
     btn.id = 'rankMoreBtn';
-    btn.textContent = `もっと見る（あと ${sorted.length - rankShowCount} 件）`;
+    btn.textContent = t('more-btn', { n: sorted.length - rankShowCount });
     btn.style.cssText = 'display:block;width:100%;margin-top:12px;padding:10px;border:1px solid var(--border);border-radius:6px;background:transparent;color:var(--text-muted);font-size:13px;cursor:pointer;transition:all 0.15s;';
     btn.onmouseenter = () => { btn.style.borderColor = 'var(--accent)'; btn.style.color = 'var(--accent)'; };
     btn.onmouseleave = () => { btn.style.borderColor = 'var(--border)'; btn.style.color = 'var(--text-muted)'; };
@@ -479,7 +479,7 @@ function renderRanking() {
       btn.remove();
       renderRankingItems(sorted, maxRating, minRating, range, prev, rankShowCount);
       if (rankShowCount < sorted.length) {
-        btn.textContent = `もっと見る（あと ${sorted.length - rankShowCount} 件）`;
+        btn.textContent = t('more-btn', { n: sorted.length - rankShowCount });
         list.appendChild(btn);
       }
     });
@@ -550,7 +550,7 @@ function renderSidebar() {
       const toggle = document.createElement('span');
       toggle.className = 'sidebar-group-toggle' + (collapsed ? ' collapsed' : '');
       toggle.textContent = '▾';
-      header.appendChild(document.createTextNode('チャンネル'));
+      header.appendChild(document.createTextNode(t('ungrouped')));
       header.addEventListener('click', () => {
         _sidebarCollapsed['_ungrouped'] = !_sidebarCollapsed['_ungrouped'];
         renderSidebar();
@@ -602,11 +602,11 @@ function openThumbModal({ v, idx, rating, wins, battles, wr, barPct, videoUrl, m
   document.getElementById('modalBadge').textContent = medal;
   document.getElementById('modalTitle').textContent = v.title;
   document.getElementById('modalStats').innerHTML =
-    `<div><strong>${Math.round(rating)}</strong><br>レーティング</div>` +
-    `<div><strong>${battles}</strong><br>戦数</div>` +
-    `<div><strong>${wins}</strong><br>勝利</div>` +
-    (battles > 0 ? `<div><strong>${wr}%</strong><br>勝率</div>` : '') +
-    `<div><strong>#${idx + 1}</strong><br>順位</div>`;
+    `<div><strong>${Math.round(rating)}</strong><br>${t('rating-label')}</div>` +
+    `<div><strong>${battles}</strong><br>${t('battles-label')}</div>` +
+    `<div><strong>${wins}</strong><br>${t('wins-label')}</div>` +
+    (battles > 0 ? `<div><strong>${wr}%</strong><br>${t('winrate-label')}</div>` : '') +
+    `<div><strong>#${idx + 1}</strong><br>${t('rank-label')}</div>`;
   document.getElementById('modalYtBtn').href = videoUrl;
   modal.classList.add('open');
   document.body.style.overflow = 'hidden';
@@ -672,7 +672,7 @@ async function addChannelFromSidebarInput() {
     };
     saveChannels();
     document.getElementById('sidebarSearchInput').value = '';
-    statusEl.textContent = '追加しました (APIキーなし)';
+    statusEl.textContent = t('added-no-api');
     renderSidebar();
     selectChannel(key);
     setTimeout(() => { statusEl.textContent = ''; statusEl.className = 'sidebar-search-status'; }, 3000);
@@ -681,7 +681,7 @@ async function addChannelFromSidebarInput() {
 
   const parsed = parseChannel(url);
   if (!parsed) {
-    statusEl.textContent = 'URLの形式が不正です';
+    statusEl.textContent = t('invalid-url');
     return;
   }
 
@@ -690,15 +690,15 @@ async function addChannelFromSidebarInput() {
   statusEl.className = 'sidebar-search-status';
 
   try {
-    statusEl.textContent = 'チャンネル情報を取得中...';
+    statusEl.textContent = t('fetching-channel');
 
     const videoIds = await getAllVideoIds(apiKey, playlistId, (cur, total) => {
-      statusEl.textContent = `動画ID取得中: ${cur}/${total}`;
+      statusEl.textContent = t('fetching-videos', { cur, total });
     });
 
-    statusEl.textContent = '動画詳細を取得中...';
+    statusEl.textContent = t('fetching-details');
     const videos = await getVideoDetails(apiKey, videoIds, (cur, total) => {
-      statusEl.textContent = `詳細取得中: ${cur}/${total}`;
+      statusEl.textContent = t('fetching-details-progress', { cur, total });
     });
 
     const handleMatch = url.match(/@([\w.-]+)/);
@@ -715,20 +715,38 @@ async function addChannelFromSidebarInput() {
     saveChannels();
     saveVideosForChannel(key, videos);
 
-    statusEl.textContent = `追加: ${channelName} (${videos.length}件)`;
+    statusEl.textContent = t('added-channel', { name: channelName, count: videos.length });
     document.getElementById('sidebarSearchInput').value = '';
     renderSidebar();
     selectChannel(key);
     setTimeout(() => { statusEl.textContent = ''; statusEl.className = 'sidebar-search-status'; }, 4000);
   } catch (err) {
-    statusEl.textContent = `エラー: ${err.message}`;
+    statusEl.textContent = t('error-msg', { msg: err.message });
   } finally {
     searchBtn.disabled = false;
   }
 }
 
+// --- テーマ ---
+var _theme = localStorage.getItem('thumb-theme') || 'dark';
+
+function applyTheme(theme) {
+  _theme = theme;
+  localStorage.setItem('thumb-theme', theme);
+  document.documentElement.dataset.theme = theme;
+  const btn = document.getElementById('themeBtn');
+  if (btn) {
+    btn.innerHTML = `<i data-lucide="${theme === 'dark' ? 'moon' : 'sun'}"></i>`;
+    btn.title = t(theme === 'dark' ? 'mode-dark' : 'mode-light');
+  }
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
 // --- 初期化 ---
 function init() {
+  applyTheme(_theme);
+  applyLang(_lang);
+  if (typeof lucide !== 'undefined') lucide.createIcons();
   loadRating();
   loadChannels();
   loadGroups();
@@ -765,7 +783,7 @@ document.getElementById('catFilter').addEventListener('click', e => {
 // --- スキップ・リセット ---
 
 document.getElementById('resetBtn').addEventListener('click', () => {
-  if (!confirm('全投票データをリセットしますか？')) return;
+  if (!confirm(t('reset-confirm'))) return;
   saveRating();
   document.getElementById('voteCount').textContent = 0;
   renderRanking();
@@ -785,7 +803,7 @@ function renderGroupModal() {
   const listEl = document.getElementById('gmGroupList');
   listEl.innerHTML = '';
   if (groups.length === 0) {
-    listEl.innerHTML = '<div style="padding:12px 10px;font-size:12px;color:var(--text-muted)">グループはまだありません</div>';
+    listEl.innerHTML = `<div style="padding:12px 10px;font-size:12px;color:var(--text-muted)">${t('no-groups')}</div>`;
   }
   groups.forEach(g => {
     const item = document.createElement('div');
@@ -795,7 +813,7 @@ function renderGroupModal() {
     nameEl.textContent = '?? ' + g.label;
     const delBtn = document.createElement('button');
     delBtn.className = 'gm-gdel';
-    delBtn.title = '削除';
+    delBtn.title = t('del-title');
     delBtn.textContent = '×';
     item.appendChild(delBtn);
     item.addEventListener('click', e => {
@@ -804,7 +822,8 @@ function renderGroupModal() {
       renderGroupModal();
     });
     delBtn.addEventListener('click', () => {
-      if (!confirm(`「${g.label}」を削除しますか？`)) return;
+      if (!confirm(t('del-group-confirm', { name: g.label }))) return;
+      const toDelete = new Set();
       const q = [g.id];
       while (q.length) {
         const id = q.shift(); toDelete.add(id);
@@ -823,24 +842,24 @@ function renderGroupModal() {
   const detail = document.getElementById('gmDetail');
   const g = selectedGroupId ? groups.find(g2 => g2.id === selectedGroupId) : null;
   if (!g) {
-    detail.innerHTML = '<div class="gm-right-empty">&larr; グループを選択してください</div>';
+    detail.innerHTML = `<div class="gm-right-empty">${t('group-select')}</div>`;
     return;
   }
   const inGroup = Object.values(channels).filter(ch => (ch.tags || []).includes(g.label));
   const notInGroup = Object.values(channels).filter(ch => !(ch.tags || []).includes(g.label));
   detail.innerHTML = `
-    <div class="gm-detail-header"><div class="gm-detail-name">${g.label} &mdash; <span style="font-size:12px;font-weight:400;color:var(--text-muted)">${inGroup.length}チャンネル</span></div></div>
-    <div class="gm-section-label">グループ内のチャンネル</div>
+    <div class="gm-detail-header"><div class="gm-detail-name">${g.label} &mdash; <span style="font-size:12px;font-weight:400;color:var(--text-muted)">${inGroup.length}${t('ch-count-unit')}</span></div></div>
+    <div class="gm-section-label">${t('group-channels')}</div>
     <div class="gm-channel-scroll" id="gmChList"></div>
-    <div class="gm-section-label" style="border-top:1px solid var(--border);padding-top:10px">追加できるチャンネル</div>
+    <div class="gm-section-label" style="border-top:1px solid var(--border);padding-top:10px">${t('add-channels-label')}</div>
     <div class="gm-channel-scroll" id="gmAddList" style="max-height:160px"></div>
     <div class="gm-url-add">
-      <input id="gmUrlInput" type="text" placeholder="URLまたは@handleで新規登録（Enterで連続追加）" autocomplete="off">
-      <button id="gmUrlAddBtn">登録</button>
-    </div>` 
+      <input id="gmUrlInput" type="text" placeholder="${t('url-add-ph')}" autocomplete="off">
+      <button id="gmUrlAddBtn">${t('register')}</button>
+    </div>`;
   const chScroll = detail.querySelector('#gmChList');
   if (inGroup.length === 0) {
-    chScroll.innerHTML = '<div style="padding:8px 10px;font-size:12px;color:var(--text-muted)">まだチャンネルがありません</div>';
+    chScroll.innerHTML = `<div style="padding:8px 10px;font-size:12px;color:var(--text-muted)">${t('no-ch-in-group')}</div>`;
   }
   inGroup.forEach(ch => {
     const item = document.createElement('div');
@@ -863,7 +882,7 @@ function renderGroupModal() {
     item.appendChild(nameEl);
     const delBtn = document.createElement('button');
     delBtn.className = 'gm-ch-del';
-    delBtn.title = 'グループから削除';
+    delBtn.title = t('remove-from-group');
     delBtn.textContent = '×';
     delBtn.addEventListener('click', () => {
       channels[ch.key].tags = (channels[ch.key].tags || []).filter(t => t !== g.label);
@@ -878,7 +897,7 @@ function renderGroupModal() {
   // 追加候補: グループ未所属チャンネル
   const addScroll = detail.querySelector('#gmAddList');
   if (notInGroup.length === 0) {
-    addScroll.innerHTML = '<div style="padding:6px 10px;font-size:12px;color:var(--text-muted)">全チャンネルが追加済みです</div>';
+    addScroll.innerHTML = `<div style="padding:6px 10px;font-size:12px;color:var(--text-muted)">${t('all-added')}</div>`;
   }
   notInGroup.forEach(ch => {
     const item = document.createElement('div');
@@ -888,7 +907,7 @@ function renderGroupModal() {
     nameEl.textContent = ch.displayName || ch.handle || ch.key;
     const addBtn = document.createElement('button');
     addBtn.className = 'gm-add-btn';
-    addBtn.textContent = '＋ 追加';
+    addBtn.textContent = t('add-ch-btn');
     addBtn.addEventListener('click', () => {
       channels[ch.key].tags = [...(channels[ch.key].tags || []), g.label];
       saveChannels();
@@ -924,6 +943,7 @@ function renderGroupModal() {
     renderGroupModal();
     renderSidebar();
   };
+  const urlInput = detail.querySelector('#gmUrlInput');
   detail.querySelector('#gmUrlAddBtn').addEventListener('click', addUrl);
   urlInput.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); addUrl(); } });
 }
@@ -931,7 +951,7 @@ function renderGroupModal() {
 document.getElementById('groupAddConfirmBtn').addEventListener('click', () => {
   const label = document.getElementById('groupLabelInput').value.trim();
   if (!label) return;
-  if (groups.some(g => g.label === label)) { alert(`「${label}」は既に存在します`); return; }
+  if (groups.some(g => g.label === label)) { alert(t('group-exists', { name: label })); return; }
   const ng = { id: 'g_' + Date.now(), label, parentId: null };
   groups.push(ng);
   saveGroups();
