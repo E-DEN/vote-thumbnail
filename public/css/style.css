@@ -1049,6 +1049,8 @@ header {
   background: var(--surface2);
   cursor: pointer;
   position: relative;
+  /* clip-path でblurの枠外はみ出しをクリップする */
+  clip-path: inset(0);
   /* 初期状態: グレースケール・暗い・ぼかし */
   filter: saturate(0) brightness(0.15) blur(3px);
   transition: filter 0.5s, box-shadow 0.3s;
