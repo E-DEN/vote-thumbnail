@@ -381,7 +381,8 @@ function fmtDuration(sec) {
 }
 
 // --- 一覧 ---
-let _listHoverTimer = null;
+var _listMode = localStorage.getItem('thumb-list-mode') || 'gallery';
+var _shortsObserver = null;
 
 // 行パターン: [列数, flex-grow 重みの配列]
 var _GALLERY_PATTERNS = [
@@ -392,9 +393,42 @@ var _GALLERY_PATTERNS = [
 ];
 
 function renderList() {
+  if (_listMode === 'grid') { renderListGrid(); return; }
+  // ギャラリーモード
   var pool = filteredVideos();
   var grid = document.getElementById('listGrid');
   grid.innerHTML = '';
+  grid.classList.remove('mode-grid');
+
+  // ショートは縦長セルの専用レイアウト（waterfall + IntersectionObserver）
+  if (currentCat === 'shorts') {
+    grid.classList.add('mode-shorts');
+    pool.forEach(function(v) {
+      var cell = document.createElement('div');
+      cell.className = 'gallery-cell--short';
+      cell.innerHTML =
+        '<img src="' + v.thumb + '" alt="" loading="lazy"' +
+        ' onerror="this.src=\'https://i.ytimg.com/vi/' + v.id + '/hqdefault.jpg\'"' +
+        ' referrerpolicy="no-referrer">' +
+        '<div class="gallery-overlay"><div class="gallery-title">' + v.title + '</div></div>';
+      cell.addEventListener('click', (function(vid) {
+        return function() { openModalReactions(vid); };
+      }(v)));
+      grid.appendChild(cell);
+    });
+    // 視野に完全に入ったセルに inbound クラスを付与
+    if (_shortsObserver) { _shortsObserver.disconnect(); }
+    _shortsObserver = new IntersectionObserver(function(entries) {
+      entries.forEach(function(entry) {
+        entry.target.classList.toggle('inbound', entry.intersectionRatio >= 1);
+      });
+    }, { threshold: [0, 1] });
+    grid.querySelectorAll('.gallery-cell--short').forEach(function(item) {
+      _shortsObserver.observe(item);
+    });
+    return;
+  }
+  grid.classList.remove('mode-shorts');
   var pat = 0;
   var i = 0;
   while (i < pool.length) {
@@ -426,7 +460,40 @@ function renderList() {
   }
 }
 
-// --- ランキング ---
+// グリッドモード（カード一覧）
+function renderListGrid() {
+  var pool = filteredVideos();
+  var grid = document.getElementById('listGrid');
+  grid.innerHTML = '';
+  grid.classList.add('mode-grid');
+  pool.forEach(function(v) {
+    var durHtml = v.duration
+      ? '<span class="list-duration">' + fmtDuration(v.duration) + '</span>'
+      : '';
+    var views   = v.viewCount   ? fmtViews(v.viewCount)      : '';
+    var relTime = v.publishedAt ? fmtRelTime(v.publishedAt)  : '';
+    var meta    = [views, relTime].filter(Boolean).join(' - ');
+    var card = document.createElement('div');
+    card.className = 'list-card' + (v.category === 'shorts' ? ' list-card--short' : '');
+    card.innerHTML =
+      '<div class="list-thumb-wrap">' +
+        '<img src="' + v.thumb + '" alt="" loading="lazy"' +
+        ' onerror="this.src=\'https://i.ytimg.com/vi/' + v.id + '/hqdefault.jpg\'"' +
+        ' referrerpolicy="no-referrer">' +
+        durHtml +
+      '</div>' +
+      '<div class="list-info">' +
+        '<div class="list-info-text">' +
+          '<div class="list-info-title">' + v.title + '</div>' +
+          (meta ? '<div class="list-info-meta">' + meta + '</div>' : '') +
+        '</div>' +
+      '</div>';
+    card.addEventListener('click', (function(vid) {
+      return function() { openModalReactions(vid); };
+    }(v)));
+    grid.appendChild(card);
+  });
+}
 const RANK_PAGE = 50;
 let rankShowCount = RANK_PAGE;
 
@@ -995,6 +1062,28 @@ function applyTheme(theme) {
 
 // --- 初期化 ---
 function init() {
+  // 一覧モード切り替えボタンの初期状態を反映
+  var _galBtn  = document.getElementById('listModeGalleryBtn');
+  var _gridBtn = document.getElementById('listModeGridBtn');
+  if (_listMode === 'grid') {
+    _galBtn.classList.remove('active');
+    _gridBtn.classList.add('active');
+  }
+  _galBtn.addEventListener('click', function() {
+    _listMode = 'gallery';
+    localStorage.setItem('thumb-list-mode', 'gallery');
+    _galBtn.classList.add('active');
+    _gridBtn.classList.remove('active');
+    renderList();
+  });
+  _gridBtn.addEventListener('click', function() {
+    _listMode = 'grid';
+    localStorage.setItem('thumb-list-mode', 'grid');
+    _gridBtn.classList.add('active');
+    _galBtn.classList.remove('active');
+    renderList();
+  });
+
   // チャンネル名ツールチップ要素を一度だけ生成
   _chTooltip = document.createElement('div');
   _chTooltip.className = 'ch-tooltip';

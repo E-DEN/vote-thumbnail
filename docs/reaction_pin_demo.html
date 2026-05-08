@@ -1,0 +1,483 @@
+﻿<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reaction Pin / Attention Map デモ</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      min-height: 100svh;
+      background: #0a0a0a;
+      color: #f5f5f5;
+      font-family: system-ui, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 2rem;
+      gap: 1.5rem;
+    }
+
+    .header {
+      width: 100%;
+      max-width: 960px;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+
+    .header h1 {
+      font-size: 1.75rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .header p {
+      color: #a3a3a3;
+      font-size: 0.85rem;
+      margin-top: 0.4rem;
+      line-height: 1.6;
+      max-width: 36rem;
+    }
+
+    .controls {
+      display: flex;
+      gap: 0.25rem;
+      background: #171717;
+      border: 1px solid #262626;
+      border-radius: 1rem;
+      padding: 0.25rem;
+      flex-shrink: 0;
+    }
+
+    .controls button {
+      padding: 0.5rem 1rem;
+      border-radius: 0.75rem;
+      border: none;
+      background: transparent;
+      color: #a3a3a3;
+      font-size: 0.875rem;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+    }
+
+    .controls button:hover { color: #fff; background: rgba(255,255,255,0.08); }
+    .controls button.active { background: #fff; color: #000; }
+
+    .stage {
+      position: relative;
+      overflow: hidden;
+      border-radius: 2rem;
+      border: 1px solid #262626;
+      box-shadow: 0 25px 50px rgba(0,0,0,0.5);
+      background: #000;
+      cursor: crosshair;
+      width: min(96vw, 960px);
+      aspect-ratio: 16 / 9;
+    }
+
+    .stage img {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      opacity: 0.9;
+    }
+
+    .stage-overlay {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(to top, rgba(0,0,0,0.4), transparent, rgba(0,0,0,0.1));
+      pointer-events: none;
+    }
+
+    .stage-spotlight {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      transition: background 0.05s;
+    }
+
+    /* ピンカーソル（ホバー追従） */
+    .pin-cursor {
+      position: absolute;
+      pointer-events: none;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      transform: translate(-50%, -100%);
+      opacity: 0;
+      transition: opacity 0.2s;
+      z-index: 40;
+    }
+
+    .stage:hover .pin-cursor { opacity: 1; }
+
+    .pin-cursor-glow {
+      position: absolute;
+      width: 3.5rem;
+      height: 3.5rem;
+      border-radius: 50%;
+      background: rgba(236, 72, 153, 0.25);
+      filter: blur(1rem);
+    }
+
+    .pin-cursor-body {
+      position: relative;
+      width: 2.5rem;
+      height: 2.5rem;
+      border-radius: 50%;
+      border: 1px solid rgba(255,255,255,0.4);
+      background: rgba(255,255,255,0.9);
+      backdrop-filter: blur(8px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    }
+
+    .pin-cursor-body svg { fill: #ec4899; width: 1.1rem; height: 1.1rem; }
+
+    .pin-cursor-tail {
+      width: 0;
+      height: 0;
+      border-left: 7px solid transparent;
+      border-right: 7px solid transparent;
+      border-top: 10px solid rgba(255,255,255,0.9);
+    }
+
+    /* ヒートマップレイヤー */
+    .heatmap-layer {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+    }
+
+    .heatmap-blob {
+      position: absolute;
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      mix-blend-mode: screen;
+      filter: blur(10px);
+    }
+
+    /* pin アニメーション */
+    .pin {
+      position: absolute;
+      pointer-events: none;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      transform-origin: bottom center;
+      animation: pinFloat 24s linear forwards;
+    }
+
+    .pin-glow {
+      position: absolute;
+      width: 3rem;
+      height: 3rem;
+      border-radius: 50%;
+      background: rgba(236, 72, 153, 0.25);
+      filter: blur(0.8rem);
+    }
+
+    .pin-body {
+      position: relative;
+      border-radius: 50%;
+      background: #fff;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .pin-body svg { fill: #ec4899; }
+
+    .pin-tail {
+      width: 0;
+      height: 0;
+      border-left: 6px solid transparent;
+      border-right: 6px solid transparent;
+      border-top: 9px solid #fff;
+    }
+
+    @keyframes pinFloat {
+      0%   { opacity: 0; translate: 0 8%; }
+      4%   { opacity: 1; translate: 0 0%; }
+      92%  { opacity: 1; translate: 0 -2%; }
+      100% { opacity: 0.06; translate: 0 -4%; }
+    }
+
+    /* ステージ下部ラベル */
+    .stage-label {
+      position: absolute;
+      bottom: 1.25rem;
+      left: 1.25rem;
+      background: rgba(0,0,0,0.55);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 1rem;
+      padding: 0.6rem 1rem;
+      font-size: 0.8rem;
+      color: #e5e5e5;
+      max-width: 22rem;
+      line-height: 1.5;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <div>
+      <h1>Reaction Pin / Attention Map デモ</h1>
+      <p>密度の高い場所ほど連続して pin が出現し、時間経過でフェードアウト。再生終了後は一呼吸置いて自動リプレイ。ヒートマップ表示への切り替えも可能。</p>
+    </div>
+    <div class="controls">
+      <button id="replayBtn">リプレイ</button>
+      <button id="pinsModeBtn" class="active">Reaction Pins</button>
+      <button id="heatmapModeBtn">Heatmap</button>
+    </div>
+  </div>
+
+  <div class="stage" id="stage">
+    <img
+      src="https://images.unsplash.com/photo-1516321318423-f06f85e504b3?q=80&w=1600&auto=format&fit=crop"
+      alt="サムネイルサンプル"
+    >
+    <div class="stage-overlay"></div>
+    <div class="stage-spotlight" id="spotlight"></div>
+    <div class="pin-cursor" id="pinCursor">
+      <div class="pin-cursor-glow"></div>
+      <div class="pin-cursor-body">
+        <svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+      </div>
+      <div class="pin-cursor-tail"></div>
+    </div>
+    <div class="heatmap-layer" id="heatmapLayer" style="display:none"></div>
+    <div id="pinsLayer"></div>
+    <div class="stage-label">密度の高いホットゾーンほど、短い間隔で連続して pin が出現。タイムラインは DB 登録順ではなく、density ベースで再構成。</div>
+  </div>
+
+  <script>
+    // --- シードデータ（実際は DB から取得） ---
+    const PIN_SEEDS = [
+      { x: 0.51, y: 0.34, density: 1.0 },
+      { x: 0.48, y: 0.36, density: 0.95 },
+      { x: 0.56, y: 0.35, density: 0.9 },
+      { x: 0.53, y: 0.41, density: 0.82 },
+      { x: 0.61, y: 0.32, density: 0.72 },
+      { x: 0.35, y: 0.68, density: 0.45 },
+      { x: 0.72, y: 0.61, density: 0.3 },
+      { x: 0.18, y: 0.42, density: 0.18 },
+    ];
+
+    // --- ユーティリティ ---
+    function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
+
+    function randomGaussian() {
+      let u = 0, v = 0;
+      while (u === 0) u = Math.random();
+      while (v === 0) v = Math.random();
+      return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+    }
+
+    // density に応じた重み付きランダム選択
+    function weightedPick(items) {
+      const total = items.reduce((s, item) => s + item.density, 0);
+      let r = Math.random() * total;
+      for (const item of items) {
+        r -= item.density;
+        if (r <= 0) return item;
+      }
+      return items[items.length - 1];
+    }
+
+    // 同一座標付近の密集を間引くタイムライン圧縮
+    function compressTimeline(events) {
+      const out = [];
+      for (const ev of events) {
+        const nearby = out.filter(e => {
+          const dx = e.x - ev.x, dy = e.y - ev.y;
+          return Math.sqrt(dx * dx + dy * dy) < 0.035;
+        }).length;
+        if (Math.random() >= Math.min(0.82, nearby * 0.08)) out.push(ev);
+      }
+      return out;
+    }
+
+    // density が高いほど発火間隔が短い（べき乗カーブ）
+    function densityDelay(density) {
+      return 520 - Math.pow(density, 0.42) * (520 - 28);
+    }
+
+    // --- ヒートマップ描画 ---
+    function renderHeatmap(seeds) {
+      const layer = document.getElementById('heatmapLayer');
+      layer.innerHTML = '';
+      for (const p of seeds) {
+        const blob = document.createElement('div');
+        blob.className = 'heatmap-blob';
+        const size = 120 * p.density;
+        blob.style.cssText = `
+          left:${p.x * 100}%;
+          top:${p.y * 100}%;
+          width:${size}px;
+          height:${size}px;
+          background:radial-gradient(circle, rgba(255,0,80,0.28) 0%, rgba(255,0,80,0.12) 35%, rgba(255,0,80,0.00) 70%);
+        `;
+        layer.appendChild(blob);
+      }
+    }
+
+    // --- モード管理 ---
+    let mode = 'pins';
+
+    function setMode(m) {
+      mode = m;
+      document.getElementById('heatmapLayer').style.display = m === 'heatmap' ? '' : 'none';
+      document.getElementById('pinsLayer').style.display = m === 'pins' ? '' : 'none';
+      document.getElementById('pinsModeBtn').classList.toggle('active', m === 'pins');
+      document.getElementById('heatmapModeBtn').classList.toggle('active', m === 'heatmap');
+    }
+
+    // --- アニメーションループ ---
+    const MAX_PINS = 48;
+    let loopTimer = null;
+
+    function startLoop() {
+      clearTimeout(loopTimer);
+
+      const pinsLayer = document.getElementById('pinsLayer');
+      pinsLayer.innerHTML = '';
+      let pinCount = 0;
+
+      const totalDuration = 9000;
+
+      // クラスタごとの発火状態を初期化
+      const clusters = PIN_SEEDS.map(seed => {
+        const targetCount = Math.max(3, Math.floor(4 + seed.density * 14));
+        return {
+          seed,
+          targetCount,
+          avgInterval: totalDuration / targetCount,
+          emitted: 0,
+          nextFire: performance.now() + (1 - seed.density) * 1400 + Math.random() * 1200,
+        };
+      });
+
+      function tick() {
+        const now = performance.now();
+        let allDone = true;
+
+        for (const cluster of clusters) {
+          if (cluster.emitted >= cluster.targetCount) continue;
+          allDone = false;
+          if (cluster.nextFire > now) continue;
+
+          const { seed } = cluster;
+          const spread = 0.012 + (1 - seed.density) * 0.03;
+          const x = clamp(seed.x + randomGaussian() * spread, 0.04, 0.96);
+          const y = clamp(seed.y + randomGaussian() * spread, 0.04, 0.96);
+
+          // 付近の既存 pin 数で間引き
+          const existingPins = pinsLayer.querySelectorAll('.pin');
+          let nearbyCount = 0;
+          for (const el of existingPins) {
+            const dx = parseFloat(el.dataset.x) - x;
+            const dy = parseFloat(el.dataset.y) - y;
+            if (Math.sqrt(dx * dx + dy * dy) < 0.04) nearbyCount++;
+          }
+          const hotspotBias = 1 - seed.density * 0.55;
+          const skipChance = Math.min(0.78, nearbyCount * 0.06 * hotspotBias);
+
+          if (Math.random() > skipChance) {
+            // 上限超過分は古い pin を削除
+            while (pinsLayer.children.length >= MAX_PINS) {
+              pinsLayer.removeChild(pinsLayer.firstChild);
+            }
+
+            const scale = 0.8 + seed.density * 0.8;
+            const size = Math.round(32 * scale);
+            const pin = document.createElement('div');
+            pin.className = 'pin';
+            pin.dataset.x = x;
+            pin.dataset.y = y;
+            pin.style.cssText = `
+              left:${x * 100}%;
+              top:${y * 100}%;
+              translate:-50% -100%;
+              scale:${scale};
+            `;
+            pin.innerHTML = `
+              <div class="pin-glow"></div>
+              <div class="pin-body" style="width:${size}px;height:${size}px">
+                <svg viewBox="0 0 24 24" style="width:${Math.round(size * 0.52)}px;height:${Math.round(size * 0.52)}px">
+                  <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+                </svg>
+              </div>
+              <div class="pin-tail"></div>
+            `;
+            pinsLayer.appendChild(pin);
+            pinCount++;
+          }
+
+          cluster.emitted++;
+          const progress = cluster.emitted / cluster.targetCount;
+          const easing = 0.9 + progress * 0.55;
+          const jitter = 0.7 + Math.random() * 0.6;
+          cluster.nextFire = now + cluster.avgInterval * easing * jitter;
+        }
+
+        if (allDone) {
+          // 一呼吸置いて自動リプレイ
+          loopTimer = setTimeout(() => startLoop(), 1800);
+          return;
+        }
+
+        loopTimer = setTimeout(tick, 70);
+      }
+
+      tick();
+    }
+
+    // --- マウス追従スポットライト & カーソル ---
+    const stage = document.getElementById('stage');
+    const spotlight = document.getElementById('spotlight');
+    const pinCursor = document.getElementById('pinCursor');
+
+    stage.addEventListener('mousemove', e => {
+      const rect = stage.getBoundingClientRect();
+      const xPct = (e.clientX - rect.left) / rect.width * 100;
+      const yPct = (e.clientY - rect.top) / rect.height * 100;
+      spotlight.style.background = `radial-gradient(circle at ${xPct}% ${yPct}%, transparent 0px, transparent 90px, rgba(0,0,0,0.18) 180px)`;
+      pinCursor.style.left = xPct + '%';
+      pinCursor.style.top = yPct + '%';
+    });
+
+    // --- イベント ---
+    document.getElementById('replayBtn').addEventListener('click', () => {
+      setMode('pins');
+      startLoop();
+    });
+
+    document.getElementById('pinsModeBtn').addEventListener('click', () => {
+      setMode('pins');
+    });
+
+    document.getElementById('heatmapModeBtn').addEventListener('click', () => {
+      setMode('heatmap');
+      renderHeatmap(PIN_SEEDS);
+    });
+
+    // --- 初期起動 ---
+    renderHeatmap(PIN_SEEDS);
+    startLoop();
+  </script>
+
+</body>
+</html>

@@ -1002,20 +1002,102 @@ header {
 @media (max-width: 600px) {
   .gallery-row { height: 140px; }
 }
+/* 一覧ツールバー */
+.list-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  gap: 4px;
+  padding: 0 0 10px;
+}
+.list-mode-btn {
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, color 0.15s;
+}
+.list-mode-btn:hover { background: var(--surface2); color: var(--text); }
+.list-mode-btn.active { background: var(--surface2); color: var(--accent); }
+
+/* グリッドモード */
+#listGrid.mode-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 16px;
+}
+/* ショートギャラリーモード（waterfall + IntersectionObserver） */
+#listGrid.mode-shorts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  grid-gap: 8px;
+  grid-auto-flow: row dense;
+  grid-auto-rows: 68px;
+}
+/* 3パターンの高さでリズムを作る */
+#listGrid.mode-shorts .gallery-cell--short:nth-of-type(3n+1) { grid-row: auto / span 3; }
+#listGrid.mode-shorts .gallery-cell--short:nth-of-type(3n+2) { grid-row: auto / span 4; }
+#listGrid.mode-shorts .gallery-cell--short:nth-of-type(3n+3) { grid-row: auto / span 5; }
+#listGrid.mode-shorts .gallery-cell--short {
+  overflow: hidden;
+  border-radius: 0;
+  background: var(--surface2);
+  cursor: pointer;
+  position: relative;
+  /* 初期状態: グレースケール・暗い・ぼかし */
+  filter: saturate(0) brightness(0.15) blur(3px);
+  transition: filter 0.5s, box-shadow 0.3s;
+}
+#listGrid.mode-shorts .gallery-cell--short img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transform: scale(0.75);
+  transform-origin: bottom center;
+  transition: transform 0.45s;
+}
+/* 視野に完全に入ったセル */
+#listGrid.mode-shorts .gallery-cell--short.inbound {
+  filter: saturate(1) brightness(1) blur(0px);
+  box-shadow: 0 4px 18px rgba(0,0,0,0.4);
+}
+#listGrid.mode-shorts .gallery-cell--short.inbound img {
+  transform: scale(1);
+}
+#listGrid.mode-shorts .gallery-cell--short .gallery-overlay {
+  opacity: 0;
+  transition: opacity 0.25s;
+  background: linear-gradient(to top, rgba(0,0,0,0.82) 0%, rgba(0,0,0,0.15) 50%, transparent 72%);
+  padding: 12px 8px;
+}
+#listGrid.mode-shorts .gallery-cell--short.inbound:hover .gallery-overlay { opacity: 1; }
+#listGrid.mode-shorts .gallery-cell--short .gallery-title {
+  font-size: 11px;
+  -webkit-line-clamp: 3;
+}
 .list-card {
   background: transparent;
   text-decoration: none;
   display: block;
   color: inherit;
+  cursor: pointer;
 }
-.list-card:hover .list-thumb-wrap img { opacity: 0; }
-.list-card:not(:hover) .list-thumb-wrap img { opacity: 1; transition: opacity 0.2s 0.1s; }
 .list-thumb-wrap {
   position: relative;
   border-radius: 10px;
   overflow: hidden;
   background: var(--surface2);
   aspect-ratio: 16/9;
+}
+/* ショートカードは縦長 */
+.list-card--short .list-thumb-wrap {
+  aspect-ratio: 9/16;
 }
 .list-thumb-wrap img {
   width: 100%;
