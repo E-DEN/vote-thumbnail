@@ -65,14 +65,14 @@ function applyLang(lang) {
 // ── 組み込み: 日本語 ──────────────────────────────────────────
 registerLang('ja', '日本語', {
   // アプリ
-  'app-title':  'みんなの推しサムネ',
+  'app-title':  'ラブ♥ねいる',
   // モード
   'mode-dark':  'ダークモード',
   'mode-light': 'ライトモード',
   // ヘッダー
   'lang-switch': '言語切り替え',
   // サイドバー
-  'sidebar-logo':   '推しサムネ',
+  'sidebar-logo':   'ラブ♥ねいる',
   'search-ph':      'URL / @handle を追加',
   'search-add':     '追加',
   'group-manage':   'グループ管理',
@@ -167,14 +167,14 @@ registerLang('ja', '日本語', {
 // ── 組み込み: 英語 ────────────────────────────────────────────
 registerLang('en', 'English', {
   // App
-  'app-title':  'ThumbnailVote',
+  'app-title':  'Love♥Nail',
   // Mode
   'mode-dark':  'Dark mode',
   'mode-light': 'Light mode',
   // Header
   'lang-switch': 'Switch language',
   // Sidebar
-  'sidebar-logo':   'ThumbnailVote',
+  'sidebar-logo':   'Love♥Nail',
   'search-ph':      'URL / @handle to add',
   'search-add':     'Add',
   'group-manage':   'Manage groups',

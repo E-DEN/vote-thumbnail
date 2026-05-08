@@ -153,6 +153,26 @@ function parseChannel(url) {
   return null;
 }
 
+// 動画URLから動画IDを抜く
+function parseVideoId(url) {
+  const mWatch = url.match(/[?&]v=([\w-]{11})/);
+  if (mWatch) return mWatch[1];
+  const mShort = url.match(/youtu\.be\/([\w-]{11})/);
+  if (mShort) return mShort[1];
+  const mShorts = url.match(/\/shorts\/([\w-]{11})/);
+  if (mShorts) return mShorts[1];
+  return null;
+}
+
+// 動画ID → チャンネルIDを取得
+async function getChannelIdFromVideo(apiKey, videoId) {
+  const params = new URLSearchParams({ part: 'snippet', id: videoId, key: apiKey });
+  const data = await apiFetch(`${BASE}/videos?${params}`);
+  const channelId = data.items?.[0]?.snippet?.channelId;
+  if (!channelId) throw new Error('動画が見つかりませんでした');
+  return channelId;
+}
+
 async function getUploadsPlaylistId(apiKey, channel) {
   const params = new URLSearchParams({ part: 'contentDetails,snippet', key: apiKey });
   if (channel.type === 'handle') params.set('forHandle', channel.value);
@@ -662,12 +682,25 @@ async function addChannelFromSidebarInput() {
   if (!raw) return;
 
   const statusEl = document.getElementById('sidebarSearchStatus');
-  const url = raw.startsWith('http') ? raw
+  const inputUrl = raw.startsWith('http') ? raw
     : `https://www.youtube.com/${raw.startsWith('@') ? raw : '@' + raw}`;
-  const key = channelKeyFromUrl(url);
 
-  // 既登録の場合はそのまま選択
-  if (channels[key]) {
+  // 動画URLかどうかを事前に判定（APIコールは後で行う）
+  const pendingVideoId = parseVideoId(inputUrl);
+  // チャンネルURLかどうかを事前に判定
+  let parsed = parseChannel(inputUrl);
+
+  if (!parsed && !pendingVideoId) {
+    statusEl.textContent = t('invalid-url');
+    return;
+  }
+
+  // チャンネルURLの場合は初期キーを設定、動画URLの場合は後で更新
+  let key = parsed ? channelKeyFromUrl(inputUrl) : null;
+  let url = parsed ? inputUrl : null;
+
+  // 既登録チェック（チャンネルURLの場合のみ先行確認）
+  if (key && channels[key]) {
     statusEl.textContent = '';
     statusEl.className = 'sidebar-search-status';
     renderSidebar();
@@ -677,7 +710,12 @@ async function addChannelFromSidebarInput() {
 
   const apiKey = (typeof CONFIG !== 'undefined' ? CONFIG.youtubeApiKey : '');
   if (!apiKey || apiKey === 'YOUR_API_KEY_HERE') {
-    // APIキーなし: メタデータなしで仮登録
+    // APIキーなし: チャンネルURLのみ仮登録（動画URLは解決不可）
+    if (!parsed) {
+      statusEl.textContent = t('invalid-url');
+      return;
+    }
+    const handleMatch = inputUrl.match(/@([\w.-]+)/);
     const handle = handleMatch ? handleMatch[1] : key;
     channels[key] = {
       key, url, handle, displayName: handle,
@@ -693,12 +731,6 @@ async function addChannelFromSidebarInput() {
     return;
   }
 
-  const parsed = parseChannel(url);
-  if (!parsed) {
-    statusEl.textContent = t('invalid-url');
-    return;
-  }
-
   const searchBtn = document.getElementById('sidebarSearchBtn');
   searchBtn.disabled = true;
   statusEl.className = 'sidebar-search-status';
@@ -706,7 +738,26 @@ async function addChannelFromSidebarInput() {
   try {
     statusEl.textContent = t('fetching-channel');
 
-    const { playlistId, channelName, avatar } = await getUploadsPlaylistId(apiKey, parsed);
+    // 動画URLの場合はここでチャンネルIDを解決
+    if (pendingVideoId) {
+      const channelId = await getChannelIdFromVideo(apiKey, pendingVideoId);
+      parsed = { type: 'id', value: channelId };
+    }
+
+    const { playlistId, channelName, avatar, channelId: resolvedId } = await getUploadsPlaylistId(apiKey, parsed);
+
+    // key/url をチャンネルベースに確定（動画URLから追加した場合も正しいキーになる）
+    const channelUrl = resolvedId ? `https://www.youtube.com/channel/${resolvedId}` : inputUrl;
+    key = channelKeyFromUrl(channelUrl);
+    url = channelUrl;
+
+    // 解決後に既登録チェック（動画URLから追加して既存チャンネルだった場合）
+    if (channels[key]) {
+      statusEl.textContent = '';
+      renderSidebar();
+      selectChannel(key);
+      return;
+    }
 
     const videoIds = await getAllVideoIds(apiKey, playlistId, (cur, total) => {
       statusEl.textContent = t('fetching-videos', { cur, total });
@@ -717,7 +768,7 @@ async function addChannelFromSidebarInput() {
       statusEl.textContent = t('fetching-details-progress', { cur, total });
     });
 
-    const handleMatch = url.match(/@([\w.-]+)/);
+    const handleMatch = channelUrl.match(/@([\w.-]+)/);
     channels[key] = {
       key, url,
       handle: handleMatch?.[1] || '',
