@@ -1049,8 +1049,6 @@ header {
   background: var(--surface2);
   cursor: pointer;
   position: relative;
-  /* clip-path でblurの枠外はみ出しをクリップする */
-  clip-path: inset(0);
   transition: filter 0.5s, opacity 0.5s, box-shadow 0.3s;
 }
 #listGrid.mode-shorts .gallery-cell--short img {
@@ -1081,6 +1079,7 @@ header {
 :root[data-theme="dark"] #listGrid.mode-shorts .gallery-cell--short {
   filter: saturate(0) blur(3px);
   opacity: 0.02;
+  background: var(--bg);
 }
 :root[data-theme="dark"] #listGrid.mode-shorts .gallery-cell--short.inbound {
   filter: saturate(1) blur(0px);
@@ -1089,7 +1088,7 @@ header {
 /* ライトモード */
 :root[data-theme="light"] #listGrid.mode-shorts .gallery-cell--short {
   filter: saturate(0) blur(3px);
-  opacity: 0.08;
+  opacity: 0.1;
 }
 :root[data-theme="light"] #listGrid.mode-shorts .gallery-cell--short.inbound {
   filter: saturate(1) blur(0px);
