@@ -13,6 +13,8 @@ crons = ["* * * * *"]   # 毎分実行 (wrangler dev では `wrangler dev --test
 # ALLOWED_ORIGIN: 本番デプロイ時に本番ドメインを設定する (例: "https://example.com")
 [vars]
 ALLOWED_ORIGIN = ""
+# cron 1回あたりの処理チャンネル数。有料プランへ移行時は増やす
+CRON_BATCH_SIZE = "10"
 
 # D1 データベース
 [[d1_databases]]

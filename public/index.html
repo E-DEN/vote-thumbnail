@@ -6,7 +6,6 @@
   <title data-i18n="app-title">ラブ❤ねいる</title>
   <meta name="referrer" content="no-referrer">
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
-  <script src="config.js" onerror="void 0"></script>
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -94,6 +93,7 @@
       <div class="channel-header" id="channelHeader" style="display:none">
         <img class="ch-avatar" id="chAvatar" src="" alt="" referrerpolicy="no-referrer">
         <span class="ch-name" id="chName"></span>
+        <button class="ch-refresh-btn" id="chRefreshBtn" title="動画を再取得">&#8635;</button>
         <div class="ch-tabs">
           <button class="ch-tab active" data-view="vote" data-i18n="tab-vote">投票</button>
           <button class="ch-tab" data-view="list" data-i18n="tab-list">一覧</button>
@@ -155,7 +155,6 @@
             <h2 data-i18n="ranking-h2">ランキング</h2>
             <small id="rankSubtitle"></small>
           </div>
-          <button class="reset-btn" id="resetBtn" data-i18n="reset-btn">データリセット</button>
         </div>
         <div class="rank-list" id="rankList"></div>
       </div>

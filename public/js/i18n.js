@@ -99,8 +99,6 @@ registerLang('ja', '日本語', {
   'pace-blazing': '猛速',
   // ランキング
   'ranking-h2':     'ランキング',
-  'reset-btn':      'データリセット',
-  'reset-confirm':  '全投票データをリセットしますか？',
   'rank-subtitle':  '{count} 件 / {cat}',
   'more-btn':       'もっと見る（あと {n} 件）',
   'pts':            'pts',
@@ -135,7 +133,6 @@ registerLang('ja', '日本語', {
   'fetching-videos':            '動画ID取得中: {cur}/{total}',
   'fetching-details':           '動画詳細を取得中...',
   'fetching-details-progress':  '詳細取得中: {cur}/{total}',
-  'added-channel':              '追加: {name} ({count}件)',
   'error-msg':                  'エラー: {msg}',
   // モーダル
   'modal-close': '閉じる',
@@ -214,8 +211,6 @@ registerLang('en', 'English', {
   'pace-blazing': 'Blazing',
   // Ranking
   'ranking-h2':    'Ranking',
-  'reset-btn':     'Reset data',
-  'reset-confirm': 'Reset all vote data?',
   'rank-subtitle': '{count} items / {cat}',
   'more-btn':      'Show more ({n} remaining)',
   'pts':           'pts',
@@ -250,7 +245,6 @@ registerLang('en', 'English', {
   'fetching-videos':            'Fetching video IDs: {cur}/{total}',
   'fetching-details':           'Fetching video details...',
   'fetching-details-progress':  'Fetching details: {cur}/{total}',
-  'added-channel':              'Added: {name} ({count} videos)',
   'error-msg':                  'Error: {msg}',
   // Modal
   'modal-close': 'Close',

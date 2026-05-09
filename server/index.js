@@ -18,12 +18,18 @@ export default {
 
   // Cron Trigger: アクティブチャンネルの RSS をポーリングして新着動画を追加
   // wrangler.toml の [triggers] crons で設定
+  // CRON_BATCH_SIZE env var でバッチサイズを調整可能 (デフォルト10)
   async scheduled(_event, env) {
+    const batchSize = parseInt(env.CRON_BATCH_SIZE ?? '10');
     const { results } = await env.DB.prepare(
-      "SELECT channel_id FROM channels WHERE inactive = 0 AND last_accessed > datetime('now', '-7 days')"
+      `SELECT channel_id FROM channels WHERE inactive = 0 AND (last_checked IS NULL OR last_checked < datetime('now', '-1 hour')) ORDER BY last_checked ASC LIMIT ${batchSize}`
     ).all();
     for (const ch of results) {
-      await fetchAndSaveRss(ch.channel_id, env).catch(() => {});
+      const { newVideoIds } = await fetchAndSaveRss(ch.channel_id, env).catch(() => ({ newVideoIds: [] }));
+      if (newVideoIds.length > 0) {
+        await detectShortsCategories(newVideoIds, env).catch(() => {});
+        await fetchVideoDetails(newVideoIds, env).catch(() => {});
+      }
     }
   },
 
@@ -79,8 +85,11 @@ async function handleApi(request, env, url, ctx) {
       if (!pageRes.ok) return err('チャンネルが見つかりません', 404);
       const html = await pageRes.text();
 
-      // channel_id を HTML から抽出 (UCで始まる24文字)
-      const cidMatch = html.match(/"channelId":"(UC[\w-]{22})"/);
+      // channel_id を HTML から抽出
+      // canonical URL が最も確実 (例: <link rel="canonical" href="https://www.youtube.com/channel/UCxxxx"/>)
+      const canonicalMatch = html.match(/rel="canonical"\s+href="https:\/\/www\.youtube\.com\/channel\/(UC[\w-]{22})"/);
+      const externalIdMatch = html.match(/"externalId":"(UC[\w-]{22})"/);
+      const cidMatch = canonicalMatch || externalIdMatch;
       if (!cidMatch) return err('チャンネルIDの取得に失敗しました', 502);
       channelId = cidMatch[1];
 
@@ -97,11 +106,15 @@ async function handleApi(request, env, url, ctx) {
          ON CONFLICT(channel_id) DO UPDATE SET handle=excluded.handle, title=excluded.title, icon_url=excluded.icon_url, last_accessed=datetime('now')`
       ).bind(channelId, channelHandle, title, iconUrl).run();
 
-      // RSS から最新15件を即時取得（レスポンスを遅らせない範囲で実行）
-      await fetchAndSaveRss(channelId, env);
+      // RSS から最新15件を即時取得 → カテゴリ判定・視聴回数取得も同期実行
+      const { newVideoIds } = await fetchAndSaveRss(channelId, env);
+      if (newVideoIds.length > 0) {
+        await detectShortsCategories(newVideoIds, env);
+        await fetchVideoDetails(newVideoIds, env);
+      }
 
       const channel = { channel_id: channelId, handle: channelHandle, title, icon_url: iconUrl };
-      return json({ ok: true, channel, cached: false });
+      return json({ ok: true, channel, cached: false, videoCount: newVideoIds.length });
     }
 
     // --- GET /api/channels ---
@@ -110,6 +123,27 @@ async function handleApi(request, env, url, ctx) {
         'SELECT channel_id, handle, title, icon_url FROM channels WHERE inactive = 0 ORDER BY title'
       ).all();
       return json(rows.results);
+    }
+
+    // --- POST /api/channels/:channelId/refresh ---
+    const mRefresh = path.match(/^\/channels\/(UC[\w-]{22})\/refresh$/);
+    if (method === 'POST' && mRefresh) {
+      const channelId = mRefresh[1];
+      const exists = await env.DB.prepare(
+        'SELECT channel_id FROM channels WHERE channel_id = ? AND inactive = 0'
+      ).bind(channelId).first();
+      if (!exists) return err('チャンネルが見つかりません', 404);
+      const { added, rssStatus, newVideoIds } = await fetchAndSaveRss(channelId, env);
+      // 新規動画 + 既存の未判定動画 (duration=0) をまとめてカテゴリ判定
+      const undetected = await env.DB.prepare(
+        "SELECT video_id FROM videos WHERE channel_id = ? AND duration = 0 LIMIT 20"
+      ).bind(channelId).all();
+      const toDetect = [...new Set([...newVideoIds, ...undetected.results.map(r => r.video_id)])];
+      if (toDetect.length > 0) {
+        await detectShortsCategories(toDetect, env);
+        await fetchVideoDetails(toDetect, env);
+      }
+      return json({ ok: true, added, rssStatus });
     }
 
     // --- GET /api/channels/:channelId/videos ---
@@ -126,11 +160,18 @@ async function handleApi(request, env, url, ctx) {
         : env.DB.prepare(videosSql).bind(channelId);
       const [rows] = await Promise.all([
         videosStmt.all(),
-        // ユーザーがチャンネルを選んだ瞬間に last_accessed を更新 (cron の対象判定に使用)
         env.DB.prepare(
           "UPDATE channels SET last_accessed = datetime('now') WHERE channel_id = ?"
         ).bind(channelId).run(),
       ]);
+      // duration=0 の動画 (RSS経由・未判定) をバックグラウンドでカテゴリ判定
+      const unchecked = rows.results.filter(v => v.duration === 0 && v.category === 'videos');
+      if (unchecked.length > 0) {
+        ctx.waitUntil((async () => {
+          await detectShortsCategories(unchecked.map(v => v.video_id), env);
+          await fetchVideoDetails(unchecked.map(v => v.video_id), env);
+        })());
+      }
       return json(rows.results);
     }
 
@@ -227,28 +268,41 @@ async function fetchAndSaveRss(channelId, env) {
     `https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`,
     { headers: { 'User-Agent': 'Mozilla/5.0' } }
   );
-  if (!res.ok) return;
+  if (!res.ok) return { added: 0, rssStatus: res.status, newVideoIds: [] };
   const xml = await res.text();
 
   // <entry> ブロックをすべて抽出
   const entries = [...xml.matchAll(/<entry>([\/\s\S]*?)<\/entry>/g)];
-  const now = new Date().toISOString();
 
+  const items = [];
   for (const [, entry] of entries) {
-    const videoIdMatch     = entry.match(/<yt:videoId>([\w-]{11})<\/yt:videoId>/);
-    const titleMatch       = entry.match(/<title>([^<]*)<\/title>/);
-    const publishedMatch   = entry.match(/<published>([^<]+)<\/published>/);
-    const thumbnailMatch   = entry.match(/url="(https:\/\/i\.ytimg\.com\/vi\/[\w-]+\/[^"]+)"/);
+    const videoIdMatch   = entry.match(/<yt:videoId>([\w-]{11})<\/yt:videoId>/);
+    const titleMatch     = entry.match(/<title>([^<]*)<\/title>/);
+    const publishedMatch = entry.match(/<published>([^<]+)<\/published>/);
     if (!videoIdMatch) continue;
+    const videoId = videoIdMatch[1];
+    items.push({
+      videoId,
+      title:        titleMatch     ? titleMatch[1]     : '',
+      publishedAt:  publishedMatch ? publishedMatch[1] : null,
+      thumbnailUrl: `https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg`,
+    });
+  }
 
-    const videoId      = videoIdMatch[1];
-    const title        = titleMatch      ? titleMatch[1]     : '';
-    const publishedAt  = publishedMatch  ? publishedMatch[1] : null;
-    const thumbnailUrl = thumbnailMatch  ? thumbnailMatch[1] : `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+  if (items.length === 0) return { added: 0, rssStatus: 200, newVideoIds: [] };
 
+  // 新規動画のみ INSERT (category は後でバックグラウンド判定)
+  const placeholders = items.map(() => '?').join(',');
+  const existing = await env.DB.prepare(
+    `SELECT video_id FROM videos WHERE video_id IN (${placeholders})`
+  ).bind(...items.map(i => i.videoId)).all();
+  const existingIds = new Set(existing.results.map(r => r.video_id));
+  const newItems = items.filter(i => !existingIds.has(i.videoId));
+
+  for (const { videoId, title, publishedAt, thumbnailUrl } of newItems) {
     await env.DB.prepare(
-      `INSERT INTO videos (video_id, channel_id, title, thumbnail_url, published_at)
-       VALUES (?, ?, ?, ?, ?)
+      `INSERT INTO videos (video_id, channel_id, title, thumbnail_url, category, published_at)
+       VALUES (?, ?, ?, ?, 'videos', ?)
        ON CONFLICT(video_id) DO NOTHING`
     ).bind(videoId, channelId, title, thumbnailUrl, publishedAt).run();
   }
@@ -257,6 +311,73 @@ async function fetchAndSaveRss(channelId, env) {
   await env.DB.prepare(
     "UPDATE channels SET last_checked = datetime('now') WHERE channel_id = ?"
   ).bind(channelId).run();
+
+  return { added: newItems.length, rssStatus: 200, newVideoIds: newItems.map(i => i.videoId) };
+}
+
+// ---------------------------------------------------------------------------
+// カテゴリ判定: duration=0 かつ category='videos' の動画を分類
+// /shorts/{id} へのリクエスト1本でショート・ライブ・通常動画を判定
+//   - ショート  → /shorts/ のURLのまま
+//   - 通常/ライブ → /watch?v= にリダイレクト → HTMLでライブ判定
+// ctx.waitUntil から呼ぶ (レスポンスをブロックしない)
+// ---------------------------------------------------------------------------
+async function detectShortsCategories(videoIds, env) {
+  // 一度に処理する上限 (subrequest制限の考慮: 無料50件/回)
+  const batch = videoIds.slice(0, 20);
+  await Promise.allSettled(batch.map(async videoId => {
+    try {
+      const r = await fetch(`https://www.youtube.com/shorts/${videoId}`, {
+        redirect: 'follow',
+        headers: { 'User-Agent': 'Mozilla/5.0' },
+      });
+      let category;
+      if (r.url.includes('/shorts/')) {
+        category = 'shorts';
+      } else {
+        // リダイレクト先の watch ページ HTML でライブ判定
+        const html = await r.text();
+        const isLive = /"isLiveContent":true/.test(html) || /"liveBroadcastDetails"/.test(html);
+        category = isLive ? 'live' : 'videos';
+      }
+      await env.DB.prepare(
+        'UPDATE videos SET category = ?, duration = -1 WHERE video_id = ?'
+      ).bind(category, videoId).run();
+    } catch { /* サイレント失敗: 次回アクセス時に再試行 */ }
+  }));
+}
+
+// ---------------------------------------------------------------------------
+// YouTube Data API v3 で視聴回数・再生時間を取得して DB に保存
+// YOUTUBE_API_KEY が未設定の場合は無音でスキップ
+// ---------------------------------------------------------------------------
+function parseISODuration(iso) {
+  // PT1H2M3S / PT30S / PT5M などを秒に変換
+  const m = (iso || '').match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+  if (!m) return 0;
+  return (parseInt(m[1] || 0) * 3600) + (parseInt(m[2] || 0) * 60) + parseInt(m[3] || 0);
+}
+
+async function fetchVideoDetails(videoIds, env) {
+  if (!env.YOUTUBE_API_KEY || videoIds.length === 0) return;
+  // Data API は最大50件/リクエスト
+  const CHUNK = 50;
+  for (let i = 0; i < videoIds.length; i += CHUNK) {
+    const chunk = videoIds.slice(i, i + CHUNK);
+    try {
+      const apiUrl = `https://www.googleapis.com/youtube/v3/videos?part=statistics%2CcontentDetails&id=${chunk.join(',')}&key=${env.YOUTUBE_API_KEY}`;
+      const res = await fetch(apiUrl);
+      if (!res.ok) continue;
+      const data = await res.json();
+      for (const item of (data.items ?? [])) {
+        const viewCount = parseInt(item.statistics?.viewCount ?? 0);
+        const duration  = parseISODuration(item.contentDetails?.duration);
+        await env.DB.prepare(
+          'UPDATE videos SET view_count = ?, duration = ? WHERE video_id = ?'
+        ).bind(viewCount, duration, item.id).run();
+      }
+    } catch { /* API障害時はスキップ */ }
+  }
 }
 
 // ---------------------------------------------------------------------------

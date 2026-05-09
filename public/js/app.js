@@ -18,6 +18,8 @@ let groups = [];
 let selectedGroupId = null;
 const _sidebarCollapsed = {};
 let _chTooltip = null;
+let _ctxMenu = null;
+let _ctxMenuKey = null;
 
 // --- ReactionPin グローバル状態 ---
 var _reactionsSessionId = (function() {
@@ -828,6 +830,33 @@ function getTopRankedVideo(key) {
 // --- サイドバー ---
 // コンパクト状態を維持
 
+function _hideChCtxMenu() {
+  if (_ctxMenu) _ctxMenu.hidden = true;
+  _ctxMenuKey = null;
+}
+
+function _showChCtxMenu(key, x, y) {
+  _ctxMenuKey = key;
+  if (!_ctxMenu) return;
+  _ctxMenu.hidden = false;
+  // 画面端に収まるよう位置調整
+  const mw = _ctxMenu.offsetWidth || 160;
+  const mh = _ctxMenu.offsetHeight || 80;
+  _ctxMenu.style.left = (x + mw > window.innerWidth ? x - mw : x) + 'px';
+  _ctxMenu.style.top  = (y + mh > window.innerHeight ? y - mh : y) + 'px';
+}
+
+function deleteChannel(key) {
+  delete channels[key];
+  saveChannels();
+  if (currentChannelKey === key) {
+    currentChannelKey = null;
+    document.getElementById('channelHeader').style.display = 'none';
+    showView('welcome');
+  }
+  renderSidebar();
+}
+
 function buildChannelItem(ch) {
   const item = document.createElement('div');
   item.className = 'sidebar-channel-item' + (currentChannelKey === ch.key ? ' active' : '');
@@ -838,6 +867,10 @@ function buildChannelItem(ch) {
     : `<div class="sidebar-ch-avatar"></div>`;
   item.innerHTML = `${avatarEl}<span class="sidebar-ch-name">${name}</span>`;
   item.addEventListener('click', () => selectChannel(ch.key));
+  item.addEventListener('contextmenu', e => {
+    e.preventDefault();
+    _showChCtxMenu(ch.key, e.clientX, e.clientY);
+  });
   // コンパクト時のチャンネル名ツールチップ
   item.addEventListener('mouseenter', () => {
     if (!_chTooltip || !document.getElementById('sidebar').classList.contains('sidebar--compact')) return;
@@ -1265,10 +1298,9 @@ async function addChannelFromSidebarInput() {
     };
     saveChannels();
     document.getElementById('sidebarSearchInput').value = '';
-    statusEl.textContent = t('added-channel', { name: ch.title, count: '' });
+    statusEl.textContent = '';
     renderSidebar();
     await selectChannel(ch.channel_id);
-    setTimeout(() => { statusEl.textContent = ''; statusEl.className = 'sidebar-search-status'; }, 3000);
   } catch (e) {
     statusEl.textContent = t('error-msg', { msg: e.message });
   } finally {
@@ -1330,6 +1362,37 @@ function init() {
   _chTooltip = document.createElement('div');
   _chTooltip.className = 'ch-tooltip';
   document.body.appendChild(_chTooltip);
+
+  // サイドバーチャンネル右クリックメニュー
+  _ctxMenu = document.createElement('div');
+  _ctxMenu.className = 'ch-ctx-menu';
+  _ctxMenu.hidden = true;
+  _ctxMenu.innerHTML =
+    '<button class="ch-ctx-item" data-action="refresh">動画を再取得</button>' +
+    '<button class="ch-ctx-item ch-ctx-item--danger" data-action="delete">削除</button>';
+  document.body.appendChild(_ctxMenu);
+  _ctxMenu.addEventListener('click', async e => {
+    const btn = e.target.closest('[data-action]');
+    if (!btn || !_ctxMenuKey) return;
+    const key = _ctxMenuKey;
+    _hideChCtxMenu();
+    if (btn.dataset.action === 'delete') {
+      deleteChannel(key);
+    } else if (btn.dataset.action === 'refresh') {
+      if (key !== currentChannelKey) await selectChannel(key);
+      try {
+        await fetch('/api/channels/' + key + '/refresh', { method: 'POST' });
+        allVideos = await fetchChannelVideos(key);
+        if (currentView === 'vote') renderVote();
+        else if (currentView === 'list') renderList();
+        else if (currentView === 'ranking') renderRanking();
+      } catch (e) { console.error('refresh:', e); }
+    }
+  });
+  document.addEventListener('click', _hideChCtxMenu);
+  document.addEventListener('contextmenu', e => {
+    if (!e.target.closest('.sidebar-channel-item')) _hideChCtxMenu();
+  });
 
   // コンパクトモード: チャンネル追加ポップオーバーを生成
   const _compactAddBtn = document.getElementById('sidebarCompactAddBtn');
@@ -1437,6 +1500,18 @@ function init() {
 
   // 1分ごとに list/ranking 画面の動画を再取得して新着を反映
   setInterval(_pollRefresh, 60000);
+
+  // 再取得ボタン
+  document.getElementById('chRefreshBtn').addEventListener('click', async () => {
+    if (!currentChannelKey) return;
+    try {
+      await fetch('/api/channels/' + currentChannelKey + '/refresh', { method: 'POST' });
+      allVideos = await fetchChannelVideos(currentChannelKey);
+      if (currentView === 'vote') renderVote();
+      else if (currentView === 'list') renderList();
+      else if (currentView === 'ranking') renderRanking();
+    } catch (e) { console.error('refresh:', e); }
+  });
 }
 
 // --- サイドバーイベント ---
@@ -1466,15 +1541,6 @@ document.getElementById('catFilter').addEventListener('click', e => {
   if (currentView === 'vote') renderVote();
   else if (currentView === 'list') renderList();
   else if (currentView === 'ranking') renderRanking();
-});
-
-// --- スキップ・リセット ---
-
-document.getElementById('resetBtn').addEventListener('click', () => {
-  if (!confirm(t('reset-confirm'))) return;
-  saveRating();
-  document.getElementById('voteCount').textContent = 0;
-  renderRanking();
 });
 
 // --- グループモーダル ---

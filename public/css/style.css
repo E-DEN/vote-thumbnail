@@ -241,6 +241,7 @@ header {
   background: var(--drop-hover);
   color: var(--accent);
 }
+
 .sidebar-ch-avatar {
   width: 36px;
   height: 36px;
@@ -419,6 +420,35 @@ header {
   box-shadow: 2px 4px 12px var(--shadow);
 }
 .ch-tooltip.visible { opacity: 1; transform: translateX(0) translateY(-50%); }
+/* チャンネル右クリックメニュー */
+.ch-ctx-menu {
+  position: fixed;
+  z-index: 10000;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 4px 0;
+  min-width: 150px;
+  box-shadow: 0 4px 16px var(--shadow);
+}
+.ch-ctx-item {
+  display: block;
+  width: 100%;
+  padding: 8px 16px;
+  text-align: left;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+  border-radius: 0;
+  transition: background 0.1s;
+}
+.ch-ctx-item:hover {
+  background: var(--surface2);
+}
+.ch-ctx-item--danger { color: var(--err); }
+.ch-ctx-item--danger:hover { background: var(--err); color: #fff; }
 
 /* --- Main area --- */
 .main-area {
@@ -461,6 +491,25 @@ header {
   text-overflow: ellipsis;
   max-width: 160px;
   flex-shrink: 0;
+}
+.ch-refresh-btn {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 16px;
+  border-radius: 4px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.1s, color 0.1s;
+}
+.ch-refresh-btn:hover {
+  background: var(--surface2);
+  color: var(--accent);
 }
 .ch-tabs {
   display: flex;
@@ -740,20 +789,6 @@ header {
   font-size: 12px;
   color: var(--text-muted);
 }
-.reset-btn {
-  padding: 5px 12px;
-  border-radius: 6px;
-  border: 1px solid var(--border);
-  background: transparent;
-  color: var(--text-muted);
-  font-size: 12px;
-  transition: all 0.15s;
-}
-.reset-btn:hover {
-  border-color: var(--err);
-  color: var(--err);
-}
-
 .rank-list {
   display: flex;
   flex-direction: column;
