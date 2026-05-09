@@ -187,7 +187,7 @@ header {
   font-size: 11px;
   color: var(--text-muted);
   padding: 4px 12px 0;
-  min-height: 16px;
+  height: 20px;
   flex-shrink: 0;
   white-space: nowrap;
   overflow: hidden;
@@ -1506,18 +1506,37 @@ header {
 }
 .sidebar-folder-badge { font-size: 11px; color: var(--text-muted); }
 .sidebar-folder-chevron { font-size: 11px; color: var(--text-muted); margin-left: auto; }
+.sidebar-folder-rename-btn {
+  display: none;
+  align-items: center; justify-content: center;
+  width: 20px; height: 20px; flex-shrink: 0;
+  border: none; background: transparent;
+  color: var(--text-muted); padding: 0;
+  border-radius: 3px; cursor: pointer;
+}
+.sidebar-folder-rename-btn:hover { background: var(--border); color: var(--text); }
+.sidebar-folder-header:hover .sidebar-folder-rename-btn { display: flex; }
 .sidebar-folder-drop-zone { height: 8px; min-height: 8px; }
 .sidebar--compact .sidebar-folder-header {
   width: 50px; height: 50px; padding: 3px; margin: 2px 0; gap: 0;
   justify-content: center; border-radius: 50%; position: relative;
-  transition: border-radius 0.2s, background 0.12s;
+  transition: border-radius 0.2s, background 0.12s, color 0.12s;
 }
 .sidebar--compact .sidebar-folder-header:hover { border-radius: 30%; background: var(--surface2); }
+.sidebar--compact .sidebar-folder--open { width: 50px; background: var(--drop-hover); border-radius: 15px 15px 10px 10px; margin: 2px 0; padding-bottom: 4px; }
+.sidebar--compact .sidebar-folder--open > .sidebar-folder-header { margin: 0; transition: border-radius 0.2s, background 0.12s, color 0.12s; }
+.sidebar--compact .sidebar-folder--open > .sidebar-folder-header:hover { background: var(--surface2); }
 .sidebar--compact .sidebar-folder-name,
 .sidebar--compact .sidebar-folder-badge { display: none; }
-.sidebar--compact .sidebar-folder-preview { width: 44px; height: 44px; }
+.sidebar--compact .sidebar-folder-preview { width: 44px; height: 44px; background: transparent; border-radius: 50%; overflow: hidden; }
+.sidebar--compact .sidebar-folder-open-icon { background: transparent; border-radius: 0; }
 .sidebar--compact .sidebar-folder-preview-img { width: 30px; height: 30px; }
-.sidebar--compact .sidebar-folder-children { display: none !important; }
+.sidebar--compact .sidebar-folder-chevron { display: none; }
+.sidebar--compact .sidebar-folder-rename-btn { display: none; }
+.sidebar--compact .sidebar-folder-header:hover .sidebar-folder-rename-btn { display: none; }
+.sidebar--compact .sidebar-folder-children { padding-left: 0; margin-left: 0; margin-bottom: 0; }
+.sidebar--compact .sidebar-folder--open > .sidebar-folder-children { background: transparent; border-radius: 0; padding-bottom: 0; }
+.sidebar--compact .sidebar-folder--open > .sidebar-folder-children::before { display: none; }
 .sidebar-merge-hover { box-shadow: 0 0 0 2px var(--accent, #4f9cf9) !important; border-radius: 12px !important; }
 .sidebar-folder-drop-hover { box-shadow: 0 0 0 2px var(--accent, #4f9cf9) !important; border-radius: 8px !important; }
 .sidebar-drag-indicator { pointer-events: none; }
@@ -1918,6 +1937,7 @@ header {
 .settings-anchor { position: relative; }
 
 /* バックドロップ */
+.settings-modal-backdrop[hidden] { display: none !important; }
 .settings-modal-backdrop {
   position: fixed;
   inset: 0;
@@ -1936,6 +1956,7 @@ header {
 /* モーダル本体 */
 .settings-modal {
   display: flex;
+  flex: none;
   width: 700px;
   max-width: calc(100vw - 32px);
   height: 480px;
@@ -1954,7 +1975,10 @@ header {
 /* 左ナビ */
 .settings-modal-sidebar {
   width: 200px;
+  min-width: 200px;
+  max-width: 200px;
   flex-shrink: 0;
+  min-height: 0;
   background: var(--surface2);
   border-right: 1px solid var(--border);
   display: flex;
@@ -1965,6 +1989,10 @@ header {
   padding: 22px 16px 14px;
   font-size: 17px;
   font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   color: var(--text);
   flex-shrink: 0;
 }
@@ -1979,7 +2007,8 @@ header {
   align-items: center;
   gap: 10px;
   width: 100%;
-  padding: 8px 10px;
+  height: 36px;
+  padding: 0 10px;
   border-radius: 6px;
   border: none;
   background: transparent;
@@ -1995,15 +2024,17 @@ header {
   color: #fff;
 }
 .settings-nav-item svg { flex-shrink: 0; opacity: 0.85; }
+.settings-nav-item span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .settings-nav-item.active svg { opacity: 1; }
 
 /* 右コンテンツ */
 .settings-modal-content {
   flex: 1;
+  min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  min-width: 0;
 }
 .settings-modal-header {
   display: flex;
@@ -2016,6 +2047,7 @@ header {
 .settings-modal-heading {
   font-size: 17px;
   font-weight: 700;
+  line-height: 1;
   margin: 0;
   color: var(--text);
 }
@@ -2037,6 +2069,7 @@ header {
 /* タブ */
 .settings-tab {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding: 20px 24px;
 }

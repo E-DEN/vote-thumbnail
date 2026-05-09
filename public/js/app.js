@@ -981,6 +981,14 @@ function buildFolderItem(folder) {
   badge.textContent = folder.children.length;
   header.appendChild(badge);
 
+  const renameBtn = document.createElement('button');
+  renameBtn.type = 'button';
+  renameBtn.className = 'sidebar-folder-rename-btn';
+  renameBtn.title = 'リネーム';
+  renameBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
+  renameBtn.addEventListener('click', function(e) { e.stopPropagation(); startRename(); });
+  header.appendChild(renameBtn);
+
   const chevron = document.createElement('span');
   chevron.className = 'sidebar-folder-chevron';
   chevron.textContent = folder.open ? '\u25b4' : '\u25be';
@@ -1660,28 +1668,41 @@ function showView(view) {
 
 // --- サイドバー検索・チャンネル追加 ---
 async function addChannelFromSidebarInput() {
-  const raw = document.getElementById('sidebarSearchInput').value.trim();
-  if (!raw) return;
+  const rawInput = document.getElementById('sidebarSearchInput').value.trim();
+  if (!rawInput) return;
+  let raw;
+  try { raw = decodeURIComponent(rawInput); } catch { raw = rawInput; }
 
   const statusEl  = document.getElementById('sidebarSearchStatus');
   const searchBtn = document.getElementById('sidebarSearchBtn');
 
   // @handle を正規化 (URL入力にも対応)
-  const handleMatch = raw.match(/@([\w.-]+)/);
-  if (!handleMatch) {
+  const handleMatch = raw.match(/@([^\s/?#&]+)/);
+  // 動画 URL から video ID を抽出
+  const videoIdMatch = !handleMatch && raw.match(
+    /(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|shorts\/|live\/|embed\/|v\/))([A-Za-z0-9_-]{11})/
+  );
+
+  if (!handleMatch && !videoIdMatch) {
     statusEl.textContent = t('invalid-url');
     return;
   }
-  const handle = '@' + handleMatch[1];
 
-  // DB 既登録チェック (channel_id をキーに保持)
-  const existing = Object.values(channels).find(ch => ch.handle === handle);
-  if (existing) {
-    statusEl.textContent = '';
-    statusEl.className = 'sidebar-search-status';
-    renderSidebar();
-    await selectChannel(existing.key);
-    return;
+  const postBody = handleMatch
+    ? { handle: '@' + handleMatch[1] }
+    : { videoId: videoIdMatch[1] };
+
+  // DB 既登録チェック (handle の場合のみ)
+  if (postBody.handle) {
+    const handle = postBody.handle;
+    const existing = Object.values(channels).find(ch => ch.handle === handle);
+    if (existing) {
+      statusEl.textContent = '';
+      statusEl.className = 'sidebar-search-status';
+      renderSidebar();
+      await selectChannel(existing.key);
+      return;
+    }
   }
 
   searchBtn.disabled = true;
@@ -1692,7 +1713,7 @@ async function addChannelFromSidebarInput() {
     const res = await fetch('/api/channels', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...apiKeyHeaders() },
-      body: JSON.stringify({ handle }),
+      body: JSON.stringify(postBody),
     });
     const data = await res.json();
     if (!res.ok) {
@@ -1925,6 +1946,18 @@ function init() {
 document.getElementById('sidebarSearchInput').addEventListener('keydown', e => {
   if (e.key === 'Enter') addChannelFromSidebarInput();
 });
+document.getElementById('sidebarSearchInput').addEventListener('paste', e => {
+  const text = (e.clipboardData || window.clipboardData).getData('text');
+  let decoded;
+  try { decoded = decodeURIComponent(text); } catch { decoded = text; }
+  if (decoded !== text) {
+    e.preventDefault();
+    const el = e.currentTarget;
+    const start = el.selectionStart, end = el.selectionEnd;
+    el.value = el.value.slice(0, start) + decoded + el.value.slice(end);
+    el.selectionStart = el.selectionEnd = start + decoded.length;
+  }
+});
 document.getElementById('sidebarSearchBtn').addEventListener('click', () => {
   addChannelFromSidebarInput();
 });
@@ -1988,7 +2021,6 @@ document.getElementById('sidebarSearchBtn').addEventListener('click', () => {
   const closeBtn      = document.getElementById('settingsModalClose');
   const heading       = document.getElementById('settingsModalHeading');
 
-  const TAB_LABELS = { display: '表示', lang: '言語', apikey: 'APIキー', sidebar: 'データ' };
   var _currentTab = 'display';
 
   // ---- タブ切り替え ----
@@ -2000,7 +2032,8 @@ document.getElementById('sidebarSearchBtn').addEventListener('click', () => {
     document.querySelectorAll('.settings-tab').forEach(function(el) {
       el.hidden = (el.id !== 'settingsTab-' + name);
     });
-    heading.textContent = TAB_LABELS[name] || name;
+    heading.textContent = t('settings-tab-' + name);
+    heading.dataset.tab = name;
     if (name === 'apikey') showDisplayMode();
     if (name === 'lang' && typeof rebuildLangDialog === 'function') rebuildLangDialog();
   }
@@ -2090,19 +2123,19 @@ document.getElementById('sidebarSearchBtn').addEventListener('click', () => {
   saveBtn.addEventListener('click', function() {
     const val = input.value.trim();
     if (!val) {
-      statusEl.textContent = 'APIキーを入力してください';
+      statusEl.textContent = t('settings-apikey-err-empty');
       statusEl.style.color = 'var(--err)';
       return;
     }
     if (!/^AIzaSy[A-Za-z0-9_-]{33}$/.test(val)) {
-      statusEl.textContent = '形式が正しくありません（AIzaSy... で始まる39文字）';
+      statusEl.textContent = t('settings-apikey-err-format');
       statusEl.style.color = 'var(--err)';
       return;
     }
     localStorage.setItem(LS_API_KEY, val);
     updateIndicator();
     deleteBtn.hidden = false;
-    statusEl.textContent = '保存しました';
+    statusEl.textContent = t('settings-apikey-saved');
     statusEl.style.color = 'var(--ok)';
     setTimeout(function() { statusEl.textContent = ''; statusEl.style.color = ''; }, 2000);
   });
@@ -2124,7 +2157,7 @@ document.getElementById('sidebarSearchBtn').addEventListener('click', () => {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    dataStatusEl.textContent = 'エクスポートしました';
+    dataStatusEl.textContent = t('settings-data-exported');
     dataStatusEl.style.color = '';
     setTimeout(function() { dataStatusEl.textContent = ''; }, 2000);
   });
@@ -2142,10 +2175,10 @@ document.getElementById('sidebarSearchBtn').addEventListener('click', () => {
         localStorage.setItem(LS_SIDEBAR_ORDER, JSON.stringify(parsed));
         loadSidebarOrder();
         renderSidebar();
-        dataStatusEl.textContent = 'インポートしました';
+        dataStatusEl.textContent = t('settings-data-imported');
         dataStatusEl.style.color = 'var(--ok)';
       } catch (err) {
-        dataStatusEl.textContent = '読み込みに失敗しました（形式が正しくありません）';
+        dataStatusEl.textContent = t('settings-data-import-err');
         dataStatusEl.style.color = 'var(--err)';
       }
       importFile.value = '';

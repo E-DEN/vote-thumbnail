@@ -69,12 +69,33 @@ async function handleApi(request, env, url, ctx) {
     // --- POST /api/channels ---
     if (method === 'POST' && path === '/channels') {
       const body = await request.json().catch(() => null);
+
+      // 動画 URL から channel を解決する場合
+      if (body?.videoId && !body?.handle) {
+        const videoId = String(body.videoId).replace(/[^A-Za-z0-9_-]/g, '').slice(0, 11);
+        if (videoId.length !== 11) return err('video ID が不正です');
+        const vRes = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
+          headers: { 'User-Agent': 'Mozilla/5.0' },
+        });
+        if (!vRes.ok) return err('動画が見つかりません', 404);
+        const vHtml = await vRes.text();
+        const baseUrlMatch = vHtml.match(/"canonicalBaseUrl":"(\/@[^"]+)"/);
+        if (!baseUrlMatch) return err('チャンネル情報の取得に失敗しました', 502);
+        const rawPath = baseUrlMatch[1].replace(/^\//, '');
+        try { body.handle = decodeURIComponent(rawPath); } catch { body.handle = rawPath; }
+      }
+
       const handle = body?.handle?.trim();
       if (!handle) return err('handle は必須です');
 
-      // @handle または channel_id (UCxxxx) を受け付ける
+      // @handle を正規化: デコード済み Unicode 文字列として保持
       let channelId = null;
-      let channelHandle = handle.startsWith('@') ? handle : '@' + handle;
+      const rawName = handle.startsWith('@') ? handle.slice(1) : handle;
+      let decodedName;
+      try { decodedName = decodeURIComponent(rawName); } catch { decodedName = rawName; }
+      const channelHandle = '@' + decodedName;
+      // フェッチ用: 非ASCII は再エンコード
+      const fetchPath = '@' + encodeURIComponent(decodedName);
 
       // DB に既存チャンネルがあれば即返し
       const existing = await env.DB.prepare(
@@ -83,7 +104,7 @@ async function handleApi(request, env, url, ctx) {
       if (existing) return json({ ok: true, channel: existing, cached: true });
 
       // youtube.com/@handle をフェッチしてチャンネルIDを取得
-      const pageRes = await fetch(`https://www.youtube.com/${channelHandle}`, {
+      const pageRes = await fetch(`https://www.youtube.com/${fetchPath}`, {
         headers: { 'User-Agent': 'Mozilla/5.0' },
       });
       if (!pageRes.ok) return err('チャンネルが見つかりません', 404);

@@ -54,6 +54,14 @@ function applyLang(lang) {
   });
   const langLabel = document.getElementById('langLabel');
   if (langLabel) langLabel.textContent = _lang === 'ja' ? 'EN' : 'JA';
+  // 設定モーダルの見出しを更新
+  document.querySelectorAll('[data-i18n-href]').forEach(el => {
+    el.href = t(el.dataset.i18nHref);
+  });
+  const modalHeading = document.getElementById('settingsModalHeading');
+  if (modalHeading && modalHeading.dataset.tab) {
+    modalHeading.textContent = t('settings-tab-' + modalHeading.dataset.tab);
+  }
   // テーマボタンのタイトルを現在言語で更新
   const themeBtn = document.getElementById('themeBtn');
   if (themeBtn) {
@@ -162,6 +170,31 @@ registerLang('ja', '日本語', {
   'lang-add':          '＋ 追加',
   'lang-cancel':       'キャンセル',
   'lang-template-dl':  'テンプレートをDL',
+  // 設定モーダル
+  'settings-title':          '設定',
+  'settings-tab-display':    '表示',
+  'settings-tab-lang':       '言語',
+  'settings-tab-apikey':     'APIキー',
+  'settings-tab-sidebar':    'データ',
+  'settings-theme-label':    'テーマ',
+  'settings-theme-dark':     'ダーク',
+  'settings-theme-light':    'ライト',
+  'settings-close':          '閉じる',
+  'settings-apikey-label':   'YouTube APIキー',
+  'settings-apikey-save':    '保存',
+  'settings-apikey-delete':  '削除',
+  'settings-apikey-guide':     'API キーの発行方法',
+  'settings-apikey-guide-url': 'https://www.youtube.com/watch?v=9VJ_7tVEDUQ',
+  'settings-apikey-err-empty':  'APIキーを入力してください',
+  'settings-apikey-err-format': '形式が正しくありません（AIzaSy... で始まる39文字）',
+  'settings-apikey-saved':   '保存しました',
+  'settings-data-label':     'バックアップ',
+  'settings-data-export':    'エクスポート',
+  'settings-data-import':    'インポート',
+  'settings-data-desc':      'サイドバーのチャンネル・フォルダ構成を JSON ファイルとして保存・復元します。',
+  'settings-data-exported':  'エクスポートしました',
+  'settings-data-imported':  'インポートしました',
+  'settings-data-import-err': '読み込みに失敗しました（形式が正しくありません）',
 });
 
 // ── 組み込み: 英語 ────────────────────────────────────────────
@@ -263,6 +296,31 @@ registerLang('en', 'English', {
   'lang-add':          '+ Add',
   'lang-cancel':       'Cancel',
   'lang-template-dl':  'Download template',
+  // Settings modal
+  'settings-title':          'Settings',
+  'settings-tab-display':    'Display',
+  'settings-tab-lang':       'Language',
+  'settings-tab-apikey':     'API Key',
+  'settings-tab-sidebar':    'Data',
+  'settings-theme-label':    'Theme',
+  'settings-theme-dark':     'Dark',
+  'settings-theme-light':    'Light',
+  'settings-close':          'Close',
+  'settings-apikey-label':   'YouTube API Key',
+  'settings-apikey-save':    'Save',
+  'settings-apikey-delete':  'Delete',
+  'settings-apikey-guide':     'How to issue an API key',
+  'settings-apikey-guide-url': 'https://www.youtube.com/watch?v=uz7dY8qTFJw',
+  'settings-apikey-err-empty':  'Please enter an API key',
+  'settings-apikey-err-format': 'Invalid format (39 characters starting with AIzaSy...)',
+  'settings-apikey-saved':   'Saved',
+  'settings-data-label':     'Backup',
+  'settings-data-export':    'Export',
+  'settings-data-import':    'Import',
+  'settings-data-desc':      'Save and restore your sidebar channel/folder structure as a JSON file.',
+  'settings-data-exported':  'Exported',
+  'settings-data-imported':  'Imported',
+  'settings-data-import-err': 'Failed to load (invalid format)',
 });
 
 // ── 外部言語: JSON インポート ───────────────────────────────────
