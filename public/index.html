@@ -82,7 +82,6 @@
 
       <!-- フッター -->
       <div class="sidebar-footer">
-        <button class="sidebar-manage-btn" id="sidebarManageBtn" title="グループ管理" data-i18n="group-manage" data-i18n-title="group-manage">グループ管理</button>
       </div>
     </aside>
 
@@ -91,8 +90,8 @@
 
       <!-- チャンネル選択後のサブヘッダ -->
       <div class="channel-header" id="channelHeader" style="display:none">
-        <img class="ch-avatar" id="chAvatar" src="" alt="" referrerpolicy="no-referrer">
-        <span class="ch-name" id="chName"></span>
+        <img id="chAvatar" class="ch-avatar" src="" alt="" referrerpolicy="no-referrer" style="display:none">
+        <span id="chName" class="ch-name"></span>
         <button class="ch-refresh-btn" id="chRefreshBtn" title="動画を再取得">&#8635;</button>
         <div class="ch-tabs">
           <button class="ch-tab active" data-view="vote" data-i18n="tab-vote">投票</button>
@@ -192,27 +191,6 @@
     </div>
   </div>
 
-  <!-- グループ管理モーダル -->
-  <div id="groupModal">
-    <div class="group-modal-inner">
-      <div class="group-modal-header">
-        <div class="group-modal-title" data-i18n="group-modal-title">グループ管理</div>
-        <button class="group-modal-close-btn" id="groupModalCloseBtn">&times;</button>
-      </div>
-      <div class="group-modal-body">
-        <div class="gm-left">
-          <div class="gm-left-scroll" id="gmGroupList"></div>
-          <div class="gm-left-add">
-            <input id="groupLabelInput" type="text" placeholder="グループ名" data-i18n-ph="group-name-ph">
-            <button id="groupAddConfirmBtn" data-i18n="group-create">作成</button>
-          </div>
-        </div>
-        <div class="gm-right" id="gmDetail">
-          <div class="gm-right-empty" data-i18n="group-select">← グループを選択してください</div>
-        </div>
-      </div>
-    </div>
-  </div>
 
   <!-- サムネモーダル -->
   <div id="thumbModal" role="dialog" aria-modal="true">

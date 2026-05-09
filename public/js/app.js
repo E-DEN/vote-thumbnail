@@ -3,7 +3,7 @@ const BASE = 'https://www.googleapis.com/youtube/v3';
 const LS_RATING = 'thumb-ranking-elo';
 const LS_VIDEOS = 'thumb-ranking-videos';
 const LS_CHANNELS = 'thumb-ranking-channels';
-const LS_GROUPS = 'thumb-ranking-groups';
+const LS_SIDEBAR_ORDER = 'thumb-sidebar-order';
 
 let allVideos = [];
 let currentCat = 'videos';
@@ -14,9 +14,7 @@ let ratingData = {};
 let voteTotal = 0;
 let channels = {};
 let currentChannelKey = null;
-let groups = [];
-let selectedGroupId = null;
-const _sidebarCollapsed = {};
+let sidebarOrder = [];
 let _chTooltip = null;
 let _ctxMenu = null;
 let _ctxMenuKey = null;
@@ -190,12 +188,38 @@ function loadChannels() {
 function saveChannels() {
   try { localStorage.setItem(LS_CHANNELS, JSON.stringify(channels)); } catch {}
 }
-function loadGroups() {
-  const raw = localStorage.getItem(LS_GROUPS);
-  groups = raw ? JSON.parse(raw) : [];
+function loadSidebarOrder() {
+  const raw = localStorage.getItem(LS_SIDEBAR_ORDER);
+  sidebarOrder = raw ? JSON.parse(raw) : [];
 }
-function saveGroups() {
-  try { localStorage.setItem(LS_GROUPS, JSON.stringify(groups)); } catch {}
+function saveSidebarOrder() {
+  try { localStorage.setItem(LS_SIDEBAR_ORDER, JSON.stringify(sidebarOrder)); } catch {}
+}
+function syncSidebarOrder() {
+  const known = new Set(Object.keys(channels));
+  // Remove entries for deleted channels
+  sidebarOrder = sidebarOrder.filter(item => {
+    if (item.type === 'channel') return known.has(item.key);
+    if (item.type === 'folder') {
+      item.children = item.children.filter(k => known.has(k));
+      return item.children.length > 0;
+    }
+    return false;
+  });
+  // Dissolve single-child folders
+  sidebarOrder = sidebarOrder.map(item =>
+    (item.type === 'folder' && item.children.length === 1)
+      ? { type: 'channel', key: item.children[0] } : item
+  );
+  // Add any channels not yet in order
+  const inOrder = new Set();
+  sidebarOrder.forEach(item => {
+    if (item.type === 'channel') inOrder.add(item.key);
+    else if (item.type === 'folder') item.children.forEach(k => inOrder.add(k));
+  });
+  Object.keys(channels).forEach(k => {
+    if (!inOrder.has(k)) sidebarOrder.push({ type: 'channel', key: k });
+  });
 }
 function saveVideosForChannel(key, videos) {
   try { localStorage.setItem(LS_VIDEOS + '_' + key, JSON.stringify(videos)); } catch {}
@@ -857,6 +881,21 @@ function _showChCtxMenu(key, x, y) {
 function deleteChannel(key) {
   delete channels[key];
   saveChannels();
+  // Remove from sidebarOrder
+  sidebarOrder = sidebarOrder.filter(item => {
+    if (item.type === 'channel') return item.key !== key;
+    if (item.type === 'folder') {
+      item.children = item.children.filter(k => k !== key);
+      return item.children.length > 0;
+    }
+    return true;
+  });
+  // Dissolve single-child folders
+  sidebarOrder = sidebarOrder.map(item =>
+    (item.type === 'folder' && item.children.length === 1)
+      ? { type: 'channel', key: item.children[0] } : item
+  );
+  saveSidebarOrder();
   if (currentChannelKey === key) {
     currentChannelKey = null;
     document.getElementById('channelHeader').style.display = 'none';
@@ -894,59 +933,386 @@ function buildChannelItem(ch) {
   return item;
 }
 
-function renderSidebar() {
-  const nav = document.getElementById('sidebarNav');
-  nav.innerHTML = '';
+function buildFolderItem(folder) {
+  const wrap = document.createElement('div');
+  wrap.className = 'sidebar-folder' + (folder.open ? ' sidebar-folder--open' : '');
+  wrap.dataset.folderId = folder.id;
 
-  const allChs = Object.values(channels).sort((a, b) => (b.addedAt > a.addedAt ? 1 : -1));
-  const topLevelGroups = groups.filter(g => !g.parentId);
+  const header = document.createElement('div');
+  header.className = 'sidebar-folder-header';
+  header.dataset.folderId = folder.id;
+  header.tabIndex = 0;
 
-  topLevelGroups.forEach(g => {
-    const chsInGroup = allChs.filter(ch => (ch.tags || []).includes(g.label));
-    if (chsInGroup.length === 0) return;
-    const collapsed = !!_sidebarCollapsed[g.id];
-    const header = document.createElement('div');
-    header.className = 'sidebar-group-header';
-    const toggle = document.createElement('span');
-    toggle.className = 'sidebar-group-toggle' + (collapsed ? ' collapsed' : '');
-    toggle.textContent = '▾';
-    header.appendChild(document.createTextNode(g.label));
-    header.addEventListener('click', () => {
-      _sidebarCollapsed[g.id] = !_sidebarCollapsed[g.id];
-      renderSidebar();
-    });
-    nav.appendChild(header);
-    if (!collapsed) {
-      chsInGroup.forEach(ch => nav.appendChild(buildChannelItem(ch)));
+  const preview = document.createElement('div');
+  preview.className = 'sidebar-folder-preview';
+  folder.children.slice(0, 2).forEach(key => {
+    const ch = channels[key];
+    if (!ch) return;
+    const el = ch.avatar
+      ? Object.assign(document.createElement('img'), { className: 'sidebar-folder-preview-img', src: ch.avatar, referrerPolicy: 'no-referrer' })
+      : Object.assign(document.createElement('div'), { className: 'sidebar-folder-preview-img sidebar-folder-preview-ph' });
+    if (ch.avatar) el.onerror = () => el.style.display = 'none';
+    preview.appendChild(el);
+  });
+  header.appendChild(preview);
+
+  const nameEl = document.createElement('span');
+  nameEl.className = 'sidebar-folder-name';
+  nameEl.textContent = folder.name || '';
+  header.appendChild(nameEl);
+
+  const badge = document.createElement('span');
+  badge.className = 'sidebar-folder-badge';
+  badge.textContent = folder.children.length;
+  header.appendChild(badge);
+
+  const chevron = document.createElement('span');
+  chevron.className = 'sidebar-folder-chevron';
+  chevron.textContent = folder.open ? '\u25b4' : '\u25be';
+  header.appendChild(chevron);
+
+  function startRename() {
+    if (header.querySelector('.sidebar-folder-name-input')) return;
+    const input = document.createElement('input');
+    input.className = 'sidebar-folder-name-input';
+    input.value = folder.name || '';
+    input.placeholder = 'フォルダ名';
+    header.replaceChild(input, nameEl);
+    input.focus();
+    input.select();
+    function commit() {
+      const val = input.value.trim();
+      folder.name = val;
+      nameEl.textContent = val;
+      if (header.contains(input)) header.replaceChild(nameEl, input);
+      saveSidebarOrder();
     }
+    function cancel() {
+      if (header.contains(input)) header.replaceChild(nameEl, input);
+    }
+    input.addEventListener('blur', commit);
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+      if (e.key === 'Escape') { e.preventDefault(); input.removeEventListener('blur', commit); cancel(); }
+    });
+    input.addEventListener('click', e => e.stopPropagation());
+    input.addEventListener('mousedown', e => e.stopPropagation());
+  }
+
+  header.addEventListener('dblclick', e => {
+    if (e.target.closest('button')) return;
+    e.preventDefault();
+    startRename();
+  });
+  header.addEventListener('keydown', e => {
+    if (e.key === 'F2') { e.preventDefault(); startRename(); }
   });
 
-  // グループに属していないチャンネル
-  const ungrouped = allChs.filter(ch =>
-    !(ch.tags || []).some(t => topLevelGroups.some(g => g.label === t))
-  );
-  if (ungrouped.length > 0) {
-    if (topLevelGroups.length > 0) {
-      const header = document.createElement('div');
-      header.className = 'sidebar-group-header';
-      const collapsed = !!_sidebarCollapsed['_ungrouped'];
-      const toggle = document.createElement('span');
-      toggle.className = 'sidebar-group-toggle' + (collapsed ? ' collapsed' : '');
-      toggle.textContent = '▾';
-      header.appendChild(document.createTextNode(t('ungrouped')));
-      header.addEventListener('click', () => {
-        _sidebarCollapsed['_ungrouped'] = !_sidebarCollapsed['_ungrouped'];
-        renderSidebar();
-      });
-      nav.appendChild(header);
-      if (!collapsed) {
-        ungrouped.forEach(ch => nav.appendChild(buildChannelItem(ch)));
+  header.addEventListener('mouseenter', () => {
+    if (!_chTooltip || !document.getElementById('sidebar').classList.contains('sidebar--compact')) return;
+    const rect = header.getBoundingClientRect();
+    _chTooltip.textContent = (folder.name ? folder.name + ' ' : '') + folder.children.length + 'ch';
+    _chTooltip.style.top = (rect.top + rect.height / 2) + 'px';
+    _chTooltip.style.left = (rect.right + 10) + 'px';
+    _chTooltip.classList.add('visible');
+  });
+  header.addEventListener('mouseleave', () => { if (_chTooltip) _chTooltip.classList.remove('visible'); });
+
+  const childrenEl = document.createElement('div');
+  childrenEl.className = 'sidebar-folder-children';
+  childrenEl.dataset.folderId = folder.id;
+
+  folder.children.forEach(key => {
+    const ch = channels[key];
+    if (ch) childrenEl.appendChild(buildChannelItem(ch));
+  });
+
+  const dropZone = document.createElement('div');
+  dropZone.className = 'sidebar-folder-drop-zone';
+  dropZone.dataset.folderId = folder.id;
+  childrenEl.appendChild(dropZone);
+
+  header.addEventListener('click', e => {
+    if (e.target.closest('button, input')) return;
+    folder.open = !folder.open;
+    saveSidebarOrder();
+    wrap.classList.toggle('sidebar-folder--open', folder.open);
+    chevron.textContent = folder.open ? '\u25b4' : '\u25be';
+  });
+
+  wrap.appendChild(header);
+  wrap.appendChild(childrenEl);
+  return wrap;
+}
+
+function renderSidebar() {
+  syncSidebarOrder();
+  const nav = document.getElementById('sidebarNav');
+  nav.innerHTML = '';
+  sidebarOrder.forEach(item => {
+    if (item.type === 'channel') {
+      const ch = channels[item.key];
+      if (ch) nav.appendChild(buildChannelItem(ch));
+    } else if (item.type === 'folder') {
+      nav.appendChild(buildFolderItem(item));
+    }
+  });
+}
+
+function initSidebarDrag() {
+  const nav = document.getElementById('sidebarNav');
+  const THRESHOLD = 5;
+  let _pending = null;
+  let _draggedEl = null;
+  let _ghost = null;
+  let _dragType = null;
+  let _srcKey = null;
+  let _srcFolderId = null;
+  let _pointerOffsetY = 0;
+  let _dropInfo = null;
+
+  const _ind = document.createElement('div');
+  _ind.className = 'sidebar-drag-indicator';
+  _ind.style.display = 'none';
+  document.body.appendChild(_ind);
+
+  function _clearState() {
+    _ind.style.display = 'none';
+    nav.querySelectorAll('.sidebar-merge-hover').forEach(el => el.classList.remove('sidebar-merge-hover'));
+    nav.querySelectorAll('.sidebar-folder-drop-hover').forEach(el => el.classList.remove('sidebar-folder-drop-hover'));
+  }
+
+  function _hitTest(mouseY) {
+    for (const el of nav.querySelectorAll('.sidebar-channel-item')) {
+      if (_dragType === 'channel' && el.dataset.key === _srcKey) continue;
+      // 閉じたフォルダ内のアイテムはスキップ
+      const parentChildren = el.closest('.sidebar-folder-children');
+      if (parentChildren) {
+        const folder = parentChildren.closest('.sidebar-folder');
+        if (folder && !folder.classList.contains('sidebar-folder--open')) continue;
       }
-    } else {
-      ungrouped.forEach(ch => nav.appendChild(buildChannelItem(ch)));
+      const r = el.getBoundingClientRect();
+      if (mouseY < r.top || mouseY > r.bottom) continue;
+      const relY = (mouseY - r.top) / r.height;
+      const folderId = parentChildren ? parentChildren.dataset.folderId : null;
+      if (relY < 0.3) return { action: 'before', targetKey: el.dataset.key, folderId, el };
+      if (relY > 0.7) return { action: 'after', targetKey: el.dataset.key, folderId, el };
+      if (_dragType === 'channel') return { action: 'merge', targetKey: el.dataset.key, folderId, el };
+      return { action: 'before', targetKey: el.dataset.key, folderId, el };
+    }
+    for (const el of nav.querySelectorAll('.sidebar-folder-header')) {
+      const folderId = el.dataset.folderId;
+      if (_dragType === 'folder' && folderId === _srcFolderId) continue;
+      const r = el.getBoundingClientRect();
+      if (mouseY < r.top || mouseY > r.bottom) continue;
+      if (_dragType === 'channel') return { action: 'add-to-folder', folderId, el };
+      const wrap = el.closest('.sidebar-folder');
+      return (mouseY - r.top) / r.height < 0.5
+        ? { action: 'folder-before', folderId, el }
+        : { action: 'folder-after', folderId, el: wrap || el };
+    }
+    for (const el of nav.querySelectorAll('.sidebar-folder-drop-zone')) {
+      const r = el.getBoundingClientRect();
+      if (mouseY >= r.top - 8 && mouseY <= r.bottom + 8 && _dragType === 'channel') {
+        return { action: 'add-to-folder', folderId: el.dataset.folderId, el };
+      }
+    }
+    return { action: 'end' };
+  }
+
+  function _showDrop(mouseY) {
+    _clearState();
+    _dropInfo = _hitTest(mouseY);
+    if (!_dropInfo) return;
+    const { action, el } = _dropInfo;
+    const indStyle = (r, atTop) =>
+      `display:block;position:fixed;left:${r.left}px;top:${atTop ? r.top - 2 : r.bottom - 1}px;width:${r.width}px;height:3px;background:var(--accent,#4f9cf9);border-radius:2px;pointer-events:none;z-index:9998;`;
+    if (action === 'before') _ind.style.cssText = indStyle(el.getBoundingClientRect(), true);
+    else if (action === 'after') _ind.style.cssText = indStyle(el.getBoundingClientRect(), false);
+    else if (action === 'merge') el.classList.add('sidebar-merge-hover');
+    else if (action === 'add-to-folder') {
+      const h = nav.querySelector(`.sidebar-folder-header[data-folder-id="${_dropInfo.folderId}"]`);
+      if (h) h.classList.add('sidebar-folder-drop-hover');
+    }
+    else if (action === 'folder-before') _ind.style.cssText = indStyle(el.getBoundingClientRect(), true);
+    else if (action === 'folder-after') _ind.style.cssText = indStyle(el.getBoundingClientRect(), false);
+    else if (action === 'end') {
+      const navR = nav.getBoundingClientRect();
+      const all = [...nav.querySelectorAll('.sidebar-channel-item, .sidebar-folder')];
+      const last = all[all.length - 1];
+      const bottom = last ? last.getBoundingClientRect().bottom : navR.top;
+      _ind.style.cssText = `display:block;position:fixed;left:${navR.left}px;top:${bottom}px;width:${navR.width}px;height:3px;background:var(--accent,#4f9cf9);border-radius:2px;pointer-events:none;z-index:9998;`;
     }
   }
+
+  function _removeFromOrder(key) {
+    for (let i = sidebarOrder.length - 1; i >= 0; i--) {
+      const item = sidebarOrder[i];
+      if (item.type === 'channel' && item.key === key) { sidebarOrder.splice(i, 1); return; }
+      if (item.type === 'folder') {
+        const ci = item.children.indexOf(key);
+        if (ci !== -1) { item.children.splice(ci, 1); return; }
+      }
+    }
+  }
+
+  function _applyDrop() {
+    if (!_dropInfo) return;
+    const { action, targetKey, folderId } = _dropInfo;
+    if (_dragType === 'channel') {
+      const srcKey = _srcKey;
+      _removeFromOrder(srcKey);
+      if (action === 'before') {
+        if (folderId) {
+          const f = sidebarOrder.find(i => i.type === 'folder' && i.id === folderId);
+          if (f) { const idx = f.children.indexOf(targetKey); f.children.splice(Math.max(0, idx), 0, srcKey); }
+        } else {
+          const idx = sidebarOrder.findIndex(i => i.type === 'channel' && i.key === targetKey);
+          sidebarOrder.splice(idx < 0 ? 0 : idx, 0, { type: 'channel', key: srcKey });
+        }
+      } else if (action === 'after') {
+        if (folderId) {
+          const f = sidebarOrder.find(i => i.type === 'folder' && i.id === folderId);
+          if (f) { const idx = f.children.indexOf(targetKey); f.children.splice(idx + 1, 0, srcKey); }
+        } else {
+          const idx = sidebarOrder.findIndex(i => i.type === 'channel' && i.key === targetKey);
+          sidebarOrder.splice(idx < 0 ? sidebarOrder.length : idx + 1, 0, { type: 'channel', key: srcKey });
+        }
+      } else if (action === 'merge') {
+        if (folderId) {
+          const f = sidebarOrder.find(i => i.type === 'folder' && i.id === folderId);
+          if (f && !f.children.includes(srcKey)) f.children.push(srcKey);
+          else if (!f) sidebarOrder.push({ type: 'channel', key: srcKey });
+        } else {
+          const tgtIdx = sidebarOrder.findIndex(i => i.type === 'channel' && i.key === targetKey);
+          if (tgtIdx >= 0) {
+            sidebarOrder.splice(tgtIdx, 1, { type: 'folder', id: 'f_' + Date.now(), open: false, children: [targetKey, srcKey] });
+          } else { sidebarOrder.push({ type: 'channel', key: srcKey }); }
+        }
+      } else if (action === 'add-to-folder') {
+        const f = sidebarOrder.find(i => i.type === 'folder' && i.id === folderId);
+        if (f && !f.children.includes(srcKey)) f.children.push(srcKey);
+        else if (!f) sidebarOrder.push({ type: 'channel', key: srcKey });
+      } else {
+        sidebarOrder.push({ type: 'channel', key: srcKey });
+      }
+      sidebarOrder = sidebarOrder.map(item =>
+        (item.type === 'folder' && item.children.length === 1)
+          ? { type: 'channel', key: item.children[0] } : item
+      );
+      sidebarOrder = sidebarOrder.filter(item => item.type !== 'folder' || item.children.length > 0);
+    } else if (_dragType === 'folder') {
+      const fi = sidebarOrder.findIndex(i => i.type === 'folder' && i.id === _srcFolderId);
+      if (fi < 0) return;
+      const [folder] = sidebarOrder.splice(fi, 1);
+      if (action === 'folder-before') {
+        const ti = sidebarOrder.findIndex(i => i.type === 'folder' && i.id === folderId);
+        sidebarOrder.splice(ti < 0 ? 0 : ti, 0, folder);
+      } else if (action === 'folder-after') {
+        const ti = sidebarOrder.findIndex(i => i.type === 'folder' && i.id === folderId);
+        sidebarOrder.splice(ti < 0 ? sidebarOrder.length : ti + 1, 0, folder);
+      } else if (action === 'before') {
+        const ti = sidebarOrder.findIndex(i => i.type === 'channel' && i.key === targetKey);
+        sidebarOrder.splice(ti < 0 ? 0 : ti, 0, folder);
+      } else if (action === 'after') {
+        const ti = sidebarOrder.findIndex(i => i.type === 'channel' && i.key === targetKey);
+        sidebarOrder.splice(ti < 0 ? sidebarOrder.length : ti + 1, 0, folder);
+      } else {
+        sidebarOrder.push(folder);
+      }
+    }
+    saveSidebarOrder();
+  }
+
+  function _cleanup() {
+    document.removeEventListener('mousemove', _onMove);
+    document.removeEventListener('mouseup', _onUp);
+    document.removeEventListener('touchmove', _onTouchMove);
+    document.removeEventListener('touchend', _onUp);
+    if (_ghost) { _ghost.remove(); _ghost = null; }
+    if (_draggedEl) { _draggedEl.style.opacity = ''; _draggedEl = null; }
+    _clearState();
+    _dragType = _srcKey = _srcFolderId = _dropInfo = _pending = null;
+  }
+
+  function _startDrag(p) {
+    const { unit, rect, downY, type, srcKey, srcFolderId } = p;
+    _draggedEl = unit;
+    _dragType = type;
+    _srcKey = srcKey;
+    _srcFolderId = srcFolderId;
+    _pointerOffsetY = downY - rect.top;
+    _ghost = unit.cloneNode(true);
+    _ghost.style.cssText = `position:fixed;top:${rect.top}px;left:${rect.left}px;width:${rect.width}px;pointer-events:none;z-index:9999;opacity:0.85;box-shadow:0 6px 24px rgba(0,0,0,0.55);border-radius:8px;transition:none;`;
+    document.body.appendChild(_ghost);
+    unit.style.opacity = '0.2';
+    document.addEventListener('mousemove', _onMove);
+    document.addEventListener('mouseup', _onUp);
+    document.addEventListener('touchmove', _onTouchMove, { passive: false });
+    document.addEventListener('touchend', _onUp);
+  }
+
+  function _onMove(e) {
+    if (!_draggedEl) return;
+    e.preventDefault();
+    const src = e.touches ? e.touches[0] : e;
+    _ghost.style.top = (src.clientY - _pointerOffsetY) + 'px';
+    _showDrop(src.clientY);
+  }
+  const _onTouchMove = e => { if (_draggedEl) { e.preventDefault(); _onMove(e); } };
+  function _onUp() {
+    if (!_draggedEl) return;
+    _applyDrop();
+    _cleanup();
+    renderSidebar();
+  }
+  function _cancelPending() {
+    document.removeEventListener('mousemove', _onPendingMove);
+    document.removeEventListener('mouseup', _onPendingUp);
+    document.removeEventListener('touchmove', _onPendingMove);
+    document.removeEventListener('touchend', _onPendingUp);
+    _pending = null;
+  }
+  function _onPendingMove(e) {
+    if (!_pending) return;
+    const src = e.touches ? e.touches[0] : e;
+    if (Math.abs(src.clientY - _pending.downY) < THRESHOLD && Math.abs(src.clientX - _pending.downX) < THRESHOLD) return;
+    const p = _pending;
+    _cancelPending();
+    _startDrag(p);
+    e.preventDefault();
+    _onMove(e);
+  }
+  function _onPendingUp() { _cancelPending(); }
+
+  nav.addEventListener('mousedown', e => {
+    if (e.target.closest('button, input, select, textarea')) return;
+    const chItem = e.target.closest('.sidebar-channel-item');
+    const fldHdr = !chItem && e.target.closest('.sidebar-folder-header');
+    if (!chItem && !fldHdr) return;
+    const type = chItem ? 'channel' : 'folder';
+    const unit = chItem || fldHdr.closest('.sidebar-folder');
+    _pending = { downY: e.clientY, downX: e.clientX, unit, rect: unit.getBoundingClientRect(), type,
+      srcKey: chItem ? chItem.dataset.key : null, srcFolderId: fldHdr ? fldHdr.dataset.folderId : null };
+    document.addEventListener('mousemove', _onPendingMove);
+    document.addEventListener('mouseup', _onPendingUp);
+  });
+  nav.addEventListener('touchstart', e => {
+    if (e.target.closest('button, input, select, textarea')) return;
+    const chItem = e.target.closest('.sidebar-channel-item');
+    const fldHdr = !chItem && e.target.closest('.sidebar-folder-header');
+    if (!chItem && !fldHdr) return;
+    const type = chItem ? 'channel' : 'folder';
+    const unit = chItem || fldHdr.closest('.sidebar-folder');
+    const touch = e.touches[0];
+    _pending = { downY: touch.clientY, downX: touch.clientX, unit, rect: unit.getBoundingClientRect(), type,
+      srcKey: chItem ? chItem.dataset.key : null, srcFolderId: fldHdr ? fldHdr.dataset.folderId : null };
+    document.addEventListener('touchmove', _onPendingMove, { passive: false });
+    document.addEventListener('touchend', _onPendingUp);
+  }, { passive: false });
 }
+
+
 
 // --- チャンネル選択 ---
 async function selectChannel(key) {
@@ -1305,6 +1671,10 @@ async function addChannelFromSidebarInput() {
       addedAt:     channels[ch.channel_id]?.addedAt ?? new Date().toISOString(),
     };
     saveChannels();
+    if (!sidebarOrder.some(i => (i.type === 'channel' && i.key === ch.channel_id) || (i.type === 'folder' && i.children.includes(ch.channel_id)))) {
+      sidebarOrder.push({ type: 'channel', key: ch.channel_id });
+      saveSidebarOrder();
+    }
     document.getElementById('sidebarSearchInput').value = '';
     statusEl.textContent = '';
     renderSidebar();
@@ -1474,8 +1844,9 @@ function init() {
   if (typeof lucide !== 'undefined') lucide.createIcons();
   loadRating();
   loadChannels();
-  loadGroups();
+  loadSidebarOrder();
   renderSidebar();
+  initSidebarDrag();
   showView('welcome');
 
   // ReactionPin: モード切り替え・戻る
@@ -1531,10 +1902,6 @@ document.getElementById('sidebarSearchInput').addEventListener('keydown', e => {
 document.getElementById('sidebarSearchBtn').addEventListener('click', () => {
   addChannelFromSidebarInput();
 });
-document.getElementById('sidebarManageBtn').addEventListener('click', () => {
-  selectedGroupId = null;
-  openGroupModal();
-});
 
 // --- チャンネルヘッダーのタブ ---
 document.getElementById('channelHeader').addEventListener('click', e => {
@@ -1567,185 +1934,6 @@ document.getElementById('catFilter').addEventListener('click', e => {
     el.style.display = 'none';
   });
 })();
-
-// --- グループモーダル ---
-function openGroupModal() {
-  renderGroupModal();
-  document.getElementById('groupModal').classList.add('open');
-}
-function closeGroupModal() {
-  document.getElementById('groupModal').classList.remove('open');
-}
-
-function renderGroupModal() {
-  // 左パネル: グループリスト
-  const listEl = document.getElementById('gmGroupList');
-  listEl.innerHTML = '';
-  if (groups.length === 0) {
-    listEl.innerHTML = `<div style="padding:12px 10px;font-size:12px;color:var(--text-muted)">${t('no-groups')}</div>`;
-  }
-  groups.forEach(g => {
-    const item = document.createElement('div');
-    item.className = 'gm-group-item' + (g.id === selectedGroupId ? ' active' : '');
-    const nameEl = document.createElement('span');
-    nameEl.style.cssText = 'flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
-    nameEl.textContent = '?? ' + g.label;
-    const delBtn = document.createElement('button');
-    delBtn.className = 'gm-gdel';
-    delBtn.title = t('del-title');
-    delBtn.textContent = '×';
-    item.appendChild(delBtn);
-    item.addEventListener('click', e => {
-      if (e.target === delBtn) return;
-      selectedGroupId = g.id;
-      renderGroupModal();
-    });
-    delBtn.addEventListener('click', () => {
-      if (!confirm(t('del-group-confirm', { name: g.label }))) return;
-      const toDelete = new Set();
-      const q = [g.id];
-      while (q.length) {
-        const id = q.shift(); toDelete.add(id);
-        groups.filter(g2 => g2.parentId === id).forEach(c => q.push(c.id));
-      }
-      groups = groups.filter(g2 => !toDelete.has(g2.id));
-      saveGroups();
-      if (toDelete.has(selectedGroupId)) selectedGroupId = null;
-      renderGroupModal();
-      renderSidebar();
-    });
-    listEl.appendChild(item);
-  });
-
-  // 右パネル: 選択グループ詳細
-  const detail = document.getElementById('gmDetail');
-  const g = selectedGroupId ? groups.find(g2 => g2.id === selectedGroupId) : null;
-  if (!g) {
-    detail.innerHTML = `<div class="gm-right-empty">${t('group-select')}</div>`;
-    return;
-  }
-  const inGroup = Object.values(channels).filter(ch => (ch.tags || []).includes(g.label));
-  const notInGroup = Object.values(channels).filter(ch => !(ch.tags || []).includes(g.label));
-  detail.innerHTML = `
-    <div class="gm-detail-header"><div class="gm-detail-name">${g.label} &mdash; <span style="font-size:12px;font-weight:400;color:var(--text-muted)">${inGroup.length}${t('ch-count-unit')}</span></div></div>
-    <div class="gm-section-label">${t('group-channels')}</div>
-    <div class="gm-channel-scroll" id="gmChList"></div>
-    <div class="gm-section-label" style="border-top:1px solid var(--border);padding-top:10px">${t('add-channels-label')}</div>
-    <div class="gm-channel-scroll" id="gmAddList" style="max-height:160px"></div>
-    <div class="gm-url-add">
-      <input id="gmUrlInput" type="text" placeholder="${t('url-add-ph')}" autocomplete="off">
-      <button id="gmUrlAddBtn">${t('register')}</button>
-    </div>`;
-  const chScroll = detail.querySelector('#gmChList');
-  if (inGroup.length === 0) {
-    chScroll.innerHTML = `<div style="padding:8px 10px;font-size:12px;color:var(--text-muted)">${t('no-ch-in-group')}</div>`;
-  }
-  inGroup.forEach(ch => {
-    const item = document.createElement('div');
-    item.className = 'gm-ch-item';
-    if (ch.avatar) {
-      const img = document.createElement('img');
-      img.className = 'gm-ch-avatar';
-      img.src = ch.avatar;
-      img.referrerPolicy = 'no-referrer';
-      img.onerror = function() { this.style.display = 'none'; };
-      item.appendChild(img);
-    } else {
-      const ph = document.createElement('div');
-      ph.className = 'gm-ch-avatar';
-      item.appendChild(ph);
-    }
-    const nameEl = document.createElement('span');
-    nameEl.className = 'gm-ch-name';
-    nameEl.textContent = ch.displayName || ch.handle || ch.key;
-    item.appendChild(nameEl);
-    const delBtn = document.createElement('button');
-    delBtn.className = 'gm-ch-del';
-    delBtn.title = t('remove-from-group');
-    delBtn.textContent = '×';
-    delBtn.addEventListener('click', () => {
-      channels[ch.key].tags = (channels[ch.key].tags || []).filter(t => t !== g.label);
-      saveChannels();
-      renderGroupModal();
-      renderSidebar();
-    });
-    item.appendChild(delBtn);
-    chScroll.appendChild(item);
-  });
-
-  // 追加候補: グループ未所属チャンネル
-  const addScroll = detail.querySelector('#gmAddList');
-  if (notInGroup.length === 0) {
-    addScroll.innerHTML = `<div style="padding:6px 10px;font-size:12px;color:var(--text-muted)">${t('all-added')}</div>`;
-  }
-  notInGroup.forEach(ch => {
-    const item = document.createElement('div');
-    item.className = 'gm-add-item';
-    const nameEl = document.createElement('span');
-    nameEl.className = 'gm-ch-name';
-    nameEl.textContent = ch.displayName || ch.handle || ch.key;
-    const addBtn = document.createElement('button');
-    addBtn.className = 'gm-add-btn';
-    addBtn.textContent = t('add-ch-btn');
-    addBtn.addEventListener('click', () => {
-      channels[ch.key].tags = [...(channels[ch.key].tags || []), g.label];
-      saveChannels();
-      renderGroupModal();
-      renderSidebar();
-    });
-    item.appendChild(nameEl);
-    item.appendChild(addBtn);
-    addScroll.appendChild(item);
-  });
-
-  const addUrl = () => {
-    const raw = urlInput.value.trim();
-    if (!raw) return;
-    const url = raw.startsWith('http') ? raw
-      : `https://www.youtube.com/${raw.startsWith('@') ? raw : '@' + raw}`;
-    const key = channelKeyFromUrl(url);
-    if (!channels[key]) {
-      const handle = url.match(/@([\w.-]+)/)?.[1] || '';
-      channels[key] = {
-        key, url, handle,
-        displayName: handle || key,
-        avatar: '', thumb: '', videoCount: 0,
-        tags: [g.label],
-        addedAt: new Date().toISOString()
-      };
-    } else if (!(channels[key].tags || []).includes(g.label)) {
-      channels[key].tags = [...(channels[key].tags || []), g.label];
-    }
-    saveChannels();
-    urlInput.value = '';
-    urlInput.focus();
-    renderGroupModal();
-    renderSidebar();
-  };
-  const urlInput = detail.querySelector('#gmUrlInput');
-  detail.querySelector('#gmUrlAddBtn').addEventListener('click', addUrl);
-  urlInput.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); addUrl(); } });
-}
-
-document.getElementById('groupAddConfirmBtn').addEventListener('click', () => {
-  const label = document.getElementById('groupLabelInput').value.trim();
-  if (!label) return;
-  if (groups.some(g => g.label === label)) { alert(t('group-exists', { name: label })); return; }
-  const ng = { id: 'g_' + Date.now(), label, parentId: null };
-  groups.push(ng);
-  saveGroups();
-  selectedGroupId = ng.id;
-  document.getElementById('groupLabelInput').value = '';
-  renderGroupModal();
-  renderSidebar();
-});
-document.getElementById('groupLabelInput').addEventListener('keydown', e => {
-  if (e.key === 'Enter') document.getElementById('groupAddConfirmBtn').click();
-});
-document.getElementById('groupModalCloseBtn').addEventListener('click', closeGroupModal);
-document.getElementById('groupModal').addEventListener('click', e => {
-  if (e.target === document.getElementById('groupModal')) closeGroupModal();
-});
 
 // --- サイドバーリサイズ ---
 (function() {
