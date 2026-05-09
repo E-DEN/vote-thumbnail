@@ -160,6 +160,31 @@
         <div class="rank-list" id="rankList"></div>
       </div>
 
+      <!-- リアクション画面 -->
+      <div id="reactionsScreen" class="screen" style="display:none">
+        <div class="rs-img-wrap" id="reactionsImgWrap">
+          <img id="reactionsImg" src="" alt="" referrerpolicy="no-referrer">
+          <div class="reactions-heatmap-layer" id="reactionsHeatmapLayer"></div>
+          <div class="reactions-pins-layer" id="reactionsPinsLayer"></div>
+          <div class="reactions-my-pin" id="reactionsMyPin" hidden>
+            <svg id="reactionsMyPinSvg" class="reactions-pin-svg reactions-my-pin-svg" viewBox="0 0 24 30" width="30" height="38" xmlns="http://www.w3.org/2000/svg">
+              <path class="pin-balloon" d="M12,29 C5.5,21.5 1.5,17 1.5,11 a10.5,10.5,0,0,1,21,0 C22.5,17 18.5,21.5 12,29 Z"/>
+              <g transform="translate(12 11) scale(0.38) translate(-12 -12)">
+                <path class="pin-icon" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+              </g>
+            </svg>
+          </div>
+        </div>
+        <div class="rs-controls">
+          <button class="rs-mode-btn active" id="reactionsPinsModeBtn" data-i18n="reactions-pins">Pins</button>
+          <button class="rs-mode-btn" id="reactionsHeatmapModeBtn" data-i18n="reactions-heatmap">Heatmap</button>
+          <span class="rs-title" id="reactionsTitle"></span>
+          <div style="flex:1"></div>
+          <a class="rs-yt-btn" id="reactionsYtBtn" href="#" target="_blank" rel="noopener noreferrer" data-i18n="yt-btn">YouTube で見る</a>
+          <button class="rs-back-btn" id="reactionsBackBtn" data-i18n="reactions-back">戻る</button>
+        </div>
+      </div>
+
     </div>
   </div>
 
@@ -192,23 +217,6 @@
       <div class="modal-img-wrap" id="modalImgWrap">
         <img id="modalImg" src="" alt="" referrerpolicy="no-referrer">
         <div class="modal-badge" id="modalBadge"></div>
-        <!-- ReactionPin レイヤー群（reactions-active クラス付与時に有効） -->
-        <div class="reactions-heatmap-layer" id="reactionsHeatmapLayer"></div>
-        <div class="reactions-pins-layer" id="reactionsPinsLayer"></div>
-        <div class="reactions-cursor" id="reactionsCursor">
-          <div class="reactions-cursor-glow"></div>
-          <div class="reactions-cursor-body">
-            <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
-          </div>
-          <div class="reactions-cursor-tail"></div>
-        </div>
-        <!-- 自分のピン（固定表示） -->
-        <div class="reactions-my-pin" id="reactionsMyPin" hidden>
-          <div class="reactions-my-pin-body">
-            <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
-          </div>
-          <div class="reactions-my-pin-tail"></div>
-        </div>
       </div>
       <div class="modal-info" id="modalInfo">
         <div class="modal-title" id="modalTitle"></div>
@@ -219,42 +227,7 @@
         <a id="modalYtBtn" class="modal-yt-btn" href="#" target="_blank" rel="noopener noreferrer" data-i18n="yt-btn">YouTube で見る</a>
         <button class="modal-reactions-btn" id="modalReactionsBtn" data-i18n="reactions-open">リアクション</button>
       </div>
-      <!-- ReactionPin コントロール（リアクションモード時のみ表示） -->
-      <div class="modal-reactions-controls" id="modalReactionsControls" hidden>
-        <button class="modal-reactions-mode-btn active" id="reactionsPinsModeBtn" data-i18n="reactions-pins">Pins</button>
-        <button class="modal-reactions-mode-btn" id="reactionsHeatmapModeBtn" data-i18n="reactions-heatmap">Heatmap</button>
-        <div style="flex:1"></div>
-        <button class="modal-reactions-back-btn" id="reactionsBackBtn" data-i18n="reactions-back">戻る</button>
-      </div>
-    </div>
-  </div>
 
-  <!-- リアクション全画面ビュー -->
-  <div id="reactionsScreen" hidden>
-    <div class="rs-img-wrap" id="reactionsImgWrap">
-      <img id="reactionsImg" src="" alt="" referrerpolicy="no-referrer">
-      <div class="reactions-heatmap-layer" id="reactionsHeatmapLayer"></div>
-      <div class="reactions-pins-layer" id="reactionsPinsLayer"></div>
-      <div class="reactions-cursor" id="reactionsCursor">
-        <div class="reactions-cursor-glow"></div>
-        <div class="reactions-cursor-body">
-          <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
-        </div>
-        <div class="reactions-cursor-tail"></div>
-      </div>
-      <div class="reactions-my-pin" id="reactionsMyPin" hidden>
-        <div class="reactions-my-pin-body">
-          <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
-        </div>
-        <div class="reactions-my-pin-tail"></div>
-      </div>
-    </div>
-    <div class="rs-controls">
-      <button class="rs-mode-btn active" id="reactionsPinsModeBtn" data-i18n="reactions-pins">Pins</button>
-      <button class="rs-mode-btn" id="reactionsHeatmapModeBtn" data-i18n="reactions-heatmap">Heatmap</button>
-      <div style="flex:1"></div>
-      <a class="rs-yt-btn" id="reactionsYtBtn" href="#" target="_blank" rel="noopener noreferrer" data-i18n="yt-btn">YouTube で見る</a>
-      <button class="rs-back-btn" id="reactionsBackBtn" data-i18n="reactions-back">戻る</button>
     </div>
   </div>
 

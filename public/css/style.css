@@ -1697,44 +1697,23 @@ header {
 }
 
 /* pin アニメーション */
+/* フローティングピン（アニメーション表示） */
 .reactions-pin {
   position: absolute;
   pointer-events: none;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  transform-origin: bottom center;
   animation: reactionsPinFloat 24s linear forwards;
 }
 
-.reactions-pin-glow {
-  position: absolute;
-  width: 2.5rem;
-  height: 2.5rem;
-  border-radius: 50%;
-  background: rgba(236, 72, 153, 0.25);
-  filter: blur(0.8rem);
+/* ピンSVG共通 */
+.reactions-pin-svg {
+  display: block;
+  overflow: visible;
+  filter: drop-shadow(0 3px 8px rgba(0,0,0,0.45));
 }
 
-.reactions-pin-body {
-  position: relative;
-  border-radius: 50%;
-  background: #fff;
-  box-shadow: 0 4px 24px rgba(0,0,0,0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.reactions-pin-body svg { fill: #ec4899; }
-
-.reactions-pin-tail {
-  width: 0;
-  height: 0;
-  border-left: 5px solid transparent;
-  border-right: 5px solid transparent;
-  border-top: 8px solid #fff;
-}
+/* 吹き出し本体・アイコンの色（コンテキストごとに上書き） */
+.reactions-pin      .pin-balloon { fill: #ec4899; }
+.reactions-pin      .pin-icon    { fill: #fff; }
 
 @keyframes reactionsPinFloat {
   0%   { opacity: 0; translate: 0 8%; }
@@ -1743,87 +1722,23 @@ header {
   100% { opacity: 0.06; translate: 0 -4%; }
 }
 
-/* ピンカーソル（ホバー追従） */
-.reactions-cursor {
-  position: absolute;
-  pointer-events: none;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  transform: translate(-50%, -100%);
-  opacity: 0;
-  transition: opacity 0.2s;
-  z-index: 40;
-}
-
-.modal-img-wrap.reactions-active { cursor: crosshair; }
-.modal-img-wrap.reactions-active:hover .reactions-cursor { opacity: 1; }
-
-.reactions-cursor-glow {
-  position: absolute;
-  width: 3rem;
-  height: 3rem;
-  border-radius: 50%;
-  background: rgba(236, 72, 153, 0.25);
-  filter: blur(1rem);
-}
-
-.reactions-cursor-body {
-  position: relative;
-  width: 2.2rem;
-  height: 2.2rem;
-  border-radius: 50%;
-  border: 1px solid rgba(255,255,255,0.4);
-  background: rgba(255,255,255,0.92);
-  backdrop-filter: blur(8px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
-}
-
-.reactions-cursor-body svg { fill: #ec4899; }
-
-.reactions-cursor-tail {
-  width: 0;
-  height: 0;
-  border-left: 6px solid transparent;
-  border-right: 6px solid transparent;
-  border-top: 9px solid rgba(255,255,255,0.92);
-}
+/* ピンカーソル（ホバー追従） - 廃止 */
 
 /* 自分のピン（固定表示） */
 .reactions-my-pin {
   position: absolute;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
   transform: translate(-50%, -100%);
   z-index: 30;
   pointer-events: none;
 }
 
-.reactions-my-pin-body {
-  width: 2rem;
-  height: 2rem;
-  border-radius: 50%;
-  background: #fff;
-  border: 2px solid var(--accent);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 0 0 3px rgba(0,176,244,0.3), 0 4px 16px rgba(0,0,0,0.5);
+/* アニメーション用: transform-origin をピン先端（下中央）に */
+.reactions-my-pin-svg {
+  transform-origin: 50% 100%;
 }
 
-.reactions-my-pin-body svg { fill: var(--accent); }
-
-.reactions-my-pin-tail {
-  width: 0;
-  height: 0;
-  border-left: 5px solid transparent;
-  border-right: 5px solid transparent;
-  border-top: 8px solid #fff;
-}
+.reactions-my-pin .pin-balloon { fill: var(--accent); }
+.reactions-my-pin .pin-icon    { fill: #fff; }
 
 /* リアクションボタン（modal-actions 内） */
 .modal-reactions-btn {
@@ -1888,20 +1803,18 @@ header {
    Reactions Full-Screen View
 ===================== */
 #reactionsScreen {
-  position: fixed;
-  inset: 0;
-  z-index: 300;
-  background: #000;
+  background: var(--bg);
+  padding: 0;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
 }
-#reactionsScreen[hidden] { display: none !important; }
 .rs-img-wrap {
   flex: 1;
   min-height: 0;
   position: relative;
   overflow: hidden;
-  cursor: crosshair;
+  cursor: default;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1957,4 +1870,13 @@ header {
   transition: color 0.15s;
 }
 .rs-back-btn:hover { color: #fff; }
+.rs-title {
+  font-size: 12px;
+  color: rgba(255,255,255,0.6);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 320px;
+  padding: 0 12px;
+}
 

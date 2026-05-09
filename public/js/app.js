@@ -8,6 +8,7 @@ const LS_GROUPS = 'thumb-ranking-groups';
 let allVideos = [];
 let currentCat = 'videos';
 let currentView = 'welcome';
+let _prevView = 'vote';
 let ratingData = {};
 let voteTotal = 0;
 let channels = {};
@@ -884,7 +885,7 @@ function selectChannel(key) {
 }
 
 // --- 画面切り替え ---
-const SCREENS = ['welcome', 'vote', 'list', 'ranking'];
+const SCREENS = ['welcome', 'vote', 'list', 'ranking', 'reactions'];
 
 // --- サムネモーダル ---
 // --- ReactionPin ---
@@ -971,21 +972,20 @@ function startReactionsLoop(seeds) {
       if (Math.random() > skipChance) {
         while (pinsLayer.children.length >= REACTIONS_MAX_PINS) pinsLayer.removeChild(pinsLayer.firstChild);
         const scale = 0.8 + seed.density * 0.8;
-        const sz = Math.round(28 * scale);
-        const iconSz = Math.round(sz * 0.52);
+        const sz = Math.round(20 * scale);
+        const szH = Math.round(sz * 1.25);
         const pin = document.createElement('div');
         pin.className = 'reactions-pin';
         pin.dataset.x = x;
         pin.dataset.y = y;
         pin.style.cssText = 'left:' + (x * 100) + '%;top:' + (y * 100) + '%;translate:-50% -100%;scale:' + scale + ';';
         pin.innerHTML =
-          '<div class="reactions-pin-glow"></div>' +
-          '<div class="reactions-pin-body" style="width:' + sz + 'px;height:' + sz + 'px">' +
-            '<svg viewBox="0 0 24 24" fill="#ec4899" style="width:' + iconSz + 'px;height:' + iconSz + 'px">' +
-              '<path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>' +
-            '</svg>' +
-          '</div>' +
-          '<div class="reactions-pin-tail"></div>';
+          '<svg class="reactions-pin-svg" viewBox="0 0 24 30" width="' + sz + '" height="' + szH + '" xmlns="http://www.w3.org/2000/svg">' +
+            '<path class="pin-balloon" d="M12,29 C5.5,21.5 1.5,17 1.5,11 a10.5,10.5,0,0,1,21,0 C22.5,17 18.5,21.5 12,29 Z"/>' +
+            '<g transform="translate(12 11) scale(0.38) translate(-12 -12)">' +
+              '<path class="pin-icon" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>' +
+            '</g>' +
+          '</svg>';
         pinsLayer.appendChild(pin);
       }
       cluster.emitted++;
@@ -1019,19 +1019,43 @@ function setReactionsMode(mode) {
 }
 
 function showMyReactionsPin(x, y) {
-  const pin = document.getElementById('reactionsMyPin');
-  pin.style.left = (x * 100) + '%';
-  pin.style.top  = (y * 100) + '%';
+  // x, y は画像内の相対位置（0〜1）。wrap内のレターボックスを考慮して変換
+  var wrap = document.getElementById('reactionsImgWrap');
+  var img  = document.getElementById('reactionsImg');
+  var pin  = document.getElementById('reactionsMyPin');
+  var nw = img.naturalWidth, nh = img.naturalHeight;
+  var wRect = wrap.getBoundingClientRect();
+  var left, top;
+  if (nw && nh && wRect.width && wRect.height) {
+    var scale = Math.min(wRect.width / nw, wRect.height / nh);
+    var iw = nw * scale, ih = nh * scale;
+    var ix = (wRect.width  - iw) / 2;
+    var iy = (wRect.height - ih) / 2;
+    left = ((ix + x * iw) / wRect.width  * 100) + '%';
+    top  = ((iy + y * ih) / wRect.height * 100) + '%';
+  } else {
+    left = (x * 100) + '%';
+    top  = (y * 100) + '%';
+  }
+  pin.style.left = left;
+  pin.style.top  = top;
   pin.hidden = false;
+  // 上から刺さるアニメーション
+  var svg = document.getElementById('reactionsMyPinSvg');
+  anime.remove(svg);
+  anime({
+    targets: svg,
+    translateY: [-28, 0],
+    duration: 750,
+    easing: 'easeOutElastic',
+    elasticity: 600
+  });
 }
 
 function openReactionsMode(videoId) {
   if (!videoId) return;
   _reactionsCurrentVideoId = videoId;
   _reactionsMode = 'pins';
-  var screen = document.getElementById('reactionsScreen');
-  screen.hidden = false;
-  document.body.style.overflow = 'hidden';
   document.getElementById('reactionsPinsModeBtn').classList.add('active');
   document.getElementById('reactionsHeatmapModeBtn').classList.remove('active');
   document.getElementById('reactionsHeatmapLayer').style.display = 'none';
@@ -1049,15 +1073,16 @@ function openReactionsMode(videoId) {
 
 function closeReactionsMode() {
   clearTimeout(_reactionsTimer);
-  var screen = document.getElementById('reactionsScreen');
-  if (!screen) return;
-  screen.hidden = true;
-  document.body.style.overflow = '';
   document.getElementById('reactionsPinsLayer').innerHTML = '';
   document.getElementById('reactionsMyPin').hidden = true;
+  if (currentView === 'reactions') {
+    showView(_prevView || 'vote');
+  }
 }
 
+let _modalCurrentV = null;
 function openThumbModal({ v, idx, rating, wins, battles, wr, barPct, videoUrl, medal }) {
+  _modalCurrentV = v;
   _reactionsCurrentVideoId = v.id;
   closeReactionsMode();
   const modal = document.getElementById('thumbModal');
@@ -1084,11 +1109,14 @@ function closeThumbModal() {
 
 // ギャラリーからリアクション全画面で開く
 function openModalReactions(v) {
+  _prevView = currentView;
   var img = document.getElementById('reactionsImg');
   img.src = v.thumb;
   img.onerror = function() { this.src = 'https://i.ytimg.com/vi/' + v.id + '/hqdefault.jpg'; };
   document.getElementById('reactionsYtBtn').href = v.url || 'https://www.youtube.com/watch?v=' + v.id;
+  document.getElementById('reactionsTitle').textContent = v.title || '';
   openReactionsMode(v.id);
+  showView('reactions');
 }
 
 document.getElementById('modalClose').addEventListener('click', closeThumbModal);
@@ -1097,9 +1125,15 @@ document.getElementById('thumbModal').addEventListener('click', e => {
 });
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
-    if (!document.getElementById('reactionsScreen').hidden) { closeReactionsMode(); return; }
+    if (currentView === 'reactions') { closeReactionsMode(); return; }
     closeThumbModal();
   }
+});
+document.getElementById('modalReactionsBtn').addEventListener('click', function() {
+  if (!_modalCurrentV) return;
+  var v = _modalCurrentV;
+  closeThumbModal();
+  openModalReactions(v);
 });
 
 const TAB_IDS  = {};
@@ -1372,24 +1406,25 @@ function init() {
   document.getElementById('reactionsHeatmapModeBtn').addEventListener('click', function() { setReactionsMode('heatmap'); });
   document.getElementById('reactionsBackBtn').addEventListener('click', closeReactionsMode);
 
-  // ReactionPin: imgWrap ホバー追従 & クリックで pin 配置
+  // ReactionPin: imgWrap クリックで pin 配置
   var _rsImgWrap = document.getElementById('reactionsImgWrap');
-  _rsImgWrap.addEventListener('mousemove', function(e) {
-    var screen = document.getElementById('reactionsScreen');
-    if (screen.hidden) return;
-    var rect = _rsImgWrap.getBoundingClientRect();
-    var xp = (e.clientX - rect.left) / rect.width;
-    var yp = (e.clientY - rect.top)  / rect.height;
-    var cursor = document.getElementById('reactionsCursor');
-    cursor.style.left = (xp * 100) + '%';
-    cursor.style.top  = (yp * 100) + '%';
-  });
   _rsImgWrap.addEventListener('click', function(e) {
-    var screen = document.getElementById('reactionsScreen');
-    if (screen.hidden || _reactionsMode !== 'pins') return;
+    if (currentView !== 'reactions' || _reactionsMode !== 'pins') return;
     var rect = _rsImgWrap.getBoundingClientRect();
-    var xp = reactionsClamp((e.clientX - rect.left) / rect.width,  0.02, 0.98);
-    var yp = reactionsClamp((e.clientY - rect.top)  / rect.height, 0.02, 0.98);
+    var cx = e.clientX - rect.left;
+    var cy = e.clientY - rect.top;
+    // 実際に表示されている画像の領域を計算（object-fit:contain のレターボックス分を除外）
+    var img = document.getElementById('reactionsImg');
+    var nw = img.naturalWidth, nh = img.naturalHeight;
+    // 画像サイズ未取得時はピン不可
+    if (!nw || !nh) return;
+    var scale = Math.min(rect.width / nw, rect.height / nh);
+    var iw = nw * scale, ih = nh * scale;
+    var ix = (rect.width - iw) / 2, iy = (rect.height - ih) / 2;
+    if (cx < ix || cx > ix + iw || cy < iy || cy > iy + ih) return;
+    // 座標を画像内の相対位置（0〜1）として保持
+    var xp = reactionsClamp((cx - ix) / iw, 0.01, 0.99);
+    var yp = reactionsClamp((cy - iy) / ih, 0.01, 0.99);
     _reactionsMyPins[_reactionsCurrentVideoId] = { x: xp, y: yp };
     showMyReactionsPin(xp, yp);
     if (_reactionsCurrentVideoId) postReaction(_reactionsCurrentVideoId, xp, yp);
