@@ -954,6 +954,10 @@ function buildFolderItem(folder) {
     if (ch.avatar) el.onerror = () => el.style.display = 'none';
     preview.appendChild(el);
   });
+  const folderIcon = document.createElement('div');
+  folderIcon.className = 'sidebar-folder-open-icon';
+  folderIcon.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>';
+  preview.appendChild(folderIcon);
   header.appendChild(preview);
 
   const nameEl = document.createElement('span');
@@ -972,38 +976,37 @@ function buildFolderItem(folder) {
   header.appendChild(chevron);
 
   function startRename() {
-    if (header.querySelector('.sidebar-folder-name-input')) return;
-    const input = document.createElement('input');
-    input.className = 'sidebar-folder-name-input';
-    input.value = folder.name || '';
-    input.placeholder = 'フォルダ名';
-    header.replaceChild(input, nameEl);
-    input.focus();
-    input.select();
+    if (nameEl.contentEditable === 'plaintext-only' || nameEl.contentEditable === 'true') return;
+    const prev = folder.name || '';
+    nameEl.contentEditable = 'plaintext-only';
+    nameEl.focus();
+    const sel = window.getSelection(), range = document.createRange();
+    range.selectNodeContents(nameEl); sel.removeAllRanges(); sel.addRange(range);
+    function onMouseDown(e) { e.stopPropagation(); }
+    function onKeyDown(ev) {
+      if (ev.key === 'Enter') { ev.preventDefault(); nameEl.blur(); }
+      if (ev.key === 'Escape') {
+        nameEl.textContent = prev;
+        nameEl.contentEditable = 'false';
+        nameEl.removeEventListener('blur', commit);
+        nameEl.removeEventListener('keydown', onKeyDown);
+        nameEl.removeEventListener('mousedown', onMouseDown);
+      }
+    }
     function commit() {
-      const val = input.value.trim();
-      folder.name = val;
-      nameEl.textContent = val;
-      if (header.contains(input)) header.replaceChild(nameEl, input);
+      nameEl.contentEditable = 'false';
+      const next = nameEl.textContent.trim().slice(0, 50) || prev;
+      nameEl.textContent = next;
+      folder.name = next;
       saveSidebarOrder();
+      nameEl.removeEventListener('keydown', onKeyDown);
+      nameEl.removeEventListener('mousedown', onMouseDown);
     }
-    function cancel() {
-      if (header.contains(input)) header.replaceChild(nameEl, input);
-    }
-    input.addEventListener('blur', commit);
-    input.addEventListener('keydown', e => {
-      if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
-      if (e.key === 'Escape') { e.preventDefault(); input.removeEventListener('blur', commit); cancel(); }
-    });
-    input.addEventListener('click', e => e.stopPropagation());
-    input.addEventListener('mousedown', e => e.stopPropagation());
+    nameEl.addEventListener('blur', commit, { once: true });
+    nameEl.addEventListener('keydown', onKeyDown);
+    nameEl.addEventListener('mousedown', onMouseDown);
   }
 
-  header.addEventListener('dblclick', e => {
-    if (e.target.closest('button')) return;
-    e.preventDefault();
-    startRename();
-  });
   header.addEventListener('keydown', e => {
     if (e.key === 'F2') { e.preventDefault(); startRename(); }
   });
@@ -1033,7 +1036,7 @@ function buildFolderItem(folder) {
   childrenEl.appendChild(dropZone);
 
   header.addEventListener('click', e => {
-    if (e.target.closest('button, input')) return;
+    if (e.target.closest('button, [contenteditable]:not([contenteditable="false"])')) return;
     folder.open = !folder.open;
     saveSidebarOrder();
     wrap.classList.toggle('sidebar-folder--open', folder.open);
@@ -1090,6 +1093,8 @@ function initSidebarDrag() {
       if (parentChildren) {
         const folder = parentChildren.closest('.sidebar-folder');
         if (folder && !folder.classList.contains('sidebar-folder--open')) continue;
+        // ドラッグ中のフォルダ内のアイテムもスキップ
+        if (_dragType === 'folder' && folder && folder.dataset.folderId === _srcFolderId) continue;
       }
       const r = el.getBoundingClientRect();
       if (mouseY < r.top || mouseY > r.bottom) continue;
@@ -1112,6 +1117,12 @@ function initSidebarDrag() {
         : { action: 'folder-after', folderId, el: wrap || el };
     }
     for (const el of nav.querySelectorAll('.sidebar-folder-drop-zone')) {
+      // 閉じたフォルダ内のドロップゾーンはスキップ
+      const pc = el.closest('.sidebar-folder-children');
+      if (pc) {
+        const pf = pc.closest('.sidebar-folder');
+        if (pf && !pf.classList.contains('sidebar-folder--open')) continue;
+      }
       const r = el.getBoundingClientRect();
       if (mouseY >= r.top - 8 && mouseY <= r.bottom + 8 && _dragType === 'channel') {
         return { action: 'add-to-folder', folderId: el.dataset.folderId, el };
@@ -1138,9 +1149,22 @@ function initSidebarDrag() {
     else if (action === 'folder-after') _ind.style.cssText = indStyle(el.getBoundingClientRect(), false);
     else if (action === 'end') {
       const navR = nav.getBoundingClientRect();
-      const all = [...nav.querySelectorAll('.sidebar-channel-item, .sidebar-folder')];
-      const last = all[all.length - 1];
-      const bottom = last ? last.getBoundingClientRect().bottom : navR.top;
+      let bottom = navR.top;
+      // トップレベルのチャンネルアイテム（フォルダ外）
+      nav.querySelectorAll('.sidebar-channel-item').forEach(el => {
+        if (!el.closest('.sidebar-folder-children')) {
+          const b = el.getBoundingClientRect().bottom;
+          if (b > bottom) bottom = b;
+        }
+      });
+      // 各フォルダの視覚的な末尾（開いている場合はフォルダ全体、閉じている場合はヘッダー）
+      nav.querySelectorAll('.sidebar-folder-header').forEach(el => {
+        const folder = el.closest('.sidebar-folder');
+        const isOpen = folder && folder.classList.contains('sidebar-folder--open');
+        const ref = isOpen ? folder : el;
+        const b = ref.getBoundingClientRect().bottom;
+        if (b > bottom) bottom = b;
+      });
       _ind.style.cssText = `display:block;position:fixed;left:${navR.left}px;top:${bottom}px;width:${navR.width}px;height:3px;background:var(--accent,#4f9cf9);border-radius:2px;pointer-events:none;z-index:9998;`;
     }
   }
@@ -1186,7 +1210,9 @@ function initSidebarDrag() {
         } else {
           const tgtIdx = sidebarOrder.findIndex(i => i.type === 'channel' && i.key === targetKey);
           if (tgtIdx >= 0) {
-            sidebarOrder.splice(tgtIdx, 1, { type: 'folder', id: 'f_' + Date.now(), open: false, children: [targetKey, srcKey] });
+            const tgtCh = channels[targetKey];
+            const defaultName = tgtCh ? (tgtCh.displayName || tgtCh.handle || targetKey) : '';
+            sidebarOrder.splice(tgtIdx, 1, { type: 'folder', id: 'f_' + Date.now(), open: false, name: defaultName, children: [targetKey, srcKey] });
           } else { sidebarOrder.push({ type: 'channel', key: srcKey }); }
         }
       } else if (action === 'add-to-folder') {
