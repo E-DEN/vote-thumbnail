@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS videos (
   duration      INTEGER NOT NULL DEFAULT 0,         -- 秒
   view_count    INTEGER NOT NULL DEFAULT 0,
   published_at  TEXT,
-  -- Glicko-2
+  -- Glicko-2 (videos テーブルが正。votes からの再計算は順序依存のため不可)
   rating        REAL    NOT NULL DEFAULT 1500,
   rd            REAL    NOT NULL DEFAULT 350,
   volatility    REAL    NOT NULL DEFAULT 0.06,
@@ -42,48 +42,10 @@ CREATE INDEX IF NOT EXISTS idx_videos_channel        ON videos(channel_id);
 CREATE INDEX IF NOT EXISTS idx_videos_channel_rating ON videos(channel_id, rating DESC);
 
 -- ---------------------------------------------------------------------------
--- votes  (生投票ログ。レーティング再計算・分析用)
--- ---------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS votes (
-  id          INTEGER PRIMARY KEY AUTOINCREMENT,
-  channel_id  TEXT    NOT NULL REFERENCES channels(channel_id),
-  winner_id   TEXT    NOT NULL REFERENCES videos(video_id),
-  loser_id    TEXT    NOT NULL REFERENCES videos(video_id),
-  ip_hash     TEXT    NOT NULL, -- sha256(ip + secret)  ※日付を含めない
-  cookie_id   TEXT,             -- ランダムUUID (匿名Cookie)
-  voted_at    TEXT    NOT NULL DEFAULT (datetime('now'))
-);
-
-CREATE INDEX IF NOT EXISTS idx_votes_channel  ON votes(channel_id);
-CREATE INDEX IF NOT EXISTS idx_votes_winner   ON votes(winner_id);
-CREATE INDEX IF NOT EXISTS idx_votes_loser    ON votes(loser_id);
--- 重複チェック・集計用
-CREATE INDEX IF NOT EXISTS idx_votes_ip_date  ON votes(ip_hash, voted_at);
-
--- ---------------------------------------------------------------------------
--- daily_votes  (日次重複判定用)
---
--- 仕様書の設計変更点:
---   旧: ip_hash TEXT PRIMARY KEY  (日付をハッシュに埋め込む方式)
---   新: (ip_hash, channel_id, vote_date) 複合PK + vote_date を独立カラムに
---   理由: 旧方式だと vote_date < X で古いレコードを削除できず、
---         cleanup cron が書けない。
---   ip_hash は sha256(ip + secret) のみ。日付は vote_date カラムで管理する。
--- ---------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS daily_votes (
-  ip_hash     TEXT    NOT NULL, -- sha256(ip + secret)
-  cookie_id   TEXT,             -- 匿名Cookie。NULLの場合はIPのみで判定
-  channel_id  TEXT    NOT NULL REFERENCES channels(channel_id),
-  vote_date   TEXT    NOT NULL, -- yyyy-mm-dd (UTC)
-  count       INTEGER NOT NULL DEFAULT 1,
-  PRIMARY KEY (ip_hash, channel_id, vote_date)
-);
-
-CREATE INDEX IF NOT EXISTS idx_daily_votes_date ON daily_votes(vote_date);
--- cleanup cron: DELETE FROM daily_votes WHERE vote_date < date('now', '-2 days');
-
--- ---------------------------------------------------------------------------
 -- reactions  (1 ユーザー 1 動画に付き 1 pin。UPSERT で更新)
+--
+-- session_id は localStorage で生成した匿名 UUID。
+-- ブラウザデータ消去で再投稿可能だが、ハートマップの精度は許容範囲とする。
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS reactions (
   video_id    TEXT    NOT NULL REFERENCES videos(video_id),

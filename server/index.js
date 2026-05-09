@@ -15,6 +15,7 @@ export default {
     // 静的ファイルは wrangler.toml の [assets] が配信する
     return new Response('Not Found', { status: 404 });
   },
+
 };
 
 // ---------------------------------------------------------------------------
@@ -24,9 +25,10 @@ async function handleApi(request, env, url) {
   const method = request.method;
   const path   = url.pathname.replace('/api', '');
 
-  // CORS (ローカル開発用)
+  // CORS
+  const allowedOrigin = env.ALLOWED_ORIGIN ?? '*';
   const cors = {
-    'Access-Control-Allow-Origin':  '*',
+    'Access-Control-Allow-Origin':  allowedOrigin,
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
   };
@@ -56,9 +58,15 @@ async function handleApi(request, env, url) {
     if (method === 'GET' && mVideos) {
       const channelId = mVideos[1];
       const category  = url.searchParams.get('category') ?? 'videos';
-      const rows = await env.DB.prepare(
-        'SELECT video_id, title, thumbnail_url, category, duration, view_count, published_at, rating, rd, volatility, wins, battles FROM videos WHERE channel_id = ? AND category = ? ORDER BY rating DESC'
-      ).bind(channelId, category).all();
+      const [rows] = await Promise.all([
+        env.DB.prepare(
+          'SELECT video_id, title, thumbnail_url, category, duration, view_count, published_at, rating, rd, volatility, wins, battles FROM videos WHERE channel_id = ? AND category = ? ORDER BY rating DESC'
+        ).bind(channelId, category).all(),
+        // ユーザーがチャンネルを選んだ瞬間に last_accessed を更新 (cron の対象判定に使用)
+        env.DB.prepare(
+          "UPDATE channels SET last_accessed = datetime('now') WHERE channel_id = ?"
+        ).bind(channelId).run(),
+      ]);
       return json(rows.results);
     }
 
@@ -72,7 +80,7 @@ async function handleApi(request, env, url) {
       // レート制限チェック (KV)
       const ip       = request.headers.get('CF-Connecting-IP') ?? 'unknown';
       const today    = new Date().toISOString().slice(0, 10);
-      const kvKey    = `vote:${hashSimple(ip)}:${body.channel_id}:${today}`;
+      const kvKey    = `vote:${ip}:${today}`;  // チャンネルをまたいでサイト全体で集計
       const countStr = await env.RATE_LIMIT_KV.get(kvKey);
       const count    = parseInt(countStr ?? '0');
       const DAILY_LIMIT = 200;
@@ -101,9 +109,6 @@ async function handleApi(request, env, url) {
         env.DB.prepare(
           'UPDATE videos SET rating=?, rd=?, volatility=?, battles=battles+1, rating_updated_at=? WHERE video_id=?'
         ).bind(newL.rating, newL.rd, newL.volatility, now, body.loser_id),
-        env.DB.prepare(
-          'INSERT INTO votes (channel_id, winner_id, loser_id, ip_hash, cookie_id, voted_at) VALUES (?,?,?,?,?,?)'
-        ).bind(body.channel_id, body.winner_id, body.loser_id, hashSimple(ip), body.cookie_id ?? null, now),
       ]);
 
       // KV カウントアップ (TTL: 翌日0時まで)
@@ -194,13 +199,6 @@ function g2Update(player, opponent, score, TAU, SCALE) {
     rd:         phiNew * SCALE,
     volatility: sigmaNew,
   };
-}
-
-// IP → 簡易ハッシュ (本番では crypto.subtle.digest を使うこと)
-function hashSimple(ip) {
-  let h = 0;
-  for (let i = 0; i < ip.length; i++) h = (Math.imul(31, h) + ip.charCodeAt(i)) | 0;
-  return 'h' + Math.abs(h).toString(16);
 }
 
 // ---------------------------------------------------------------------------
