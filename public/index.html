@@ -14,42 +14,13 @@
   <header>
     <div class="app-logo" data-i18n="sidebar-logo">ラブ❤ねいる</div>
     <div class="header-controls">
-      <!-- 言語ポップオーバー -->
-      <div class="lang-popover-anchor">
-        <button class="header-btn" id="langImportBtn" data-i18n-title="lang-switch">
-          <i data-lucide="globe"></i>
+      <!-- 設定 -->
+      <div class="settings-anchor">
+        <button class="header-btn" id="settingsBtn" title="設定">
+          <i data-lucide="settings"></i>
+          <span class="apikey-indicator" id="apikeyIndicator" hidden></span>
         </button>
-        <div id="langImportDialog" class="lang-popover" hidden>
-          <div id="langOptionList" class="lang-option-list"></div>
-          <div id="langAddSection" hidden>
-            <hr class="lang-dialog-sep">
-            <div class="lang-add-form">
-              <div id="langImportDrop" class="lang-import-drop">
-                <i data-lucide="file-json" style="width:22px;height:22px;opacity:0.5;flex-shrink:0"></i>
-                <div class="drop-text">
-                  <span data-i18n="lang-import-drop"></span>
-                  <span style="font-size:10px;" data-i18n="drop-hint"></span>
-                </div>
-              </div>
-              <p class="lang-import-or" data-i18n="lang-import-or"></p>
-              <textarea id="langImportText" class="lang-import-textarea" rows="4" data-i18n-ph="lang-import-ph"></textarea>
-              <div class="lang-import-actions">
-                <button class="popover-btn popover-btn-primary" id="langImportApply" data-i18n="lang-import-apply"></button>
-                <span style="flex:1"></span>
-                <button class="popover-btn" id="langTemplateDownload" data-i18n-title="lang-template-dl" style="min-width:0;width:32px;height:32px;padding:0;display:flex;align-items:center;justify-content:center"><i data-lucide="download"></i></button>
-              </div>
-            </div>
-          </div>
-        </div>
       </div>
-      <!-- テーマ切り替え -->
-      <button class="header-btn" id="themeBtn" onclick="applyTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark')">
-        <i data-lucide="moon"></i>
-      </button>
-      <!-- GitHub リンク -->
-      <a class="header-btn" href="https://github.com/E-DEN/vote-thumbnail" target="_blank" rel="noopener" title="GitHub">
-        <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
-      </a>
     </div>
   </header>
 
@@ -89,16 +60,16 @@
     <div class="main-area">
 
       <!-- チャンネル選択後のサブヘッダ -->
-      <div class="channel-header" id="channelHeader" style="display:none">
+      <div class="channel-header" id="channelHeader">
+        <span id="chNoSelect" class="ch-no-select" data-i18n="no-channel-selected">チャンネルを選択してください</span>
         <img id="chAvatar" class="ch-avatar" src="" alt="" referrerpolicy="no-referrer" style="display:none">
-        <span id="chName" class="ch-name"></span>
-        <button class="ch-refresh-btn" id="chRefreshBtn" title="動画を再取得">&#8635;</button>
-        <div class="ch-tabs">
+        <span id="chName" class="ch-name" style="display:none"></span>
+        <div class="ch-tabs" id="chTabs" style="display:none">
           <button class="ch-tab active" data-view="vote" data-i18n="tab-vote">投票</button>
           <button class="ch-tab" data-view="list" data-i18n="tab-list">一覧</button>
           <button class="ch-tab" data-view="ranking" data-i18n="tab-ranking">ランキング</button>
         </div>
-        <div class="cat-filter" id="catFilter">
+        <div class="cat-filter" id="catFilter" style="display:none">
           <button class="cat-btn active" data-cat="videos" data-i18n="cat-videos">動画</button>
           <button class="cat-btn" data-cat="shorts" data-i18n="cat-shorts">ショート</button>
           <button class="cat-btn" data-cat="live" data-i18n="cat-live">ライブ</button>
@@ -108,8 +79,24 @@
       <!-- ウェルカム画面（チャンネル未選択時） -->
       <div id="welcomeScreen" class="screen">
         <div class="welcome-inner">
-          <div class="welcome-title" data-i18n="welcome-title">チャンネルを選択してください</div>
-          <div class="welcome-sub" data-i18n="welcome-sub">左のサイドバーからチャンネルを選ぶか、URLを入力して追加してください。</div>
+          <div class="welcome-card">
+            <div class="welcome-field">
+              <label class="welcome-label" data-i18n="welcome-add-label">チャンネルを追加</label>
+              <div class="welcome-search-wrap">
+                <input id="welcomeHandleInput" class="welcome-search-input" type="text" placeholder="@handle" autocomplete="off" spellcheck="false">
+                <button id="welcomeAddBtn" class="welcome-search-btn" data-i18n="welcome-add-btn">追加</button>
+              </div>
+              <div id="welcomeAddStatus" class="welcome-search-status"></div>
+            </div>
+            <div class="welcome-field">
+              <label class="welcome-label">YouTube API Key <span class="welcome-opt" data-i18n="welcome-opt">省略可</span></label>
+              <div class="welcome-search-wrap">
+                <input id="welcomeApiKeyInput" class="welcome-search-input" type="password" placeholder="AIzaSy..." autocomplete="off" spellcheck="false">
+                <button id="welcomeApiKeySave" class="welcome-search-btn" data-i18n="welcome-save">保存</button>
+              </div>
+              <div id="welcomeApiKeyStatus" class="welcome-search-status"></div>
+              <div class="welcome-search-hint" data-i18n="welcome-api-note">過去動画すべてを取得するには YouTube API キーの設定が必要です。</div>
+            </div>
         </div>
       </div>
 
@@ -210,6 +197,115 @@
         <button class="modal-reactions-btn" id="modalReactionsBtn" data-i18n="reactions-open">リアクション</button>
       </div>
 
+    </div>
+  </div>
+
+  <!-- 設定モーダル -->
+  <div id="settingsModal" class="settings-modal-backdrop" hidden>
+    <div class="settings-modal" role="dialog" aria-modal="true">
+
+      <!-- 左ナビ -->
+      <div class="settings-modal-sidebar">
+        <div class="settings-modal-sidebar-title">設定</div>
+        <nav class="settings-nav">
+          <button class="settings-nav-item active" data-tab="display">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
+            表示
+          </button>
+          <button class="settings-nav-item" data-tab="lang">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+            言語
+          </button>
+          <button class="settings-nav-item" data-tab="apikey">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+            APIキー
+          </button>
+          <button class="settings-nav-item" data-tab="sidebar">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+            データ
+          </button>
+        </nav>
+      </div>
+
+      <!-- 右コンテンツ -->
+      <div class="settings-modal-content">
+        <div class="settings-modal-header">
+          <h2 class="settings-modal-heading" id="settingsModalHeading">表示</h2>
+          <button class="settings-modal-close" id="settingsModalClose" title="閉じる" aria-label="閉じる">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+
+        <!-- 表示タブ -->
+        <div class="settings-tab" id="settingsTab-display">
+          <div class="settings-field">
+            <div class="settings-field-label">テーマ</div>
+            <div class="settings-theme-btns">
+              <button class="settings-theme-btn" id="settingsThemeDark">ダーク</button>
+              <button class="settings-theme-btn" id="settingsThemeLight">ライト</button>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- 言語タブ -->
+        <div class="settings-tab" id="settingsTab-lang" hidden>
+          <div id="langOptionList" class="lang-option-list"></div>
+          <div id="langAddSection" hidden>
+            <hr class="lang-dialog-sep">
+            <div class="lang-add-form">
+              <div id="langImportDrop" class="lang-import-drop">
+                <i data-lucide="file-json" style="width:22px;height:22px;opacity:0.5;flex-shrink:0"></i>
+                <div class="drop-text">
+                  <span data-i18n="lang-import-drop"></span>
+                  <span style="font-size:10px;" data-i18n="drop-hint"></span>
+                </div>
+              </div>
+              <p class="lang-import-or" data-i18n="lang-import-or"></p>
+              <textarea id="langImportText" class="lang-import-textarea" rows="4" data-i18n-ph="lang-import-ph"></textarea>
+              <div class="lang-import-actions">
+                <button class="popover-btn popover-btn-primary" id="langImportApply" data-i18n="lang-import-apply"></button>
+                <span style="flex:1"></span>
+                <button class="popover-btn" id="langTemplateDownload" data-i18n-title="lang-template-dl" style="min-width:0;width:32px;height:32px;padding:0;display:flex;align-items:center;justify-content:center"><i data-lucide="download"></i></button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- API Keyタブ -->
+        <div class="settings-tab" id="settingsTab-apikey" hidden>
+          <div class="settings-field">
+            <div class="settings-field-label">YouTube APIキー</div>
+            <div class="apikey-input-wrap">
+              <input id="apikeyPopoverInput" class="apikey-input" type="password" placeholder="AIzaSy..." autocomplete="off" spellcheck="false">
+              <button id="apikeyToggleBtn" class="apikey-toggle-btn" type="button" title="表示切り替え">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
+              </button>
+            </div>
+            <div id="apikeyPopoverStatus" class="apikey-popover-status"></div>
+            <div class="apikey-edit-actions">
+              <button id="apikeyPopoverSave" class="apikey-action-btn apikey-action-btn--primary">保存</button>
+              <button id="apikeyDeleteBtn" class="apikey-action-btn apikey-action-btn--danger" hidden>削除</button>
+            </div>
+            <p class="settings-field-desc"><a href="https://www.youtube.com/watch?v=9VJ_7tVEDUQ" target="_blank" rel="noopener" class="settings-link">API キーの取得方法</a></p>
+          </div>
+        </div>
+
+        <!-- サイドバーデータタブ -->
+        <div class="settings-tab" id="settingsTab-sidebar" hidden>
+          <div class="settings-field">
+            <div class="settings-field-label">バックアップ</div>
+            <div class="settings-data-btns">
+              <button class="settings-data-btn" id="sidebarExportBtn">エクスポート</button>
+              <button class="settings-data-btn" id="sidebarImportBtn">インポート</button>
+              <input type="file" id="sidebarImportFile" accept=".json" style="display:none">
+            </div>
+            <div id="sidebarDataStatus" class="settings-status"></div>
+            <p class="settings-field-desc">サイドバーのチャンネル・フォルダ構成を JSON ファイルとして保存・復元します。</p>
+          </div>
+        </div>
+
+      </div>
     </div>
   </div>
 

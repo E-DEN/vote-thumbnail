@@ -47,9 +47,13 @@ async function handleApi(request, env, url, ctx) {
   const cors = {
     'Access-Control-Allow-Origin':  allowedOrigin,
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Headers': 'Content-Type, X-YouTube-Api-Key',
   };
   if (method === 'OPTIONS') return new Response(null, { headers: cors });
+
+  // クライアントから渡された API キーを優先使用
+  const clientApiKey = request.headers.get('X-YouTube-Api-Key');
+  const effectiveEnv = clientApiKey ? { ...env, YOUTUBE_API_KEY: clientApiKey } : env;
 
   function json(data, status = 200) {
     return new Response(JSON.stringify(data), {
@@ -107,10 +111,10 @@ async function handleApi(request, env, url, ctx) {
       ).bind(channelId, channelHandle, title, iconUrl).run();
 
       // RSS から最新15件を即時取得 → カテゴリ判定・視聴回数取得も同期実行
-      const { newVideoIds } = await fetchAndSaveRss(channelId, env);
+      const { newVideoIds } = await fetchAndSaveRss(channelId, effectiveEnv);
       if (newVideoIds.length > 0) {
-        await detectShortsCategories(newVideoIds, env);
-        await fetchVideoDetails(newVideoIds, env);
+        await detectShortsCategories(newVideoIds, effectiveEnv);
+        await fetchVideoDetails(newVideoIds, effectiveEnv);
       }
 
       const channel = { channel_id: channelId, handle: channelHandle, title, icon_url: iconUrl };
@@ -133,15 +137,15 @@ async function handleApi(request, env, url, ctx) {
         'SELECT channel_id FROM channels WHERE channel_id = ? AND inactive = 0'
       ).bind(channelId).first();
       if (!exists) return err('チャンネルが見つかりません', 404);
-      const { added, rssStatus, newVideoIds } = await fetchAndSaveRss(channelId, env);
+      const { added, rssStatus, newVideoIds } = await fetchAndSaveRss(channelId, effectiveEnv);
       // 新規動画 + 既存の未判定動画 (duration=0) をまとめてカテゴリ判定
       const undetected = await env.DB.prepare(
         "SELECT video_id FROM videos WHERE channel_id = ? AND duration = 0 LIMIT 20"
       ).bind(channelId).all();
       const toDetect = [...new Set([...newVideoIds, ...undetected.results.map(r => r.video_id)])];
       if (toDetect.length > 0) {
-        await detectShortsCategories(toDetect, env);
-        await fetchVideoDetails(toDetect, env);
+        await detectShortsCategories(toDetect, effectiveEnv);
+        await fetchVideoDetails(toDetect, effectiveEnv);
       }
       return json({ ok: true, added, rssStatus });
     }

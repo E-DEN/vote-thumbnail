@@ -86,8 +86,13 @@ registerLang('ja', '日本語', {
   'cat-shorts':  'ショート',
   'cat-live':    'ライブ',
   // ウェルカム
-  'welcome-title': 'チャンネルを選択してください',
-  'welcome-sub':   '左のサイドバーからチャンネルを選ぶか、URLを入力して追加してください。',
+  'no-channel-selected': 'チャンネルを選択してください',
+  'welcome-add-label': 'チャンネルを追加',
+  'welcome-add-btn':   '追加',
+  'welcome-opt':       '省略可',
+  'welcome-save':      '保存',
+  'welcome-api-note':  '過去動画すべてを取得するには YouTube API キーの設定が必要です。',
+  'welcome-help-link': '使い方ガイドを見る',
   // 投票
   'vote-counter-pre':  'これまでの投票: ',
   'vote-counter-post': ' 回',
@@ -183,8 +188,13 @@ registerLang('en', 'English', {
   'cat-shorts':  'Shorts',
   'cat-live':    'Live',
   // Welcome
-  'welcome-title': 'Select a channel',
-  'welcome-sub':   'Choose a channel from the sidebar, or paste a URL to add one.',
+  'no-channel-selected': 'Select a channel',
+  'welcome-add-label': 'Add channel',
+  'welcome-add-btn':   'Add',
+  'welcome-opt':       'optional',
+  'welcome-save':      'Save',
+  'welcome-api-note':  'A YouTube API key is required to fetch all past videos.',
+  'welcome-help-link': 'View usage guide',
   // Vote
   'vote-counter-pre':  'Votes so far: ',
   'vote-counter-post': '',

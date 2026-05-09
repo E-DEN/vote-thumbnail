@@ -4,6 +4,13 @@ const LS_RATING = 'thumb-ranking-elo';
 const LS_VIDEOS = 'thumb-ranking-videos';
 const LS_CHANNELS = 'thumb-ranking-channels';
 const LS_SIDEBAR_ORDER = 'thumb-sidebar-order';
+const LS_API_KEY = 'yt-api-key';
+
+function getStoredApiKey() { return localStorage.getItem(LS_API_KEY) || ''; }
+function apiKeyHeaders() {
+  const k = getStoredApiKey();
+  return k ? { 'X-YouTube-Api-Key': k } : {};
+}
 
 let allVideos = [];
 let currentCat = 'videos';
@@ -898,7 +905,11 @@ function deleteChannel(key) {
   saveSidebarOrder();
   if (currentChannelKey === key) {
     currentChannelKey = null;
-    document.getElementById('channelHeader').style.display = 'none';
+    document.getElementById('chNoSelect').style.display = '';
+    document.getElementById('chAvatar').style.display = 'none';
+    document.getElementById('chName').style.display = 'none';
+    document.getElementById('chTabs').style.display = 'none';
+    document.getElementById('catFilter').style.display = 'none';
     showView('welcome');
   }
   renderSidebar();
@@ -1352,12 +1363,15 @@ async function selectChannel(key) {
   });
 
   // チャンネルヘッダーを表示
-  const header = document.getElementById('channelHeader');
-  header.style.display = 'flex';
+  document.getElementById('chNoSelect').style.display = 'none';
   const avatarEl = document.getElementById('chAvatar');
   avatarEl.src = ch.avatar || '';
   avatarEl.style.display = ch.avatar ? '' : 'none';
-  document.getElementById('chName').textContent = ch.displayName || ch.handle || ch.key;
+  const chNameEl = document.getElementById('chName');
+  chNameEl.textContent = ch.displayName || ch.handle || ch.key;
+  chNameEl.style.display = '';
+  document.getElementById('chTabs').style.display = '';
+  document.getElementById('catFilter').style.display = '';
 
   try {
     allVideos = await fetchChannelVideos(key);
@@ -1677,7 +1691,7 @@ async function addChannelFromSidebarInput() {
   try {
     const res = await fetch('/api/channels', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...apiKeyHeaders() },
       body: JSON.stringify({ handle }),
     });
     const data = await res.json();
@@ -1719,11 +1733,10 @@ function applyTheme(theme) {
   _theme = theme;
   localStorage.setItem('thumb-theme', theme);
   document.documentElement.dataset.theme = theme;
-  const btn = document.getElementById('themeBtn');
-  if (btn) {
-    btn.innerHTML = `<i data-lucide="${theme === 'dark' ? 'moon' : 'sun'}"></i>`;
-    btn.title = t(theme === 'dark' ? 'mode-dark' : 'mode-light');
-  }
+  const darkBtn  = document.getElementById('settingsThemeDark');
+  const lightBtn = document.getElementById('settingsThemeLight');
+  if (darkBtn)  darkBtn.classList.toggle('active', theme === 'dark');
+  if (lightBtn) lightBtn.classList.toggle('active', theme === 'light');
   if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
@@ -1785,7 +1798,7 @@ function init() {
     } else if (btn.dataset.action === 'refresh') {
       if (key !== currentChannelKey) await selectChannel(key);
       try {
-        await fetch('/api/channels/' + key + '/refresh', { method: 'POST' });
+        await fetch('/api/channels/' + key + '/refresh', { method: 'POST', headers: apiKeyHeaders() });
         allVideos = await fetchChannelVideos(key);
         _currentVotePair = null;
         if (currentView === 'vote') renderVote();
@@ -1906,19 +1919,6 @@ function init() {
 
   // 1分ごとに list/ranking 画面の動画を再取得して新着を反映
   setInterval(_pollRefresh, 60000);
-
-  // 再取得ボタン
-  document.getElementById('chRefreshBtn').addEventListener('click', async () => {
-    if (!currentChannelKey) return;
-    try {
-      await fetch('/api/channels/' + currentChannelKey + '/refresh', { method: 'POST' });
-      allVideos = await fetchChannelVideos(currentChannelKey);
-      _currentVotePair = null;
-      if (currentView === 'vote') renderVote();
-      else if (currentView === 'list') renderList();
-      else if (currentView === 'ranking') renderRanking();
-    } catch (e) { console.error('refresh:', e); }
-  });
 }
 
 // --- サイドバーイベント ---
@@ -1928,6 +1928,237 @@ document.getElementById('sidebarSearchInput').addEventListener('keydown', e => {
 document.getElementById('sidebarSearchBtn').addEventListener('click', () => {
   addChannelFromSidebarInput();
 });
+
+// --- ウェルカムフォーム ---
+(function() {
+  const apiKeyInput    = document.getElementById('welcomeApiKeyInput');
+  const handleInput    = document.getElementById('welcomeHandleInput');
+  const addBtn         = document.getElementById('welcomeAddBtn');
+  const saveBtn        = document.getElementById('welcomeApiKeySave');
+  const statusEl       = document.getElementById('welcomeAddStatus');
+  const apiKeyStatusEl = document.getElementById('welcomeApiKeyStatus');
+
+  // 保存済み API キーを復元
+  const stored = getStoredApiKey();
+  if (stored) apiKeyInput.value = stored;
+
+  apiKeyInput.addEventListener('input', () => {
+    apiKeyStatusEl.textContent = '';
+    apiKeyStatusEl.style.color = '';
+  });
+
+  saveBtn.addEventListener('click', () => {
+    const val = apiKeyInput.value.trim();
+    if (val && !/^AIzaSy[A-Za-z0-9_-]{33}$/.test(val)) {
+      apiKeyStatusEl.textContent = 'APIキーの形式が正しくありません（AIzaSy... で始まる39文字）';
+      apiKeyStatusEl.style.color = 'var(--red, #ed4245)';
+      return;
+    }
+    apiKeyStatusEl.textContent = '';
+    apiKeyStatusEl.style.color = '';
+    if (val) localStorage.setItem(LS_API_KEY, val);
+    else localStorage.removeItem(LS_API_KEY);
+    saveBtn.textContent = '保存しました';
+    setTimeout(() => { saveBtn.textContent = '保存'; }, 1500);
+  });
+
+  async function submitWelcomeAdd() {
+    const raw = handleInput.value.trim();
+    if (!raw) return;
+    document.getElementById('sidebarSearchInput').value = raw;
+    statusEl.textContent = '';
+    addBtn.disabled = true;
+    await addChannelFromSidebarInput();
+    addBtn.disabled = false;
+    handleInput.value = '';
+    // サイドバーステータスをウェルカムにも反映
+    const sidebarStatus = document.getElementById('sidebarSearchStatus');
+    statusEl.textContent = sidebarStatus.textContent;
+    sidebarStatus.textContent = '';
+  }
+
+  addBtn.addEventListener('click', submitWelcomeAdd);
+  handleInput.addEventListener('keydown', e => { if (e.key === 'Enter') submitWelcomeAdd(); });
+}());
+
+// --- 設定モーダル ---
+(function() {
+  const settingsBtn   = document.getElementById('settingsBtn');
+  const settingsModal = document.getElementById('settingsModal');
+  const closeBtn      = document.getElementById('settingsModalClose');
+  const heading       = document.getElementById('settingsModalHeading');
+
+  const TAB_LABELS = { display: '表示', lang: '言語', apikey: 'APIキー', sidebar: 'データ' };
+  var _currentTab = 'display';
+
+  // ---- タブ切り替え ----
+  function switchTab(name) {
+    _currentTab = name;
+    document.querySelectorAll('.settings-nav-item').forEach(function(el) {
+      el.classList.toggle('active', el.dataset.tab === name);
+    });
+    document.querySelectorAll('.settings-tab').forEach(function(el) {
+      el.hidden = (el.id !== 'settingsTab-' + name);
+    });
+    heading.textContent = TAB_LABELS[name] || name;
+    if (name === 'apikey') showDisplayMode();
+    if (name === 'lang' && typeof rebuildLangDialog === 'function') rebuildLangDialog();
+  }
+
+  // ---- 開閉 ----
+  function openSettings() {
+    applyTheme(_theme);
+    if (typeof rebuildLangDialog === 'function') rebuildLangDialog();
+    switchTab(_currentTab);
+    settingsModal.hidden = false;
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+  }
+
+  function closeSettings() {
+    settingsModal.hidden = true;
+  }
+
+  settingsBtn.addEventListener('click', function() {
+    if (!settingsModal.hidden) { closeSettings(); return; }
+    openSettings();
+  });
+
+  // バックドロップクリックで閉じる
+  settingsModal.addEventListener('click', function(e) {
+    if (e.target === settingsModal) closeSettings();
+  });
+
+  // 閉じるボタン
+  closeBtn.addEventListener('click', closeSettings);
+
+  // ESC
+  document.addEventListener('keydown', function(e) {
+    if (e.key !== 'Escape' || settingsModal.hidden) return;
+    closeSettings();
+  });
+
+  // 左ナビ
+  document.querySelectorAll('.settings-nav-item').forEach(function(el) {
+    el.addEventListener('click', function() { switchTab(el.dataset.tab); });
+  });
+
+  // ---- テーマ ----
+  document.getElementById('settingsThemeDark').addEventListener('click', function() { applyTheme('dark'); });
+  document.getElementById('settingsThemeLight').addEventListener('click', function() { applyTheme('light'); });
+
+  // ---- API Key ----
+  const input     = document.getElementById('apikeyPopoverInput');
+  const toggleBtn = document.getElementById('apikeyToggleBtn');
+  const statusEl  = document.getElementById('apikeyPopoverStatus');
+  const deleteBtn = document.getElementById('apikeyDeleteBtn');
+  const saveBtn   = document.getElementById('apikeyPopoverSave');
+  const indicator = document.getElementById('apikeyIndicator');
+
+  const EYE     = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>';
+  const EYE_OFF = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-10-8-10-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 10 8 10 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
+
+  function updateIndicator() {
+    indicator.hidden = !getStoredApiKey();
+  }
+
+  function showDisplayMode() {
+    input.value = getStoredApiKey() || '';
+    input.type = 'password';
+    toggleBtn.innerHTML = EYE;
+    statusEl.textContent = '';
+    statusEl.style.color = '';
+    deleteBtn.hidden = !getStoredApiKey();
+  }
+
+  toggleBtn.addEventListener('click', function() {
+    const isPassword = input.type === 'password';
+    input.type = isPassword ? 'text' : 'password';
+    toggleBtn.innerHTML = isPassword ? EYE_OFF : EYE;
+  });
+
+  input.addEventListener('input', function() {
+    statusEl.textContent = '';
+    statusEl.style.color = '';
+  });
+
+  deleteBtn.addEventListener('click', function() {
+    localStorage.removeItem(LS_API_KEY);
+    updateIndicator();
+    showDisplayMode();
+  });
+
+  saveBtn.addEventListener('click', function() {
+    const val = input.value.trim();
+    if (!val) {
+      statusEl.textContent = 'APIキーを入力してください';
+      statusEl.style.color = 'var(--err)';
+      return;
+    }
+    if (!/^AIzaSy[A-Za-z0-9_-]{33}$/.test(val)) {
+      statusEl.textContent = '形式が正しくありません（AIzaSy... で始まる39文字）';
+      statusEl.style.color = 'var(--err)';
+      return;
+    }
+    localStorage.setItem(LS_API_KEY, val);
+    updateIndicator();
+    deleteBtn.hidden = false;
+    statusEl.textContent = '保存しました';
+    statusEl.style.color = 'var(--ok)';
+    setTimeout(function() { statusEl.textContent = ''; statusEl.style.color = ''; }, 2000);
+  });
+
+  // ---- サイドバーデータ ----
+  const exportBtn    = document.getElementById('sidebarExportBtn');
+  const importBtn    = document.getElementById('sidebarImportBtn');
+  const importFile   = document.getElementById('sidebarImportFile');
+  const dataStatusEl = document.getElementById('sidebarDataStatus');
+
+  exportBtn.addEventListener('click', function() {
+    const data = localStorage.getItem(LS_SIDEBAR_ORDER) || '[]';
+    const blob = new Blob([data], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'sidebar-backup.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    dataStatusEl.textContent = 'エクスポートしました';
+    dataStatusEl.style.color = '';
+    setTimeout(function() { dataStatusEl.textContent = ''; }, 2000);
+  });
+
+  importBtn.addEventListener('click', function() { importFile.click(); });
+
+  importFile.addEventListener('change', function() {
+    const file = importFile.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(ev) {
+      try {
+        const parsed = JSON.parse(ev.target.result);
+        if (!Array.isArray(parsed)) throw new Error();
+        localStorage.setItem(LS_SIDEBAR_ORDER, JSON.stringify(parsed));
+        loadSidebarOrder();
+        renderSidebar();
+        dataStatusEl.textContent = 'インポートしました';
+        dataStatusEl.style.color = 'var(--ok)';
+      } catch (err) {
+        dataStatusEl.textContent = '読み込みに失敗しました（形式が正しくありません）';
+        dataStatusEl.style.color = 'var(--err)';
+      }
+      importFile.value = '';
+      setTimeout(function() {
+        dataStatusEl.textContent = '';
+        dataStatusEl.style.color = '';
+      }, 3000);
+    };
+    reader.readAsText(file, 'utf-8');
+  });
+
+  updateIndicator();
+}());
 
 // --- チャンネルヘッダーのタブ ---
 document.getElementById('channelHeader').addEventListener('click', e => {
