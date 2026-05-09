@@ -41,6 +41,7 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 *::-webkit-scrollbar { width: 4px; height: 4px; }
 *::-webkit-scrollbar-track { background: transparent; }
 *::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+img { -webkit-user-drag: none; user-drag: none; }
 
 /* --- Base --- */
 html, body {
@@ -244,8 +245,8 @@ header {
 }
 
 .sidebar-ch-avatar {
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   object-fit: cover;
   flex-shrink: 0;
@@ -1448,7 +1449,7 @@ header {
 }
 .sidebar-folder-header:hover { background: var(--surface2); color: var(--text); }
 .sidebar-folder--open > .sidebar-folder-header { color: var(--text); }
-.sidebar-folder-preview { position: relative; width: 36px; height: 36px; flex-shrink: 0; border-radius: 50%; overflow: hidden; background: var(--surface2); }
+.sidebar-folder-preview { position: relative; width: 44px; height: 44px; flex-shrink: 0; border-radius: 50%; overflow: hidden; background: var(--surface2); }
 .sidebar-folder-preview-img {
   position: absolute; width: 24px; height: 24px; border-radius: 50%;
   object-fit: cover; border: 1.5px solid var(--surface2);
@@ -1475,7 +1476,6 @@ header {
   overflow: hidden; max-height: 0;
   transition: max-height 0.2s ease;
   padding-left: 8px;
-  padding-bottom: 4px;
   margin-left: 22px;
   margin-bottom: 2px;
   position: relative;
@@ -1488,7 +1488,7 @@ header {
   background: var(--border);
   border-radius: 1px;
 }
-.sidebar-folder--open > .sidebar-folder-children { max-height: 500px; }
+.sidebar-folder--open > .sidebar-folder-children { max-height: 500px; padding-bottom: 4px; }
 .sidebar-folder-name {
   flex: 1; min-width: 0;
   font-size: 13px; font-weight: normal;
