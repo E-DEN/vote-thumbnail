@@ -374,8 +374,17 @@ function updatePaceGauge() {
   lbl.textContent = t(level.labelKey);
 }
 
+var _currentVotePair = null; // 画面遷移で再抽選しないためキャッシュ
+
+// --- 傾き強度 ---
+var _tiltScale = 0.5;
+
 function renderVote() {
-  const pair = pickPair();
+  // 投票後または初回のみ新ペアを抽選。画面戻りではそのまま表示。
+  if (!_currentVotePair) {
+    _currentVotePair = pickPair();
+  }
+  const pair = _currentVotePair;
   const container = document.getElementById('votePair');
   if (!pair) {
     container.innerHTML = `<p style="color:var(--text-muted);text-align:center;grid-column:1/-1;padding:60px 0;font-size:14px;">${t('no-videos-in-cat')}</p>`;
@@ -412,9 +421,9 @@ function renderVote() {
       // -0.5〜0.5に正規化（CSS transitionが滑らかに追いつく）
       var nx = (e.clientX - rect.left) / rect.width  - 0.5;
       var ny = (e.clientY - rect.top)  / rect.height - 0.5;
-      fig.style.transform     = 'rotateX(' + (-ny * 12) + 'deg) rotateY(' + (nx * 16) + 'deg)';
-      caption.style.transform = 'translateX(' + (nx * 28) + 'px) translateY(' + (ny * 28) + 'px)';
-      shine.style.transform   = 'translateX(' + (nx * 100) + 'px) translateY(' + (ny * 100) + 'px)';
+      fig.style.transform     = 'rotateX(' + (-ny * 12 * _tiltScale) + 'deg) rotateY(' + (nx * 16 * _tiltScale) + 'deg)';
+      caption.style.transform = 'translateX(' + (nx * 28 * _tiltScale) + 'px) translateY(' + (ny * 28 * _tiltScale) + 'px)';
+      shine.style.transform   = 'translateX(' + (nx * 100 * _tiltScale) + 'px) translateY(' + (ny * 100 * _tiltScale) + 'px)';
     });
 
     card.addEventListener('mouseleave', function() {
@@ -443,6 +452,7 @@ function renderVote() {
       container.querySelectorAll('.vote-card').forEach(c => {
         c.classList.add(c.dataset.id === winner.id ? 'winner' : 'loser');
       });
+      _currentVotePair = null; // 投票完了後は次のペアを抽選
       setTimeout(renderVote, 500);
     });
     container.appendChild(card);
@@ -680,11 +690,9 @@ function _normalizeSortBtnWidths() {
     Array.from(document.querySelectorAll('.ch-tab[data-i18n]')),
     _tabBtnMaxWidths, 'view', 'i18n'
   );
-  // スキップボタン（単独）
-  var skipBtn = document.getElementById('skipBtn');
-  if (skipBtn && skipBtn.dataset.i18n) {
-    _measureGroup([skipBtn], {}, 'id', 'i18n');
-  }
+  // スキップボタン（単独） -- 削除済み
+  // var skipBtn = document.getElementById('skipBtn');
+  // if (skipBtn && skipBtn.dataset.i18n) { _measureGroup([skipBtn], {}, 'id', 'i18n'); }
 }
 
 // グリッドモード（カード一覧）
@@ -961,7 +969,7 @@ async function selectChannel(key) {
 
   try {
     allVideos = await fetchChannelVideos(key);
-    // カテゴリ自動選択
+    _currentVotePair = null; // チャンネル切り替え時はペアをリセット
     const counts = { videos: 0, shorts: 0, live: 0 };
     allVideos.forEach(v => { if (counts[v.category] !== undefined) counts[v.category]++; });
     currentCat = counts.live >= counts.videos && counts.live >= counts.shorts ? 'live'
@@ -1383,6 +1391,7 @@ function init() {
       try {
         await fetch('/api/channels/' + key + '/refresh', { method: 'POST' });
         allVideos = await fetchChannelVideos(key);
+        _currentVotePair = null;
         if (currentView === 'vote') renderVote();
         else if (currentView === 'list') renderList();
         else if (currentView === 'ranking') renderRanking();
@@ -1507,6 +1516,7 @@ function init() {
     try {
       await fetch('/api/channels/' + currentChannelKey + '/refresh', { method: 'POST' });
       allVideos = await fetchChannelVideos(currentChannelKey);
+      _currentVotePair = null;
       if (currentView === 'vote') renderVote();
       else if (currentView === 'list') renderList();
       else if (currentView === 'ranking') renderRanking();
@@ -1542,6 +1552,21 @@ document.getElementById('catFilter').addEventListener('click', e => {
   else if (currentView === 'list') renderList();
   else if (currentView === 'ranking') renderRanking();
 });
+
+// --- チュートリアル ---
+(function() {
+  var el = document.getElementById('voteTutorial');
+  if (!el) return;
+  var LS_KEY = 'thumb-vote-tutorial-seen';
+  if (localStorage.getItem(LS_KEY)) {
+    el.style.display = 'none';
+    return;
+  }
+  document.getElementById('voteTutorialClose').addEventListener('click', function() {
+    localStorage.setItem(LS_KEY, '1');
+    el.style.display = 'none';
+  });
+})();
 
 // --- グループモーダル ---
 function openGroupModal() {

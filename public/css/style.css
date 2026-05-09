@@ -614,6 +614,40 @@ header {
    VOTE SCREEN
 ===================== */
 
+.vote-tutorial {
+  margin-bottom: 14px;
+}
+.vote-tutorial-body {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.vote-tutorial-body p {
+  margin: 0;
+  flex: 1;
+  line-height: 1.5;
+}
+.vote-tutorial-close {
+  flex-shrink: 0;
+  padding: 4px 12px;
+  border-radius: 5px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+.vote-tutorial-close:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 .vote-counter {
   text-align: center;
   font-size: 13px;
@@ -743,31 +777,6 @@ header {
 @keyframes flash {
   0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 70%, transparent); }
   100% { box-shadow: 0 0 0 20px color-mix(in srgb, var(--accent) 0%, transparent); }
-}
-
-.vote-skip {
-  display: flex;
-  justify-content: center;
-  margin-top: 16px;
-}
-.vote-skip button {
-  padding: 0 20px;
-  height: 34px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 6px;
-  border: 1px solid var(--border);
-  background: transparent;
-  color: var(--text-muted);
-  font-size: 13px;
-  white-space: nowrap;
-  box-sizing: border-box;
-  transition: border-color 0.15s, color 0.15s;
-}
-.vote-skip button:hover {
-  border-color: var(--accent);
-  color: var(--accent);
 }
 
 /* =====================

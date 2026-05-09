@@ -91,8 +91,9 @@ registerLang('ja', '日本語', {
   // 投票
   'vote-counter-pre':  'これまでの投票: ',
   'vote-counter-post': ' 回',
-  'skip':              'スキップ',
   'no-videos-in-cat':  'このカテゴリには動画がありません。',
+  'tutorial-vote-text': '好きなサムネイルをクリックして投票。結果はランキングに反映されます。',
+  'tutorial-got-it':    'わかった',
   // 投票ペースゲージ
   'pace-stable':  '安定',
   'pace-fast':    '速い',
@@ -203,8 +204,9 @@ registerLang('en', 'English', {
   // Vote
   'vote-counter-pre':  'Votes so far: ',
   'vote-counter-post': '',
-  'skip':             'Skip',
   'no-videos-in-cat': 'No videos in this category.',
+  'tutorial-vote-text': 'Click the thumbnail you prefer to vote. Results are reflected in the ranking.',
+  'tutorial-got-it':    'Got it',
   // Vote pace gauge
   'pace-stable':  'Steady',
   'pace-fast':    'Fast',
