@@ -9,6 +9,7 @@ let allVideos = [];
 let currentCat = 'videos';
 let currentView = 'welcome';
 let _prevView = 'vote';
+let _pollTimer = null;
 let ratingData = {};
 let voteTotal = 0;
 let channels = {};
@@ -108,6 +109,54 @@ function applyVote(winnerId, loserId) {
 
 function saveRating() {
   localStorage.setItem(LS_RATING, JSON.stringify({ ratingData, voteTotal }));
+}
+
+// --- API動画ヘルパー ---
+// サーバーレスポンスをフロントエンドの allVideos 形式に変換
+function apiVideoToFrontend(v) {
+  return {
+    id:          v.video_id,
+    title:       v.title,
+    thumb:       v.thumbnail_url,
+    category:    v.category,
+    url:         'https://www.youtube.com/watch?v=' + v.video_id,
+    viewCount:   v.view_count  ?? 0,
+    publishedAt: v.published_at ?? '',
+    duration:    v.duration    ?? 0,
+  };
+}
+
+// サーバーレスポンスから ratingData を更新
+function updateRatingFromApi(apiVideos) {
+  for (const v of apiVideos) {
+    ratingData[v.video_id] = {
+      rating:     v.rating,
+      rd:         v.rd,
+      volatility: v.volatility,
+      wins:       v.wins,
+      battles:    v.battles,
+    };
+  }
+}
+
+// チャンネルの全動画を取得して allVideos と ratingData を更新する
+async function fetchChannelVideos(channelId) {
+  const res = await fetch('/api/channels/' + channelId + '/videos');
+  if (!res.ok) throw new Error('videos fetch failed: ' + res.status);
+  const apiVideos = await res.json();
+  updateRatingFromApi(apiVideos);
+  return apiVideos.map(apiVideoToFrontend);
+}
+
+// list/ranking 表示中に 1 分ごとサーバーから動画を再取得して再描画する
+async function _pollRefresh() {
+  if (!currentChannelKey) return;
+  if (currentView !== 'list' && currentView !== 'ranking') return;
+  try {
+    allVideos = await fetchChannelVideos(currentChannelKey);
+    if (currentView === 'list') renderList();
+    else if (currentView === 'ranking') renderRanking();
+  } catch { /* サイレント失敗 */ }
 }
 
 function loadRating() {
@@ -859,7 +908,7 @@ function renderSidebar() {
 }
 
 // --- チャンネル選択 ---
-function selectChannel(key) {
+async function selectChannel(key) {
   const ch = channels[key];
   if (!ch) return;
   currentChannelKey = key;
@@ -877,11 +926,20 @@ function selectChannel(key) {
   avatarEl.style.display = ch.avatar ? '' : 'none';
   document.getElementById('chName').textContent = ch.displayName || ch.handle || ch.key;
 
-  if (!loadChannelVideos(key)) {
-    // データなし: ウェルカム画面でメッセージ表示
-    return;
+  try {
+    allVideos = await fetchChannelVideos(key);
+    // カテゴリ自動選択
+    const counts = { videos: 0, shorts: 0, live: 0 };
+    allVideos.forEach(v => { if (counts[v.category] !== undefined) counts[v.category]++; });
+    currentCat = counts.live >= counts.videos && counts.live >= counts.shorts ? 'live'
+               : counts.shorts > counts.videos ? 'shorts' : 'videos';
+    document.querySelectorAll('.cat-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.cat === currentCat);
+    });
+    showView('vote');
+  } catch (e) {
+    console.error('selectChannel:', e);
   }
-  showView('vote');
 }
 
 // --- 画面切り替え ---
@@ -1158,114 +1216,61 @@ async function addChannelFromSidebarInput() {
   const raw = document.getElementById('sidebarSearchInput').value.trim();
   if (!raw) return;
 
-  const statusEl = document.getElementById('sidebarSearchStatus');
-  const inputUrl = raw.startsWith('http') ? raw
-    : `https://www.youtube.com/${raw.startsWith('@') ? raw : '@' + raw}`;
+  const statusEl  = document.getElementById('sidebarSearchStatus');
+  const searchBtn = document.getElementById('sidebarSearchBtn');
 
-  // 動画URLかどうかを事前に判定（APIコールは後で行う）
-  const pendingVideoId = parseVideoId(inputUrl);
-  // チャンネルURLかどうかを事前に判定
-  let parsed = parseChannel(inputUrl);
-
-  if (!parsed && !pendingVideoId) {
+  // @handle を正規化 (URL入力にも対応)
+  const handleMatch = raw.match(/@([\w.-]+)/);
+  if (!handleMatch) {
     statusEl.textContent = t('invalid-url');
     return;
   }
+  const handle = '@' + handleMatch[1];
 
-  // チャンネルURLの場合は初期キーを設定、動画URLの場合は後で更新
-  let key = parsed ? channelKeyFromUrl(inputUrl) : null;
-  let url = parsed ? inputUrl : null;
-
-  // 既登録チェック（チャンネルURLの場合のみ先行確認）
-  if (key && channels[key]) {
+  // DB 既登録チェック (channel_id をキーに保持)
+  const existing = Object.values(channels).find(ch => ch.handle === handle);
+  if (existing) {
     statusEl.textContent = '';
     statusEl.className = 'sidebar-search-status';
     renderSidebar();
-    selectChannel(key);
+    await selectChannel(existing.key);
     return;
   }
 
-  const apiKey = (typeof CONFIG !== 'undefined' ? CONFIG.youtubeApiKey : '');
-  if (!apiKey || apiKey === 'YOUR_API_KEY_HERE') {
-    // APIキーなし: チャンネルURLのみ仮登録（動画URLは解決不可）
-    if (!parsed) {
-      statusEl.textContent = t('invalid-url');
-      return;
-    }
-    const handleMatch = inputUrl.match(/@([\w.-]+)/);
-    const handle = handleMatch ? handleMatch[1] : key;
-    channels[key] = {
-      key, url, handle, displayName: handle,
-      avatar: '', thumb: '', videoCount: 0,
-      tags: [], addedAt: new Date().toISOString()
-    };
-    saveChannels();
-    document.getElementById('sidebarSearchInput').value = '';
-    statusEl.textContent = t('added-no-api');
-    renderSidebar();
-    selectChannel(key);
-    setTimeout(() => { statusEl.textContent = ''; statusEl.className = 'sidebar-search-status'; }, 3000);
-    return;
-  }
-
-  const searchBtn = document.getElementById('sidebarSearchBtn');
   searchBtn.disabled = true;
+  statusEl.textContent = t('fetching-channel');
   statusEl.className = 'sidebar-search-status';
 
   try {
-    statusEl.textContent = t('fetching-channel');
-
-    // 動画URLの場合はここでチャンネルIDを解決
-    if (pendingVideoId) {
-      const channelId = await getChannelIdFromVideo(apiKey, pendingVideoId);
-      parsed = { type: 'id', value: channelId };
-    }
-
-    const { playlistId, channelName, avatar, channelId: resolvedId } = await getUploadsPlaylistId(apiKey, parsed);
-
-    // key/url をチャンネルベースに確定（動画URLから追加した場合も正しいキーになる）
-    const channelUrl = resolvedId ? `https://www.youtube.com/channel/${resolvedId}` : inputUrl;
-    key = channelKeyFromUrl(channelUrl);
-    url = channelUrl;
-
-    // 解決後に既登録チェック（動画URLから追加して既存チャンネルだった場合）
-    if (channels[key]) {
-      statusEl.textContent = '';
-      renderSidebar();
-      selectChannel(key);
+    const res = await fetch('/api/channels', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ handle }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      statusEl.textContent = t('error-msg', { msg: data.error ?? res.status });
       return;
     }
-
-    const videoIds = await getAllVideoIds(apiKey, playlistId, (cur, total) => {
-      statusEl.textContent = t('fetching-videos', { cur, total });
-    });
-
-    statusEl.textContent = t('fetching-details');
-    const videos = await getVideoDetails(apiKey, videoIds, (cur, total) => {
-      statusEl.textContent = t('fetching-details-progress', { cur, total });
-    });
-
-    const handleMatch = channelUrl.match(/@([\w.-]+)/);
-    channels[key] = {
-      key, url,
-      handle: handleMatch?.[1] || '',
-      displayName: channelName || handleMatch?.[1] || key,
-      avatar: avatar || '',
-      thumb: videos.find(v => v.thumb)?.thumb || '',
-      videoCount: videos.length,
-      tags: [],
-      addedAt: new Date().toISOString()
+    const ch = data.channel;
+    // channels に保存 (既存の tags/addedAt を維持)
+    channels[ch.channel_id] = {
+      key:         ch.channel_id,
+      channelId:   ch.channel_id,
+      handle:      ch.handle,
+      displayName: ch.title,
+      avatar:      ch.icon_url,
+      tags:        channels[ch.channel_id]?.tags    ?? [],
+      addedAt:     channels[ch.channel_id]?.addedAt ?? new Date().toISOString(),
     };
     saveChannels();
-    saveVideosForChannel(key, videos);
-
-    statusEl.textContent = t('added-channel', { name: channelName, count: videos.length });
     document.getElementById('sidebarSearchInput').value = '';
+    statusEl.textContent = t('added-channel', { name: ch.title, count: '' });
     renderSidebar();
-    selectChannel(key);
-    setTimeout(() => { statusEl.textContent = ''; statusEl.className = 'sidebar-search-status'; }, 4000);
-  } catch (err) {
-    statusEl.textContent = t('error-msg', { msg: err.message });
+    await selectChannel(ch.channel_id);
+    setTimeout(() => { statusEl.textContent = ''; statusEl.className = 'sidebar-search-status'; }, 3000);
+  } catch (e) {
+    statusEl.textContent = t('error-msg', { msg: e.message });
   } finally {
     searchBtn.disabled = false;
   }
@@ -1429,6 +1434,9 @@ function init() {
     showMyReactionsPin(xp, yp);
     if (_reactionsCurrentVideoId) postReaction(_reactionsCurrentVideoId, xp, yp);
   });
+
+  // 1分ごとに list/ranking 画面の動画を再取得して新着を反映
+  setInterval(_pollRefresh, 60000);
 }
 
 // --- サイドバーイベント ---

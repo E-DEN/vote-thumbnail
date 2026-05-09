@@ -4,16 +4,27 @@
 // 本番デプロイ: npx wrangler deploy
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
 
     // API ルーティング
     if (url.pathname.startsWith('/api/')) {
-      return handleApi(request, env, url);
+      return handleApi(request, env, url, ctx);
     }
 
     // 静的ファイルは wrangler.toml の [assets] が配信する
     return new Response('Not Found', { status: 404 });
+  },
+
+  // Cron Trigger: アクティブチャンネルの RSS をポーリングして新着動画を追加
+  // wrangler.toml の [triggers] crons で設定
+  async scheduled(_event, env) {
+    const { results } = await env.DB.prepare(
+      "SELECT channel_id FROM channels WHERE inactive = 0 AND last_accessed > datetime('now', '-7 days')"
+    ).all();
+    for (const ch of results) {
+      await fetchAndSaveRss(ch.channel_id, env).catch(() => {});
+    }
   },
 
 };
@@ -21,7 +32,7 @@ export default {
 // ---------------------------------------------------------------------------
 // API ルーター
 // ---------------------------------------------------------------------------
-async function handleApi(request, env, url) {
+async function handleApi(request, env, url, ctx) {
   const method = request.method;
   const path   = url.pathname.replace('/api', '');
 
@@ -45,6 +56,54 @@ async function handleApi(request, env, url) {
   }
 
   try {
+    // --- POST /api/channels ---
+    if (method === 'POST' && path === '/channels') {
+      const body = await request.json().catch(() => null);
+      const handle = body?.handle?.trim();
+      if (!handle) return err('handle は必須です');
+
+      // @handle または channel_id (UCxxxx) を受け付ける
+      let channelId = null;
+      let channelHandle = handle.startsWith('@') ? handle : '@' + handle;
+
+      // DB に既存チャンネルがあれば即返し
+      const existing = await env.DB.prepare(
+        'SELECT channel_id, handle, title, icon_url FROM channels WHERE handle = ? AND inactive = 0'
+      ).bind(channelHandle).first();
+      if (existing) return json({ ok: true, channel: existing, cached: true });
+
+      // youtube.com/@handle をフェッチしてチャンネルIDを取得
+      const pageRes = await fetch(`https://www.youtube.com/${channelHandle}`, {
+        headers: { 'User-Agent': 'Mozilla/5.0' },
+      });
+      if (!pageRes.ok) return err('チャンネルが見つかりません', 404);
+      const html = await pageRes.text();
+
+      // channel_id を HTML から抽出 (UCで始まる24文字)
+      const cidMatch = html.match(/"channelId":"(UC[\w-]{22})"/);
+      if (!cidMatch) return err('チャンネルIDの取得に失敗しました', 502);
+      channelId = cidMatch[1];
+
+      // タイトル・アイコンを抽出
+      const titleMatch = html.match(/<title>([^<]+)<\/title>/);
+      const iconMatch  = html.match(/"avatar":\{"thumbnails":\[\{"url":"([^"]+)"/);
+      const title   = titleMatch ? titleMatch[1].replace(' - YouTube', '').trim() : channelHandle;
+      const iconUrl = iconMatch  ? iconMatch[1] : '';
+
+      // channels に保存
+      await env.DB.prepare(
+        `INSERT INTO channels (channel_id, handle, title, icon_url, last_checked, last_accessed)
+         VALUES (?, ?, ?, ?, datetime('now'), datetime('now'))
+         ON CONFLICT(channel_id) DO UPDATE SET handle=excluded.handle, title=excluded.title, icon_url=excluded.icon_url, last_accessed=datetime('now')`
+      ).bind(channelId, channelHandle, title, iconUrl).run();
+
+      // RSS から最新15件を即時取得（レスポンスを遅らせない範囲で実行）
+      await fetchAndSaveRss(channelId, env);
+
+      const channel = { channel_id: channelId, handle: channelHandle, title, icon_url: iconUrl };
+      return json({ ok: true, channel, cached: false });
+    }
+
     // --- GET /api/channels ---
     if (method === 'GET' && path === '/channels') {
       const rows = await env.DB.prepare(
@@ -54,14 +113,19 @@ async function handleApi(request, env, url) {
     }
 
     // --- GET /api/channels/:channelId/videos ---
+    // category パラメータ省略時は全カテゴリを返す
     const mVideos = path.match(/^\/channels\/([\w.-]+)\/videos$/);
     if (method === 'GET' && mVideos) {
       const channelId = mVideos[1];
-      const category  = url.searchParams.get('category') ?? 'videos';
+      const category  = url.searchParams.get('category');
+      const videosSql = category
+        ? 'SELECT video_id, title, thumbnail_url, category, duration, view_count, published_at, rating, rd, volatility, wins, battles FROM videos WHERE channel_id = ? AND category = ? ORDER BY rating DESC'
+        : 'SELECT video_id, title, thumbnail_url, category, duration, view_count, published_at, rating, rd, volatility, wins, battles FROM videos WHERE channel_id = ? ORDER BY rating DESC';
+      const videosStmt = category
+        ? env.DB.prepare(videosSql).bind(channelId, category)
+        : env.DB.prepare(videosSql).bind(channelId);
       const [rows] = await Promise.all([
-        env.DB.prepare(
-          'SELECT video_id, title, thumbnail_url, category, duration, view_count, published_at, rating, rd, volatility, wins, battles FROM videos WHERE channel_id = ? AND category = ? ORDER BY rating DESC'
-        ).bind(channelId, category).all(),
+        videosStmt.all(),
         // ユーザーがチャンネルを選んだ瞬間に last_accessed を更新 (cron の対象判定に使用)
         env.DB.prepare(
           "UPDATE channels SET last_accessed = datetime('now') WHERE channel_id = ?"
@@ -153,6 +217,46 @@ async function handleApi(request, env, url) {
     console.error(e);
     return err('Internal Server Error', 500);
   }
+}
+
+// ---------------------------------------------------------------------------
+// RSS フェッチ & DB 保存
+// ---------------------------------------------------------------------------
+async function fetchAndSaveRss(channelId, env) {
+  const res = await fetch(
+    `https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`,
+    { headers: { 'User-Agent': 'Mozilla/5.0' } }
+  );
+  if (!res.ok) return;
+  const xml = await res.text();
+
+  // <entry> ブロックをすべて抽出
+  const entries = [...xml.matchAll(/<entry>([\/\s\S]*?)<\/entry>/g)];
+  const now = new Date().toISOString();
+
+  for (const [, entry] of entries) {
+    const videoIdMatch     = entry.match(/<yt:videoId>([\w-]{11})<\/yt:videoId>/);
+    const titleMatch       = entry.match(/<title>([^<]*)<\/title>/);
+    const publishedMatch   = entry.match(/<published>([^<]+)<\/published>/);
+    const thumbnailMatch   = entry.match(/url="(https:\/\/i\.ytimg\.com\/vi\/[\w-]+\/[^"]+)"/);
+    if (!videoIdMatch) continue;
+
+    const videoId      = videoIdMatch[1];
+    const title        = titleMatch      ? titleMatch[1]     : '';
+    const publishedAt  = publishedMatch  ? publishedMatch[1] : null;
+    const thumbnailUrl = thumbnailMatch  ? thumbnailMatch[1] : `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+
+    await env.DB.prepare(
+      `INSERT INTO videos (video_id, channel_id, title, thumbnail_url, published_at)
+       VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT(video_id) DO NOTHING`
+    ).bind(videoId, channelId, title, thumbnailUrl, publishedAt).run();
+  }
+
+  // last_checked を更新
+  await env.DB.prepare(
+    "UPDATE channels SET last_checked = datetime('now') WHERE channel_id = ?"
+  ).bind(channelId).run();
 }
 
 // ---------------------------------------------------------------------------

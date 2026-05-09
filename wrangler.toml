@@ -7,7 +7,9 @@ compatibility_date = "2025-01-01"
 directory = "./public"
 not_found_handling = "single-page-application"
 
-# 環境変数 (平文で保存できるもののみ)
+# Cron Trigger: アクティブチャンネルの RSS ポーリング (新着動画の追加)
+[triggers]
+crons = ["* * * * *"]   # 毎分実行 (wrangler dev では `wrangler dev --test-scheduled` でテスト可)
 # ALLOWED_ORIGIN: 本番デプロイ時に本番ドメインを設定する (例: "https://example.com")
 [vars]
 ALLOWED_ORIGIN = ""
