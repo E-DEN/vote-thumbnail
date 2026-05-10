@@ -4,9 +4,11 @@ const LS_RATING = 'thumb-ranking-elo';
 const LS_VIDEOS = 'thumb-ranking-videos';
 const LS_CHANNELS = 'thumb-ranking-channels';
 const LS_SIDEBAR_ORDER = 'thumb-sidebar-order';
-const LS_API_KEY = 'yt-api-key';
+const LS_API_KEY  = 'yt-api-key';
+const LS_RSS_ONLY = 'yt-rss-only';
 
 function getStoredApiKey() { return localStorage.getItem(LS_API_KEY) || ''; }
+function getRssOnly() { return localStorage.getItem(LS_RSS_ONLY) === '1'; }
 function apiKeyHeaders() {
   const k = getStoredApiKey();
   return k ? { 'X-YouTube-Api-Key': k } : {};
@@ -2367,7 +2369,7 @@ async function addChannelFromSidebarInput() {
     renderSidebar();
     await selectChannel(ch.channel_id);
     // API キーが設定されていれば全件取得を自動実行
-    if (getStoredApiKey()) {
+    if (getStoredApiKey() && !getRssOnly()) {
       try {
         const count = await importAllChannelVideos(ch.channel_id, msg => { statusEl.textContent = msg; });
         allVideos = await fetchChannelVideos(ch.channel_id);
@@ -2835,7 +2837,10 @@ document.getElementById('sidebarSearchBtn').addEventListener('click', () => {
   const EYE_OFF = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-10-8-10-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 10 8 10 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
 
   function updateIndicator() {
-    indicator.hidden = !getStoredApiKey();
+    const hasKey = !!getStoredApiKey();
+    const rssOnly = getRssOnly();
+    indicator.hidden = !hasKey && !rssOnly;
+    indicator.style.background = rssOnly ? 'var(--warn)' : 'var(--ok)';
   }
 
   function showDisplayMode() {
@@ -2883,6 +2888,17 @@ document.getElementById('sidebarSearchBtn').addEventListener('click', () => {
     statusEl.style.color = 'var(--ok)';
     setTimeout(function() { statusEl.textContent = ''; statusEl.style.color = ''; }, 2000);
   });
+
+  // ---- RSS のみオプション ----
+  const rssOnlyToggle = document.getElementById('rssOnlyToggle');
+  if (rssOnlyToggle) {
+    rssOnlyToggle.checked = getRssOnly();
+    rssOnlyToggle.addEventListener('change', function() {
+      if (rssOnlyToggle.checked) localStorage.setItem(LS_RSS_ONLY, '1');
+      else localStorage.removeItem(LS_RSS_ONLY);
+      updateIndicator();
+    });
+  }
 
   // ---- サイドバーデータ ----
   const exportBtn    = document.getElementById('sidebarExportBtn');
