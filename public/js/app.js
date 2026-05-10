@@ -46,6 +46,7 @@ let _reactionsSeeds = [];
 let _reactionsPins  = [];       // DB全ピン座標 (KDEサンプリング用)
 let _reactionsKde   = null;     // KDE重みキャッシュ
 let _reactionsMyPins = {};      // videoId → { x, y }
+let _myPinOnDrop    = null;     // animationend リスナー参照（重複登録防止）
 let _reactionsPinColor  = localStorage.getItem('reactions-pin-color')  || '#ec4899';
 
 // ピンカラーパレット（各色につき3段階シェード）
@@ -1842,11 +1843,15 @@ function reactionsRandGauss() {
 
 async function loadReactionSeeds(videoId) {
   try {
-    const resp = await fetch('/api/pins/' + videoId + '/seeds');
+    const resp = await fetch('/api/pins/' + videoId + '/seeds?session=' + encodeURIComponent(_reactionsSessionId));
     if (!resp.ok) return [];
     const data = await resp.json();
     _reactionsPins = data.pins  || [];
     _reactionsKde  = reactionsComputeKde(_reactionsPins);
+    // サーバーから自分のピンを復元（ローカルに未保存の場合）
+    if (data.my_pin && !_reactionsMyPins[videoId]) {
+      _reactionsMyPins[videoId] = { x: data.my_pin.x, y: data.my_pin.y };
+    }
     return data.seeds || [];
   } catch { return []; }
 }
@@ -1937,65 +1942,83 @@ function makeReactionsPinEl(x, y) {
   return el;
 }
 
-function startReactionsLoop(seeds) {
-  // 1ショット: REACTIONS_MAX_PINS個投下後に停止
+function startReactionsLoop() {
   _reactionsActive = false;
-  const pinsLayer = document.getElementById('reactionsPinsLayer');
+  var pinsLayer = document.getElementById('reactionsPinsLayer');
   if (!pinsLayer) return;
   pinsLayer.innerHTML = '';
 
-  const useKde = _reactionsKde && _reactionsPins.length >= 2;
-  if (!useKde && seeds.length === 0) return;
+  var pins = _reactionsPins.slice();
+  if (pins.length === 0) return;
 
-  var seedTotalD = 0;
-  if (!useKde) seeds.forEach(function(s) { seedTotalD += s.density; });
+  // シャッフル
+  for (var i = pins.length - 1; i > 0; i--) {
+    var j = Math.floor(Math.random() * (i + 1));
+    var tmp = pins[i]; pins[i] = pins[j]; pins[j] = tmp;
+  }
+  var toShow = pins.slice(0, REACTIONS_MAX_PINS);
 
+  _reactionsActive = true;
   var emitted = 0;
 
   function spawnOne() {
-    while (pinsLayer.children.length >= REACTIONS_MAX_PINS) {
-      pinsLayer.removeChild(pinsLayer.firstChild);
-    }
-    var x, y;
-    if (useKde) {
-      var p = reactionsSampleFromKde();
-      if (!p) return;
-      x = reactionsClamp(p.x + (Math.random() - 0.5) * 0.01, 0.02, 0.98);
-      y = reactionsClamp(p.y + (Math.random() - 0.5) * 0.01, 0.02, 0.98);
-    } else {
-      var r = Math.random() * seedTotalD;
-      var seed = seeds[seeds.length - 1];
-      for (var i = 0; i < seeds.length; i++) {
-        r -= seeds[i].density;
-        if (r <= 0) { seed = seeds[i]; break; }
-      }
-      var spread = 0.015 + (1 - seed.density) * 0.03;
-      x = reactionsClamp(seed.x + reactionsRandGauss() * spread, 0.03, 0.97);
-      y = reactionsClamp(seed.y + reactionsRandGauss() * spread, 0.03, 0.97);
-    }
-    pinsLayer.appendChild(makeReactionsPinEl(x, y));
-    emitted++;
-  }
-
-  function stream() {
-    if (!_reactionsActive) return;
-    if (emitted >= REACTIONS_MAX_PINS) {
+    if (!_reactionsActive || emitted >= toShow.length) {
       _reactionsActive = false;
       return;
     }
-    var delay = 60 + Math.random() * 260;
-    setTimeout(function() {
-      if (!_reactionsActive) return;
-      spawnOne();
-      stream();
-    }, delay);
+    var pin = toShow[emitted++];
+    pinsLayer.appendChild(makeReactionsPinEl(pin.x, pin.y));
+    var delay = 80 + Math.random() * 200;
+    setTimeout(spawnOne, delay);
   }
 
-  _reactionsActive = true;
+  // 5ストリーム並列発火
   for (var s = 0; s < 5; s++) {
     (function(offset) {
-      setTimeout(function() { if (_reactionsActive) stream(); }, offset * 70);
+      setTimeout(function() { if (_reactionsActive) spawnOne(); }, offset * 80);
     })(s);
+  }
+}
+
+// pinsレイヤーを画像の実際描画領域に合わせる
+function adjustReactionsLayers() {
+  var wrap = document.getElementById('reactionsImgWrap');
+  var img  = document.getElementById('reactionsImg');
+  var nw = img.naturalWidth, nh = img.naturalHeight;
+  var wRect = wrap.getBoundingClientRect();
+  if (!nw || !nh || !wRect.width || !wRect.height) return;
+  var scale = Math.min(wRect.width / nw, wRect.height / nh);
+  var iw = nw * scale, ih = nh * scale;
+  var ix = (wRect.width  - iw) / 2;
+  var iy = (wRect.height - ih) / 2;
+  ['reactionsPinsLayer', 'reactionsHeatmapLayer'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.style.left   = ix + 'px';
+    el.style.top    = iy + 'px';
+    el.style.width  = iw + 'px';
+    el.style.height = ih + 'px';
+    el.style.right  = 'auto';
+    el.style.bottom = 'auto';
+  });
+}
+
+var _reactionsResizeObserver = null;
+
+function startReactionsResizeObserver() {
+  if (_reactionsResizeObserver) return;
+  var wrap = document.getElementById('reactionsImgWrap');
+  if (!wrap || typeof ResizeObserver === 'undefined') return;
+  _reactionsResizeObserver = new ResizeObserver(function() {
+    adjustReactionsLayers();
+  });
+  _reactionsResizeObserver.observe(wrap);
+}
+
+function stopReactionsResizeObserver() {
+  if (_reactionsResizeObserver) {
+    _reactionsResizeObserver.disconnect();
+    _reactionsResizeObserver = null;
   }
 }
 
@@ -2031,16 +2054,23 @@ function showMyReactionsPin(x, y, withAnim) {
     shadow.hidden = false;
   }
   var svg = document.getElementById('reactionsMyPinSvg');
+  // 既存リスナーを必ず除去してから設定（再クリック時の重複防止）
+  if (_myPinOnDrop) {
+    pin.removeEventListener('animationend', _myPinOnDrop);
+    _myPinOnDrop = null;
+  }
+
+  // 既存アニメーションをキャンセルしてリセット
+  pin.classList.remove('color-cycling');
+  pin.getAnimations().forEach(function(a) { a.cancel(); });
+  svg.getAnimations().forEach(function(a) { a.cancel(); });
+  pin.style.transform = '';
+  pin.style.opacity   = '';
+  pin.style.animation = 'none';
+  svg.style.animation = 'none';
+  pin.offsetWidth; // reflow
+
   if (withAnim) {
-    // 既存アニメーションを先にキャンセルしてからリセット
-    pin.classList.remove('color-cycling');
-    pin.getAnimations().forEach(function(a) { a.cancel(); });
-    svg.getAnimations().forEach(function(a) { a.cancel(); });
-    pin.style.transform = '';
-    pin.style.opacity   = '';
-    pin.style.animation = 'none';
-    svg.style.animation = 'none';
-    pin.offsetWidth; // reflow
     pin.style.animation = 'reactionsPinDrop ' + DROP_SPEED + 's linear forwards';
     svg.style.animation = 'reactionsPinSvgSquash ' + DROP_SPEED + 's linear forwards';
     pin.animate(
@@ -2051,24 +2081,23 @@ function showMyReactionsPin(x, y, withAnim) {
       ],
       { duration: DROP_SPEED * 1000, fill: 'forwards', easing: 'linear' }
     );
-    // 著地後: float + カラーサイクルに切り替え
-    pin.addEventListener('animationend', function onDrop(e) {
+    // 着地後: float + カラーサイクルに切り替え
+    _myPinOnDrop = function(e) {
       if (e.animationName !== 'reactionsPinDrop') return;
-      pin.removeEventListener('animationend', onDrop);
+      pin.removeEventListener('animationend', _myPinOnDrop);
+      _myPinOnDrop = null;
       var floatDur = (2.4 + Math.random() * 0.8).toFixed(2) + 's';
       pin.style.animation = 'reactionsPinFloat ' + floatDur + ' ease-in-out infinite';
       svg.style.animation = '';
       pin.classList.add('color-cycling');
-    });
+    };
+    pin.addEventListener('animationend', _myPinOnDrop);
   } else {
-    // 復元時: アニメーションなし、着地位置に即表示 + カラーサイクル
-    pin.getAnimations().forEach(function(a) { a.cancel(); });
-    svg.getAnimations().forEach(function(a) { a.cancel(); });
-    pin.style.animation = 'none';
-    svg.style.animation = 'none';
+    // 復元時: 即座に着地位置に表示 + float + カラーサイクル
     pin.style.transform = 'translate(-50%, -100%)';
     pin.style.opacity   = '1';
-    pin.offsetWidth; // reflow
+    var floatDur = (2.4 + Math.random() * 0.8).toFixed(2) + 's';
+    pin.style.animation = 'reactionsPinFloat ' + floatDur + ' ease-in-out infinite';
     svg.style.animation = '';
     pin.classList.add('color-cycling');
   }
@@ -2091,19 +2120,27 @@ function openReactionsMode(videoId) {
   if (saved) showMyReactionsPin(saved.x, saved.y, false);
   // パレットをCSS変数に適用（ヒートマップ・ピン両方が --pin-c0/1/2 を継承）
   applyPinPalette();
-  // seeds 取得してアニメーション開始
+  // seeds 取得してアニメーション開始（サーバーからの自分のピン復元も含む）
   loadReactionSeeds(videoId).then(function(seeds) {
     _reactionsSeeds = seeds;
-    startReactionsLoop(seeds);
+    // サーバーから my_pin が復元された場合は表示を更新（ローカルになかった場合のみ）
+    var serverSaved = _reactionsMyPins[videoId];
+    if (serverSaved && document.getElementById('reactionsMyPin').hidden) {
+      showMyReactionsPin(serverSaved.x, serverSaved.y, false);
+    }
+    startReactionsLoop();
   });
 }
 
 function closeReactionsMode() {
   _reactionsActive = false;
+  stopReactionsResizeObserver();
   document.getElementById('reactionsPinsLayer').innerHTML = '';
   document.getElementById('reactionsMyPin').hidden = true;
   var shadow = document.getElementById('reactionsMyPinShadow');
   if (shadow) shadow.hidden = true;
+  var imgWrap = document.getElementById('reactionsImgWrap');
+  if (imgWrap) imgWrap.classList.remove('heatmap-visible');
   if (currentView === 'reactions') {
     showView(_prevView || 'vote');
   }
@@ -2140,8 +2177,12 @@ function closeThumbModal() {
 function openModalReactions(v) {
   _prevView = currentView;
   var img = document.getElementById('reactionsImg');
+  img.onload = function() { adjustReactionsLayers(); startReactionsResizeObserver(); };
   img.src = v.thumb;
-  img.onerror = function() { this.src = 'https://i.ytimg.com/vi/' + v.id + '/hqdefault.jpg'; };
+  img.onerror = function() {
+    this.src = 'https://i.ytimg.com/vi/' + v.id + '/hqdefault.jpg';
+    adjustReactionsLayers();
+  };
   document.getElementById('reactionsYtBtn').href = v.url || 'https://www.youtube.com/watch?v=' + v.id;
   document.getElementById('reactionsTitle').textContent = v.title || '';
   openReactionsMode(v.id);
@@ -2508,26 +2549,36 @@ function init() {
   document.getElementById('reactionsPinsModeBtn').addEventListener('click', function() {
     _reactionsPinsVisible = !_reactionsPinsVisible;
     this.classList.toggle('active', _reactionsPinsVisible);
-    var pinsLayer = document.getElementById('reactionsPinsLayer');
+    var pinsLayer   = document.getElementById('reactionsPinsLayer');
+    var myPin       = document.getElementById('reactionsMyPin');
+    var myPinShadow = document.getElementById('reactionsMyPinShadow');
     if (_reactionsPinsVisible) {
       pinsLayer.style.display = 'block';
-      startReactionsLoop(_reactionsSeeds);
+      startReactionsLoop();
+      // 保存済みの自分のピンを復元
+      var saved = _reactionsMyPins[_reactionsCurrentVideoId];
+      if (saved) showMyReactionsPin(saved.x, saved.y, false);
     } else {
       _reactionsActive = false;
       pinsLayer.style.display = 'none';
       pinsLayer.innerHTML = '';
+      myPin.hidden = true;
+      if (myPinShadow) myPinShadow.hidden = true;
     }
   });
   document.getElementById('reactionsHeatmapModeBtn').addEventListener('click', function() {
     _reactionsHeatmapVisible = !_reactionsHeatmapVisible;
     this.classList.toggle('active', _reactionsHeatmapVisible);
     var heatmapLayer = document.getElementById('reactionsHeatmapLayer');
+    var imgWrap = document.getElementById('reactionsImgWrap');
     if (_reactionsHeatmapVisible) {
       heatmapLayer.style.display = 'block';
       renderReactionsHeatmap(_reactionsSeeds);
+      imgWrap.classList.add('heatmap-visible');
     } else {
       heatmapLayer.style.display = 'none';
       heatmapLayer.innerHTML = '';
+      imgWrap.classList.remove('heatmap-visible');
     }
   });
   document.getElementById('reactionsBackBtn').addEventListener('click', closeReactionsMode);
@@ -2598,36 +2649,9 @@ document.getElementById('sidebarSearchBtn').addEventListener('click', () => {
 
 // --- ウェルカムフォーム ---
 (function() {
-  const apiKeyInput    = document.getElementById('welcomeApiKeyInput');
   const handleInput    = document.getElementById('welcomeHandleInput');
   const addBtn         = document.getElementById('welcomeAddBtn');
-  const saveBtn        = document.getElementById('welcomeApiKeySave');
   const statusEl       = document.getElementById('welcomeAddStatus');
-  const apiKeyStatusEl = document.getElementById('welcomeApiKeyStatus');
-
-  // 保存済み API キーを復元
-  const stored = getStoredApiKey();
-  if (stored) apiKeyInput.value = stored;
-
-  apiKeyInput.addEventListener('input', () => {
-    apiKeyStatusEl.textContent = '';
-    apiKeyStatusEl.style.color = '';
-  });
-
-  saveBtn.addEventListener('click', () => {
-    const val = apiKeyInput.value.trim();
-    if (val && !/^AIzaSy[A-Za-z0-9_-]{33}$/.test(val)) {
-      apiKeyStatusEl.textContent = 'APIキーの形式が正しくありません（AIzaSy... で始まる39文字）';
-      apiKeyStatusEl.style.color = 'var(--red, #ed4245)';
-      return;
-    }
-    apiKeyStatusEl.textContent = '';
-    apiKeyStatusEl.style.color = '';
-    if (val) localStorage.setItem(LS_API_KEY, val);
-    else localStorage.removeItem(LS_API_KEY);
-    saveBtn.textContent = '保存しました';
-    setTimeout(() => { saveBtn.textContent = '保存'; }, 1500);
-  });
 
   async function submitWelcomeAdd() {
     const raw = handleInput.value.trim();

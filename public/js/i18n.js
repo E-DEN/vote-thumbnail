@@ -142,6 +142,7 @@ registerLang('ja', '日本語', {
   'reactions-heatmap': 'Heatmap',
   'reactions-back':    '戻る',
   'reactions-color':   'カラー',
+  'reactions-you':     'あなた',
   // ソート
   'sort-views':  '再生数',
   'sort-date':   '投稿日',
@@ -270,6 +271,7 @@ registerLang('en', 'English', {
   'reactions-heatmap': 'Heatmap',
   'reactions-back':    'Back',
   'reactions-color':   'Color',
+  'reactions-you':     'You',
   // Sort
   'sort-views':  'Views',
   'sort-date':   'Date',

@@ -617,6 +617,7 @@ header {
 .screen {
   flex: 1;
   overflow-y: auto;
+  scrollbar-gutter: stable;
   padding: 20px 24px;
 }
 
@@ -887,12 +888,24 @@ header {
   font-size: clamp(11px, 1.5vw, 14px);
   font-weight: 700;
   line-height: 1.35;
-  color: #fff;
+  color: rgba(255,255,255,.97);
   text-shadow:
-    0 1px 3px rgba(0,0,0,1),
-    0 2px 8px rgba(0,0,0,0.95),
-    0 4px 16px rgba(0,0,0,0.8);
+    0 1px 0   rgba(255,255,255,.10),
+    0 1px 3px rgba(0,0,0,.99),
+    0 4px 12px rgba(0,0,0,.90),
+    0 10px 28px rgba(0,0,0,.65),
+    0 0 10px rgba(255,255,255,.14),
+    0 0 28px rgba(255,255,255,.09),
+    0 0 56px rgba(255,255,255,.06);
   pointer-events: none;
+}
+.vote-card .tilter__caption::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba(0,0,0,0.62) 0%, rgba(0,0,0,0.18) 60%, transparent 100%);
+  z-index: -1;
+  border-radius: inherit;
 }
 .vote-card.winner {
   filter: drop-shadow(0 0 8px var(--ok)) drop-shadow(0 8px 24px var(--drop-ok));
@@ -2246,17 +2259,24 @@ header {
   display: block;
 }
 
+/* ヒートマップ表示中: サムネイル画像を暗くする */
+#reactionsImg {
+  transition: opacity 0.3s ease;
+}
+.rs-img-wrap.heatmap-visible #reactionsImg {
+  opacity: 0.2;
+}
+
 .reactions-heatmap-blob {
   position: absolute;
   border-radius: 50%;
   transform: translate(-50%, -50%);
-  mix-blend-mode: screen;
-  /* --pin-c0 は親要素 reactionsImgWrap から継承、色切り替えで即時更新 */
+  /* 画像が暗くなった上に乗るので mix-blend-mode は normal */
   background: radial-gradient(circle,
-    color-mix(in srgb, var(--pin-c0, #ec4899) 28%, transparent) 0%,
-    color-mix(in srgb, var(--pin-c0, #ec4899) 12%, transparent) 35%,
+    color-mix(in srgb, var(--pin-c0, #ec4899) 55%, transparent) 0%,
+    color-mix(in srgb, var(--pin-c0, #ec4899) 28%, transparent) 40%,
     transparent 70%);
-  filter: blur(10px);
+  filter: blur(12px);
 }
 
 /* pin アニメーション */
@@ -2326,10 +2346,28 @@ header {
 /* 自分のピン（固定表示）*/
 .reactions-my-pin {
   position: absolute;
-  /* transform はアニメーション時は keyframe、復元時は JS inline で制御 */
   z-index: 30;
   pointer-events: none;
-  opacity: 0; /* Web Animations API で制御 */
+  opacity: 0;
+}
+
+.reactions-my-pin-label {
+  position: absolute;
+  /* 吹き出し内部の上端付近（ハートの上）に重ねる */
+  top: -6px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 8px;
+  font-weight: 800;
+  color: rgba(255,255,255,.96);
+  white-space: nowrap;
+  letter-spacing: 0.10em;
+  line-height: 1;
+  text-shadow:
+    0 1px 2px rgba(0,0,0,.99),
+    0 2px 8px rgba(0,0,0,.85),
+    0 0 6px  rgba(255,255,255,.22),
+    0 0 18px rgba(255,255,255,.12);
 }
 
 /* 自分のピン: パレットと同じ見た目、大きさだけ違う */
@@ -2406,7 +2444,7 @@ header {
 ===================== */
 #reactionsScreen {
   background: var(--bg);
-  padding: 20px 56px;
+  padding: 0;
   overflow: hidden;
   display: flex;
   flex-direction: row;

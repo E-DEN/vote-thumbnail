@@ -271,12 +271,20 @@ async function handleApi(request, env, url, ctx) {
     const mPinSeeds = path.match(/^\/pins\/([\w-]{11})\/seeds$/);
     if (method === 'GET' && mPinSeeds) {
       const videoId = mPinSeeds[1];
+      const sessionId = url.searchParams.get('session') || '';
       const rows = await env.DB.prepare(
-        'SELECT x, y FROM reactions WHERE video_id = ? ORDER BY updated_at DESC LIMIT 1000'
+        'SELECT x, y, session_id FROM reactions WHERE video_id = ? ORDER BY updated_at DESC LIMIT 1000'
       ).bind(videoId).all();
-      const pins = rows.results;
-      // クライアントが KDE サンプリング用に全座標を使う
-      return json({ pins, seeds: aggregateToSeeds(pins) });
+      const allPins = rows.results;
+      // 自分のピンを別途返却し、pins からは除外（startReactionsLoop で重複表示しないため）
+      const myRow = sessionId ? allPins.find(function(r) { return r.session_id === sessionId; }) : null;
+      const my_pin = myRow ? { x: myRow.x, y: myRow.y } : null;
+      const pins = allPins
+        .filter(function(r) { return !sessionId || r.session_id !== sessionId; })
+        .map(function(r) { return { x: r.x, y: r.y }; });
+      // seeds はヒートマップ用に全ピン（自分含む）から計算
+      const allCoords = allPins.map(function(r) { return { x: r.x, y: r.y }; });
+      return json({ pins, seeds: aggregateToSeeds(allCoords), my_pin });
     }
 
     // --- POST /api/pins ---
