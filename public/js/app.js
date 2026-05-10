@@ -915,6 +915,22 @@ function deleteChannel(key) {
   renderSidebar();
 }
 
+function _calcSidebarSlide(el) {
+  el.querySelectorAll('.name-inner').forEach(inner => {
+    const outer = inner.parentElement;
+    if (!outer || !outer.clientWidth) return;
+    const overflow = inner.scrollWidth - outer.clientWidth;
+    if (overflow > 2) {
+      inner.classList.add('overflows');
+      const fadeZone = outer.clientWidth * 0.08;
+      inner.style.setProperty('--slide-dist', `-${overflow + fadeZone}px`);
+    } else {
+      inner.classList.remove('overflows');
+      inner.style.removeProperty('--slide-dist');
+    }
+  });
+}
+
 function buildChannelItem(ch) {
   const item = document.createElement('div');
   item.className = 'sidebar-channel-item' + (currentChannelKey === ch.key ? ' active' : '');
@@ -923,7 +939,7 @@ function buildChannelItem(ch) {
   const avatarEl = ch.avatar
     ? `<img class="sidebar-ch-avatar" src="${ch.avatar}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'">`
     : `<div class="sidebar-ch-avatar"></div>`;
-  item.innerHTML = `${avatarEl}<span class="sidebar-ch-name">${name}</span>`;
+  item.innerHTML = `${avatarEl}<span class="sidebar-ch-name"><span class="name-inner">${name}</span></span>`;
   item.addEventListener('click', () => selectChannel(ch.key));
   item.addEventListener('contextmenu', e => {
     e.preventDefault();
@@ -931,6 +947,7 @@ function buildChannelItem(ch) {
   });
   // コンパクト時のチャンネル名ツールチップ
   item.addEventListener('mouseenter', () => {
+    _calcSidebarSlide(item);
     if (!_chTooltip || !document.getElementById('sidebar').classList.contains('sidebar--compact')) return;
     if (document.getElementById('sidebarNav').classList.contains('sidebar--dragging')) return;
     const rect = item.getBoundingClientRect();
@@ -974,13 +991,11 @@ function buildFolderItem(folder) {
 
   const nameEl = document.createElement('span');
   nameEl.className = 'sidebar-folder-name';
-  nameEl.textContent = folder.name || '';
+  const nameInnerEl = document.createElement('span');
+  nameInnerEl.className = 'name-inner';
+  nameInnerEl.textContent = folder.name || '';
+  nameEl.appendChild(nameInnerEl);
   header.appendChild(nameEl);
-
-  const badge = document.createElement('span');
-  badge.className = 'sidebar-folder-badge';
-  badge.textContent = folder.children.length;
-  header.appendChild(badge);
 
   const renameBtn = document.createElement('button');
   renameBtn.type = 'button';
@@ -998,6 +1013,7 @@ function buildFolderItem(folder) {
   function startRename() {
     if (nameEl.contentEditable === 'plaintext-only' || nameEl.contentEditable === 'true') return;
     const prev = folder.name || '';
+    nameEl.textContent = prev;
     nameEl.contentEditable = 'plaintext-only';
     nameEl.focus();
     const sel = window.getSelection(), range = document.createRange();
@@ -1006,8 +1022,12 @@ function buildFolderItem(folder) {
     function onKeyDown(ev) {
       if (ev.key === 'Enter') { ev.preventDefault(); nameEl.blur(); }
       if (ev.key === 'Escape') {
-        nameEl.textContent = prev;
         nameEl.contentEditable = 'false';
+        nameEl.innerHTML = '';
+        const ni = document.createElement('span');
+        ni.className = 'name-inner';
+        ni.textContent = prev;
+        nameEl.appendChild(ni);
         nameEl.removeEventListener('blur', commit);
         nameEl.removeEventListener('keydown', onKeyDown);
         nameEl.removeEventListener('mousedown', onMouseDown);
@@ -1015,10 +1035,15 @@ function buildFolderItem(folder) {
     }
     function commit() {
       nameEl.contentEditable = 'false';
-      const next = nameEl.textContent.trim().slice(0, 50) || prev;
-      nameEl.textContent = next;
+      const next = nameEl.textContent.trim().slice(0, 40) || prev;
+      nameEl.innerHTML = '';
+      const ni = document.createElement('span');
+      ni.className = 'name-inner';
+      ni.textContent = next;
+      nameEl.appendChild(ni);
       folder.name = next;
       saveSidebarOrder();
+      _calcSidebarSlide(header);
       nameEl.removeEventListener('keydown', onKeyDown);
       nameEl.removeEventListener('mousedown', onMouseDown);
     }
@@ -1032,6 +1057,7 @@ function buildFolderItem(folder) {
   });
 
   header.addEventListener('mouseenter', () => {
+    _calcSidebarSlide(header);
     if (!_chTooltip || !document.getElementById('sidebar').classList.contains('sidebar--compact')) return;
     if (document.getElementById('sidebarNav').classList.contains('sidebar--dragging')) return;
     const rect = header.getBoundingClientRect();

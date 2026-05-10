@@ -258,9 +258,27 @@ header {
   flex: 1;
   min-width: 0;
   overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 13px;
+}
+.name-inner {
+  display: inline-block;
+  white-space: nowrap;
+}
+.sidebar-ch-name:has(.name-inner.overflows),
+.sidebar-folder-name:has(.name-inner.overflows) {
+  -webkit-mask-image: linear-gradient(to right, black 85%, transparent 100%);
+  mask-image:         linear-gradient(to right, black 85%, transparent 100%);
+}
+@keyframes sidebar-text-slide {
+  0%   { transform: translateX(0); }
+  15%  { transform: translateX(0); }
+  85%  { transform: translateX(var(--slide-dist, 0px)); }
+  100% { transform: translateX(var(--slide-dist, 0px)); }
+}
+.sidebar-channel-item:hover .name-inner.overflows,
+.sidebar-folder-header:hover .name-inner.overflows {
+  animation: sidebar-text-slide 3.5s ease-in-out infinite alternate;
 }
 .sidebar-footer {
   padding: 8px 10px;
@@ -1498,7 +1516,7 @@ header {
 .sidebar-folder-name {
   flex: 1; min-width: 0;
   font-size: 13px; font-weight: normal;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  overflow: hidden; white-space: nowrap;
   outline: none;
   border-radius: 3px;
 }
@@ -1507,7 +1525,6 @@ header {
   box-shadow: 0 0 0 1px var(--accent, #4f9cf9);
   padding: 1px 4px;
   white-space: nowrap;
-  overflow: visible;
   min-width: 40px;
 }
 .sidebar-folder-badge { font-size: 11px; color: var(--text-muted); }
