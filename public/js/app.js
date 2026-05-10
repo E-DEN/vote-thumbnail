@@ -429,11 +429,12 @@ function renderVote() {
     card.dataset.id = v.id;
     card.innerHTML =
       '<figure class="tilter__figure">' +
-        '<img class="card-banner" src="' + v.thumb + '" alt="" loading="lazy"' +
+        '<img class="card-banner" src="' + v.thumb + '" alt=""' +
         ' onerror="this.src=\'https://i.ytimg.com/vi/' + v.id + '/hqdefault.jpg\'">' +
         '<div class="tilter__deco tilter__deco--shine"><div></div></div>' +
-        '<figcaption class="tilter__caption">' + v.title + '</figcaption>' +
+        '<figcaption class="tilter__caption"></figcaption>' +
       '</figure>';
+    card.querySelector('.tilter__caption').textContent = v.title;
 
     var fig     = card.querySelector('.tilter__figure');
     var caption = card.querySelector('.tilter__caption');
@@ -1061,7 +1062,7 @@ function buildFolderItem(folder) {
     if (!_chTooltip || !document.getElementById('sidebar').classList.contains('sidebar--compact')) return;
     if (document.getElementById('sidebarNav').classList.contains('sidebar--dragging')) return;
     const rect = header.getBoundingClientRect();
-    _chTooltip.textContent = (folder.name ? folder.name + ' ' : '') + folder.children.length + 'ch';
+    _chTooltip.textContent = folder.name || '';
     _chTooltip.style.top = (rect.top + rect.height / 2) + 'px';
     _chTooltip.style.left = (rect.right + 10) + 'px';
     _chTooltip.classList.add('visible');
@@ -1694,7 +1695,10 @@ async function selectChannel(key) {
     });
     showView('vote');
   } catch (e) {
-    console.error('selectChannel:', e);
+    console.error('[selectChannel] FETCH ERROR:', e);
+    _currentVotePair = null;
+    allVideos = [];
+    showView('vote');
   }
 }
 
@@ -1957,7 +1961,12 @@ function showView(view) {
   currentView = view;
   SCREENS.forEach(s => {
     const el = document.getElementById(s + 'Screen');
-    if (el) el.style.display = s === view ? '' : 'none';
+    if (!el) return;
+    if (s === view) {
+      el.style.removeProperty('display');
+    } else {
+      el.style.display = 'none';
+    }
   });
   document.querySelectorAll('.ch-tab').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.view === view);
@@ -2120,7 +2129,11 @@ function init() {
     } else if (btn.dataset.action === 'refresh') {
       if (key !== currentChannelKey) await selectChannel(key);
       try {
-        await fetch('/api/channels/' + key + '/refresh', { method: 'POST', headers: apiKeyHeaders() });
+        const res = await fetch('/api/channels/' + key + '/refresh', { method: 'POST', headers: apiKeyHeaders() });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          console.error('refresh failed:', res.status, data.error);
+        }
         allVideos = await fetchChannelVideos(key);
         _currentVotePair = null;
         if (currentView === 'vote') renderVote();
@@ -2203,12 +2216,82 @@ function init() {
   applyLang(_lang);
   _normalizeSortBtnWidths();
   if (typeof lucide !== 'undefined') lucide.createIcons();
+
+  // F2 キー: フォーカス中のフォルダヘッダーをリネーム
+  document.addEventListener('keydown', function(e) {
+    if (e.key !== 'F2') return;
+    const focused = document.activeElement;
+    if (!focused) return;
+    const header = focused.closest('.sidebar-folder-header');
+    if (!header) return;
+    e.preventDefault();
+    const btn = header.querySelector('.sidebar-folder-rename-btn');
+    if (btn) btn.click();
+  });
+
   loadRating();
   loadChannels();
   loadSidebarOrder();
   renderSidebar();
   initSidebarDrag();
   showView('welcome');
+
+  // タイトルクリック → welcome 画面へ戻る
+  document.querySelector('.app-logo').addEventListener('click', function() {
+    currentChannelKey = null;
+    allVideos = [];
+    document.querySelectorAll('.sidebar-channel-item').forEach(el => el.classList.remove('active'));
+    showView('welcome');
+  });
+
+  // チャンネルヘッダー（アバター・チャンネル名）クリック → YouTube を別タブで開く
+  function _openChannelOnYouTube() {
+    if (!currentChannelKey) return;
+    const ch = channels[currentChannelKey];
+    if (!ch) return;
+    const url = ch.handle
+      ? 'https://www.youtube.com/' + ch.handle
+      : 'https://www.youtube.com/channel/' + currentChannelKey;
+    window.open(url, '_blank', 'noopener');
+  }
+  document.getElementById('chAvatar').addEventListener('click', _openChannelOnYouTube);
+  document.getElementById('chName').addEventListener('click', _openChannelOnYouTube);
+
+  // サーバーのチャンネルリストをローカルストレージへ自動同期（DBに登録済みのチャンネルを追加）
+  (async function _syncChannelsFromServer() {
+    try {
+      const res = await fetch('/api/channels');
+      if (!res.ok) return;
+      const serverChannels = await res.json();
+      let changed = false;
+      for (const sc of serverChannels) {
+        if (!channels[sc.channel_id]) {
+          channels[sc.channel_id] = {
+            key: sc.channel_id,
+            channelId: sc.channel_id,
+            handle: sc.handle,
+            displayName: sc.title,
+            avatar: sc.icon_url,
+            tags: [],
+            addedAt: new Date().toISOString(),
+          };
+          changed = true;
+        }
+        if (!sidebarOrder.some(i =>
+          (i.type === 'channel' && i.key === sc.channel_id) ||
+          (i.type === 'folder' && Array.isArray(i.children) && i.children.includes(sc.channel_id))
+        )) {
+          sidebarOrder.push({ type: 'channel', key: sc.channel_id });
+          changed = true;
+        }
+      }
+      if (changed) {
+        saveChannels();
+        saveSidebarOrder();
+        renderSidebar();
+      }
+    } catch { /* サイレント失敗 */ }
+  })();
 
   // ReactionPin: モード切り替え・戻る
   document.getElementById('reactionsPinsModeBtn').addEventListener('click', function() { setReactionsMode('pins'); });

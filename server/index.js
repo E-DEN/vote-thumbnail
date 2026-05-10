@@ -154,10 +154,29 @@ async function handleApi(request, env, url, ctx) {
     const mRefresh = path.match(/^\/channels\/(UC[\w-]{22})\/refresh$/);
     if (method === 'POST' && mRefresh) {
       const channelId = mRefresh[1];
-      const exists = await env.DB.prepare(
+      let exists = await env.DB.prepare(
         'SELECT channel_id FROM channels WHERE channel_id = ? AND inactive = 0'
       ).bind(channelId).first();
-      if (!exists) return err('チャンネルが見つかりません', 404);
+      if (!exists) {
+        // チャンネルがDBにない場合、YouTubeページから情報を取得して自動登録する
+        const pageRes = await fetch(`https://www.youtube.com/channel/${channelId}`, {
+          headers: { 'User-Agent': 'Mozilla/5.0' },
+        });
+        if (!pageRes.ok) return err('チャンネルが見つかりません', 404);
+        const html = await pageRes.text();
+        const titleMatch  = html.match(/<title>([^<]+)<\/title>/);
+        const iconMatch   = html.match(/"avatar":\{"thumbnails":\[\{"url":"([^"]+)"/);
+        const handleMatch = html.match(/"canonicalBaseUrl":"(\/@[^"]+)"/);
+        const title  = titleMatch  ? titleMatch[1].replace(' - YouTube', '').trim() : '';
+        const iconUrl = iconMatch  ? iconMatch[1] : '';
+        const handle  = handleMatch ? handleMatch[1].replace(/^\//, '') : '';
+        await env.DB.prepare(
+          `INSERT INTO channels (channel_id, handle, title, icon_url, last_checked, last_accessed)
+           VALUES (?, ?, ?, ?, datetime('now'), datetime('now'))
+           ON CONFLICT(channel_id) DO UPDATE SET last_accessed=datetime('now')`
+        ).bind(channelId, handle, title, iconUrl).run();
+        exists = { channel_id: channelId };
+      }
       const { added, rssStatus, newVideoIds } = await fetchAndSaveRss(channelId, effectiveEnv);
       // 新規動画 + 既存の未判定動画 (duration=0) をまとめてカテゴリ判定
       const undetected = await env.DB.prepare(
