@@ -39,10 +39,74 @@ var _reactionsSessionId = (function() {
   return id;
 })();
 let _reactionsCurrentVideoId = null;
-let _reactionsMode = 'pins';
-let _reactionsTimer = null;
+let _reactionsActive = false;     // 投下ストリーム制御フラグ
+let _reactionsPinsVisible    = true;
+let _reactionsHeatmapVisible = false;
 let _reactionsSeeds = [];
-let _reactionsMyPins = {};  // videoId → { x, y }
+let _reactionsPins  = [];       // DB全ピン座標 (KDEサンプリング用)
+let _reactionsKde   = null;     // KDE重みキャッシュ
+let _reactionsMyPins = {};      // videoId → { x, y }
+let _reactionsPinColor  = localStorage.getItem('reactions-pin-color')  || '#ec4899';
+
+// ピンカラーパレット（各色につき3段階シェード）
+const PIN_PALETTES = {
+  '#ec4899': ['#ec4899', '#f472b6', '#db2777'],
+  '#00b0f4': ['#00b0f4', '#38bdf8', '#60a5fa'],
+  '#57f287': ['#57f287', '#4ade80', '#86efac'],
+  '#f59e0b': ['#f59e0b', '#fb923c', '#fbbf24'],
+  '#a855f7': ['#a855f7', '#c084fc', '#e879f9'],
+};
+
+let DROP_HEIGHT  = 55;    // px: ピン落下高さ
+let DROP_SPEED   = 1.5;   // s: 落下アニメーション時間
+const FADE_IN_FRAC = 0.05;  // Web Animations フェードイン開始割合
+
+function applyPinPalette() {
+  const wrap = document.getElementById('reactionsImgWrap');
+  if (!wrap) return;
+  const palette = PIN_PALETTES[_reactionsPinColor] || PIN_PALETTES['#ec4899'];
+  wrap.style.setProperty('--pin-c0', palette[0]);
+  wrap.style.setProperty('--pin-c1', palette[1]);
+  wrap.style.setProperty('--pin-c2', palette[2]);
+}
+
+// KDE 重み計算（bandwidth=0.07）
+function reactionsComputeKde(pins) {
+  const n = pins.length;
+  if (n < 2) return null;
+  const bw2 = 0.07 * 0.07;
+  const noiseFloor = 0.15;
+  const w = new Array(n).fill(0);
+  for (let i = 0; i < n; i++) {
+    for (let j = 0; j < n; j++) {
+      if (i === j) continue;
+      const dx = pins[i].x - pins[j].x;
+      const dy = pins[i].y - pins[j].y;
+      w[i] += Math.exp(-(dx * dx + dy * dy) / (2 * bw2));
+    }
+  }
+  const maxW = Math.max.apply(null, w) || 1;
+  const cum  = new Array(n);
+  let acc = 0;
+  for (let i = 0; i < n; i++) {
+    acc += w[i] / maxW + noiseFloor;
+    cum[i] = acc;
+  }
+  return { cum, total: acc };
+}
+
+// KDE重み付きルーレットサンプリング → 実ピン座標を返す
+function reactionsSampleFromKde() {
+  if (!_reactionsKde || _reactionsPins.length === 0) return null;
+  const r   = Math.random() * _reactionsKde.total;
+  const cum = _reactionsKde.cum;
+  let lo = 0, hi = cum.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (cum[mid] < r) lo = mid + 1; else hi = mid;
+  }
+  return _reactionsPins[lo];
+}
 
 // --- Glicko-2 レーティング ---
 const G2_TAU   = 0.5;
@@ -100,6 +164,7 @@ function g2Update(player, opponent, score) {
 }
 
 function applyVote(winnerId, loserId) {
+  // ローカルを楽観的に更新（即時UI反映用）
   if (!ratingData[winnerId]) ratingData[winnerId] = g2Init();
   if (!ratingData[loserId])  ratingData[loserId]  = g2Init();
   const w = ratingData[winnerId];
@@ -112,6 +177,34 @@ function applyVote(winnerId, loserId) {
   voteTotal++;
   document.getElementById('voteCount').textContent = voteTotal;
   updatePaceGauge();
+
+  // サーバーへ送信してグローバル統計を更新
+  if (currentChannelKey) {
+    fetch('/api/vote', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ winner_id: winnerId, loser_id: loserId, channel_id: currentChannelKey }),
+    }).then(function(res) {
+      if (!res.ok) return;
+      return res.json();
+    }).then(function(data) {
+      if (!data || !data.ok) return;
+      // サーバー計算値でローカルを上書き（全ユーザーの投票が反映された値）
+      if (data.winner) {
+        ratingData[winnerId] = {
+          rating: data.winner.rating, rd: data.winner.rd, volatility: data.winner.volatility,
+          wins: (ratingData[winnerId]?.wins ?? 0), battles: (ratingData[winnerId]?.battles ?? 0),
+        };
+      }
+      if (data.loser) {
+        ratingData[loserId] = {
+          rating: data.loser.rating, rd: data.loser.rd, volatility: data.loser.volatility,
+          wins: (ratingData[loserId]?.wins ?? 0), battles: (ratingData[loserId]?.battles ?? 0),
+        };
+      }
+      saveRating();
+    }).catch(function() { /* サイレント失敗 */ });
+  }
 }
 
 function saveRating() {
@@ -360,23 +453,46 @@ function filteredVideos() {
 
 // --- 投票 ---
 // RDが高い（対戦数が少ない）サムネを優先的に選出
+// RDがこの値以下なら「評価確定」= 両者確定のペアは再戦不要
+const G2_SETTLED_RD = 80;
+
 function pickPair() {
   const pool = filteredVideos();
   if (pool.length < 2) return null;
-  // 重み = rdの大きさ（対戦数が少ないほど高い）、最少値を1として正規化
-  const weights = pool.map(v => Math.max(1, getRd(v.id)));
-  const totalW  = weights.reduce((s, w) => s + w, 0);
-  function weightedPick(excludeIdx) {
-    let r = Math.random() * (totalW - (excludeIdx != null ? weights[excludeIdx] : 0));
-    for (let k = 0; k < pool.length; k++) {
-      if (k === excludeIdx) continue;
-      r -= weights[k];
-      if (r <= 0) return k;
+
+  // 候補リスト: 少なくとも一方が未確定 かつ このセッションで未対戦
+  function buildCandidates() {
+    const list = [];
+    for (let i = 0; i < pool.length; i++) {
+      for (let j = i + 1; j < pool.length; j++) {
+        if (getRd(pool[i].id) <= G2_SETTLED_RD && getRd(pool[j].id) <= G2_SETTLED_RD) continue;
+        if (_playedPairs.has(_pairKey(pool[i].id, pool[j].id))) continue;
+        list.push([i, j]);
+      }
     }
-    return pool.length - 1 === excludeIdx ? pool.length - 2 : pool.length - 1;
+    return list;
   }
-  const i = weightedPick(null);
-  const j = weightedPick(i);
+
+  let candidates = buildCandidates();
+  if (candidates.length === 0) {
+    // セッション内の記録をリセットして2周目へ（確定済みは引き続き除外）
+    _playedPairs.clear();
+    candidates = buildCandidates();
+  }
+  if (candidates.length === 0) return null; // 全ペア確定済み
+
+  // 重み = 両者のRD合計（不確かなペアを優先）
+  const weights = candidates.map(([i, j]) => getRd(pool[i].id) + getRd(pool[j].id));
+  const totalW  = weights.reduce((s, w) => s + w, 0);
+  let r = Math.random() * totalW;
+  for (let k = 0; k < candidates.length; k++) {
+    r -= weights[k];
+    if (r <= 0) {
+      const [i, j] = candidates[k];
+      return [pool[i], pool[j]];
+    }
+  }
+  const [i, j] = candidates[candidates.length - 1];
   return [pool[i], pool[j]];
 }
 
@@ -406,6 +522,11 @@ function updatePaceGauge() {
 }
 
 var _currentVotePair = null; // 画面遷移で再抽選しないためキャッシュ
+var _playedPairs = new Set(); // セッション内の対戦済みペア
+
+function _pairKey(idA, idB) {
+  return idA < idB ? idA + '|' + idB : idB + '|' + idA;
+}
 
 // --- 傾き強度 ---
 var _tiltScale = 0.5;
@@ -418,7 +539,8 @@ function renderVote() {
   const pair = _currentVotePair;
   const container = document.getElementById('votePair');
   if (!pair) {
-    container.innerHTML = `<p style="color:var(--text-muted);text-align:center;grid-column:1/-1;padding:60px 0;font-size:14px;">${t('no-videos-in-cat')}</p>`;
+    const isSettled = filteredVideos().length >= 2;
+    container.innerHTML = `<p style="color:var(--text-muted);text-align:center;grid-column:1/-1;padding:60px 0;font-size:14px;">${t(isSettled ? 'ranking-settled' : 'no-videos-in-cat')}</p>`;
     return;
   }
   const [pairA, pairB] = pair;
@@ -481,6 +603,7 @@ function renderVote() {
       const winner = idx === 0 ? pairA : pairB;
       const loser  = idx === 0 ? pairB : pairA;
       applyVote(winner.id, loser.id);
+      _playedPairs.add(_pairKey(winner.id, loser.id));
       container.querySelectorAll('.vote-card').forEach(c => {
         c.classList.add(c.dataset.id === winner.id ? 'winner' : 'loser');
       });
@@ -1686,6 +1809,7 @@ async function selectChannel(key) {
   try {
     allVideos = await fetchChannelVideos(key);
     _currentVotePair = null; // チャンネル切り替え時はペアをリセット
+    _playedPairs.clear();
     const counts = { videos: 0, shorts: 0, live: 0 };
     allVideos.forEach(v => { if (counts[v.category] !== undefined) counts[v.category]++; });
     currentCat = counts.live >= counts.videos && counts.live >= counts.shorts ? 'live'
@@ -1721,6 +1845,8 @@ async function loadReactionSeeds(videoId) {
     const resp = await fetch('/api/pins/' + videoId + '/seeds');
     if (!resp.ok) return [];
     const data = await resp.json();
+    _reactionsPins = data.pins  || [];
+    _reactionsKde  = reactionsComputeKde(_reactionsPins);
     return data.seeds || [];
   } catch { return []; }
 }
@@ -1747,96 +1873,133 @@ function renderReactionsHeatmap(seeds) {
   }
 }
 
-const REACTIONS_MAX_PINS = 48;
+let REACTIONS_MAX_PINS = 30;
+
+function setSquashIntensity(v) {
+  var sx = (1 + 0.24 * v).toFixed(3);
+  var sy = Math.max(0.6, 1 - 0.20 * v).toFixed(3);
+  var rule = '@keyframes reactionsPinSvgSquash {' +
+    '0%{transform:none}' +
+    '6%{transform:scaleX(' + sx + ') scaleY(' + sy + ');animation-timing-function:cubic-bezier(0.2,0,0.4,1)}' +
+    '14%{transform:none}' +
+    '100%{transform:none}}';
+  for (var _si = 0; _si < document.styleSheets.length; _si++) {
+    try {
+      var _rules = document.styleSheets[_si].cssRules;
+      for (var _ri = 0; _ri < _rules.length; _ri++) {
+        if (_rules[_ri].name === 'reactionsPinSvgSquash') {
+          document.styleSheets[_si].deleteRule(_ri);
+          document.styleSheets[_si].insertRule(rule, _ri);
+          return;
+        }
+      }
+    } catch(e) {}
+  }
+}
+
+function makeReactionsPinEl(x, y) {
+  const scale    = 0.75 + Math.random() * 0.6;
+  const sz       = Math.round(20 * scale);
+  const szH      = Math.round(sz * 1.25);
+  const shadeIdx = Math.floor(Math.random() * 3);
+  const el       = document.createElement('div');
+  el.className   = 'reactions-pin shade-' + shadeIdx;
+  el.dataset.x   = x;
+  el.dataset.y   = y;
+  el.style.cssText = 'left:' + (x * 100) + '%;top:' + (y * 100) + '%;--drop-h:' + DROP_HEIGHT + 'px;';
+  el.style.animation = 'reactionsPinDrop ' + DROP_SPEED + 's linear forwards';
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('class', 'reactions-pin-svg');
+  svg.setAttribute('viewBox', '0 0 24 30');
+  svg.setAttribute('width', sz);
+  svg.setAttribute('height', szH);
+  svg.style.animation = 'reactionsPinSvgSquash ' + DROP_SPEED + 's linear forwards';
+  svg.innerHTML =
+    '<path class="pin-balloon" d="M12,29 C5.5,21.5 1.5,17 1.5,11 a10.5,10.5,0,0,1,21,0 C22.5,17 18.5,21.5 12,29 Z"/>' +
+    '<g transform="translate(12 11) scale(0.38) translate(-12 -12)">' +
+      '<path class="pin-icon" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>' +
+    '</g>';
+  el.appendChild(svg);
+  el.addEventListener('animationend', function(e) {
+    if (e.animationName === 'reactionsPinDrop') {
+      el.style.animation = 'reactionsPinFloat ' + (2.4 + Math.random() * 0.8).toFixed(2) + 's ease-in-out infinite';
+    }
+  }, { once: true });
+  // opacity は CSS animation から分離して Web Animations API で制御
+  el.animate(
+    [
+      { opacity: 0, offset: 0 },
+      { opacity: 1, offset: FADE_IN_FRAC },
+      { opacity: 1, offset: 1 },
+    ],
+    { duration: DROP_SPEED * 1000, fill: 'forwards', easing: 'linear' }
+  );
+  return el;
+}
 
 function startReactionsLoop(seeds) {
-  clearTimeout(_reactionsTimer);
+  // 1ショット: REACTIONS_MAX_PINS個投下後に停止
+  _reactionsActive = false;
   const pinsLayer = document.getElementById('reactionsPinsLayer');
   if (!pinsLayer) return;
   pinsLayer.innerHTML = '';
-  if (seeds.length === 0) return;
 
-  const totalDuration = 9000;
-  const clusters = seeds.map(function(seed) {
-    const targetCount = Math.max(3, Math.floor(4 + seed.density * 14));
-    return {
-      seed,
-      targetCount,
-      avgInterval: totalDuration / targetCount,
-      emitted: 0,
-      nextFire: performance.now() + (1 - seed.density) * 1400 + Math.random() * 1200,
-    };
-  });
+  const useKde = _reactionsKde && _reactionsPins.length >= 2;
+  if (!useKde && seeds.length === 0) return;
 
-  function tick() {
-    const now = performance.now();
-    let allDone = true;
-    for (const cluster of clusters) {
-      if (cluster.emitted >= cluster.targetCount) continue;
-      allDone = false;
-      if (cluster.nextFire > now) continue;
-      const { seed } = cluster;
-      const spread = 0.012 + (1 - seed.density) * 0.03;
-      const x = reactionsClamp(seed.x + reactionsRandGauss() * spread, 0.04, 0.96);
-      const y = reactionsClamp(seed.y + reactionsRandGauss() * spread, 0.04, 0.96);
-      const existing = pinsLayer.querySelectorAll('.reactions-pin');
-      let nearbyCount = 0;
-      for (const el of existing) {
-        const dx = parseFloat(el.dataset.x) - x;
-        const dy = parseFloat(el.dataset.y) - y;
-        if (Math.sqrt(dx * dx + dy * dy) < 0.04) nearbyCount++;
-      }
-      const skipChance = Math.min(0.78, nearbyCount * 0.06 * (1 - seed.density * 0.55));
-      if (Math.random() > skipChance) {
-        while (pinsLayer.children.length >= REACTIONS_MAX_PINS) pinsLayer.removeChild(pinsLayer.firstChild);
-        const scale = 0.8 + seed.density * 0.8;
-        const sz = Math.round(20 * scale);
-        const szH = Math.round(sz * 1.25);
-        const pin = document.createElement('div');
-        pin.className = 'reactions-pin';
-        pin.dataset.x = x;
-        pin.dataset.y = y;
-        pin.style.cssText = 'left:' + (x * 100) + '%;top:' + (y * 100) + '%;translate:-50% -100%;scale:' + scale + ';';
-        pin.innerHTML =
-          '<svg class="reactions-pin-svg" viewBox="0 0 24 30" width="' + sz + '" height="' + szH + '" xmlns="http://www.w3.org/2000/svg">' +
-            '<path class="pin-balloon" d="M12,29 C5.5,21.5 1.5,17 1.5,11 a10.5,10.5,0,0,1,21,0 C22.5,17 18.5,21.5 12,29 Z"/>' +
-            '<g transform="translate(12 11) scale(0.38) translate(-12 -12)">' +
-              '<path class="pin-icon" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>' +
-            '</g>' +
-          '</svg>';
-        pinsLayer.appendChild(pin);
-      }
-      cluster.emitted++;
-      const progress = cluster.emitted / cluster.targetCount;
-      cluster.nextFire = now + cluster.avgInterval * (0.9 + progress * 0.55) * (0.7 + Math.random() * 0.6);
+  var seedTotalD = 0;
+  if (!useKde) seeds.forEach(function(s) { seedTotalD += s.density; });
+
+  var emitted = 0;
+
+  function spawnOne() {
+    while (pinsLayer.children.length >= REACTIONS_MAX_PINS) {
+      pinsLayer.removeChild(pinsLayer.firstChild);
     }
-    if (allDone) {
-      _reactionsTimer = setTimeout(function() { startReactionsLoop(seeds); }, 1800);
+    var x, y;
+    if (useKde) {
+      var p = reactionsSampleFromKde();
+      if (!p) return;
+      x = reactionsClamp(p.x + (Math.random() - 0.5) * 0.01, 0.02, 0.98);
+      y = reactionsClamp(p.y + (Math.random() - 0.5) * 0.01, 0.02, 0.98);
+    } else {
+      var r = Math.random() * seedTotalD;
+      var seed = seeds[seeds.length - 1];
+      for (var i = 0; i < seeds.length; i++) {
+        r -= seeds[i].density;
+        if (r <= 0) { seed = seeds[i]; break; }
+      }
+      var spread = 0.015 + (1 - seed.density) * 0.03;
+      x = reactionsClamp(seed.x + reactionsRandGauss() * spread, 0.03, 0.97);
+      y = reactionsClamp(seed.y + reactionsRandGauss() * spread, 0.03, 0.97);
+    }
+    pinsLayer.appendChild(makeReactionsPinEl(x, y));
+    emitted++;
+  }
+
+  function stream() {
+    if (!_reactionsActive) return;
+    if (emitted >= REACTIONS_MAX_PINS) {
+      _reactionsActive = false;
       return;
     }
-    _reactionsTimer = setTimeout(tick, 70);
+    var delay = 60 + Math.random() * 260;
+    setTimeout(function() {
+      if (!_reactionsActive) return;
+      spawnOne();
+      stream();
+    }, delay);
   }
-  tick();
-}
 
-function setReactionsMode(mode) {
-  _reactionsMode = mode;
-  const heatmapLayer = document.getElementById('reactionsHeatmapLayer');
-  const pinsLayer    = document.getElementById('reactionsPinsLayer');
-  if (!heatmapLayer) return;
-  heatmapLayer.style.display = mode === 'heatmap' ? '' : 'none';
-  pinsLayer.style.display    = mode === 'pins' ? '' : 'none';
-  document.getElementById('reactionsPinsModeBtn').classList.toggle('active', mode === 'pins');
-  document.getElementById('reactionsHeatmapModeBtn').classList.toggle('active', mode === 'heatmap');
-  if (mode === 'heatmap') {
-    clearTimeout(_reactionsTimer);
-    renderReactionsHeatmap(_reactionsSeeds);
-  } else {
-    startReactionsLoop(_reactionsSeeds);
+  _reactionsActive = true;
+  for (var s = 0; s < 5; s++) {
+    (function(offset) {
+      setTimeout(function() { if (_reactionsActive) stream(); }, offset * 70);
+    })(s);
   }
 }
 
-function showMyReactionsPin(x, y) {
+function showMyReactionsPin(x, y, withAnim) {
   // x, y は画像内の相対位置（0〜1）。wrap内のレターボックスを考慮して変換
   var wrap = document.getElementById('reactionsImgWrap');
   var img  = document.getElementById('reactionsImg');
@@ -1850,38 +2013,84 @@ function showMyReactionsPin(x, y) {
     var ix = (wRect.width  - iw) / 2;
     var iy = (wRect.height - ih) / 2;
     left = ((ix + x * iw) / wRect.width  * 100) + '%';
-    top  = ((iy + y * ih) / wRect.height * 100) + '%';
+    // 先端座標計算: SVGの先端は底辺から 1.5px 上なので top に +1.5px みずかす (36x45のpin height/30 = 1.5)
+    top  = 'calc(' + ((iy + y * ih) / wRect.height * 100) + '% + 1.5px)';
   } else {
     left = (x * 100) + '%';
-    top  = (y * 100) + '%';
+    top  = 'calc(' + (y * 100) + '% + 1.5px)';
   }
   pin.style.left = left;
   pin.style.top  = top;
+  pin.style.setProperty('--drop-h', DROP_HEIGHT + 'px');
   pin.hidden = false;
-  // 上から刺さるアニメーション
+  // 影をクリック地点に固定
+  var shadow = document.getElementById('reactionsMyPinShadow');
+  if (shadow) {
+    shadow.style.left = left;
+    shadow.style.top  = top;
+    shadow.hidden = false;
+  }
   var svg = document.getElementById('reactionsMyPinSvg');
-  anime.remove(svg);
-  anime({
-    targets: svg,
-    translateY: [-28, 0],
-    duration: 750,
-    easing: 'easeOutElastic',
-    elasticity: 600
-  });
+  if (withAnim) {
+    // 既存アニメーションを先にキャンセルしてからリセット
+    pin.classList.remove('color-cycling');
+    pin.getAnimations().forEach(function(a) { a.cancel(); });
+    svg.getAnimations().forEach(function(a) { a.cancel(); });
+    pin.style.transform = '';
+    pin.style.opacity   = '';
+    pin.style.animation = 'none';
+    svg.style.animation = 'none';
+    pin.offsetWidth; // reflow
+    pin.style.animation = 'reactionsPinDrop ' + DROP_SPEED + 's linear forwards';
+    svg.style.animation = 'reactionsPinSvgSquash ' + DROP_SPEED + 's linear forwards';
+    pin.animate(
+      [
+        { opacity: 0, offset: 0 },
+        { opacity: 1, offset: FADE_IN_FRAC },
+        { opacity: 1, offset: 1 },
+      ],
+      { duration: DROP_SPEED * 1000, fill: 'forwards', easing: 'linear' }
+    );
+    // 著地後: float + カラーサイクルに切り替え
+    pin.addEventListener('animationend', function onDrop(e) {
+      if (e.animationName !== 'reactionsPinDrop') return;
+      pin.removeEventListener('animationend', onDrop);
+      var floatDur = (2.4 + Math.random() * 0.8).toFixed(2) + 's';
+      pin.style.animation = 'reactionsPinFloat ' + floatDur + ' ease-in-out infinite';
+      svg.style.animation = '';
+      pin.classList.add('color-cycling');
+    });
+  } else {
+    // 復元時: アニメーションなし、着地位置に即表示 + カラーサイクル
+    pin.getAnimations().forEach(function(a) { a.cancel(); });
+    svg.getAnimations().forEach(function(a) { a.cancel(); });
+    pin.style.animation = 'none';
+    svg.style.animation = 'none';
+    pin.style.transform = 'translate(-50%, -100%)';
+    pin.style.opacity   = '1';
+    pin.offsetWidth; // reflow
+    svg.style.animation = '';
+    pin.classList.add('color-cycling');
+  }
 }
 
 function openReactionsMode(videoId) {
   if (!videoId) return;
-  _reactionsCurrentVideoId = videoId;
-  _reactionsMode = 'pins';
+  _reactionsCurrentVideoId    = videoId;
+  _reactionsPinsVisible        = true;
+  _reactionsHeatmapVisible     = false;
+  _reactionsPins = [];
+  _reactionsKde  = null;
   document.getElementById('reactionsPinsModeBtn').classList.add('active');
   document.getElementById('reactionsHeatmapModeBtn').classList.remove('active');
   document.getElementById('reactionsHeatmapLayer').style.display = 'none';
-  document.getElementById('reactionsPinsLayer').style.display    = '';
+  document.getElementById('reactionsPinsLayer').style.display    = 'block';
   document.getElementById('reactionsMyPin').hidden = true;
-  // 自分の保存済みピンを復元
+  // 自分の保存済みピンを復元（アニメーションなし）
   var saved = _reactionsMyPins[videoId];
-  if (saved) showMyReactionsPin(saved.x, saved.y);
+  if (saved) showMyReactionsPin(saved.x, saved.y, false);
+  // パレットをCSS変数に適用（ヒートマップ・ピン両方が --pin-c0/1/2 を継承）
+  applyPinPalette();
   // seeds 取得してアニメーション開始
   loadReactionSeeds(videoId).then(function(seeds) {
     _reactionsSeeds = seeds;
@@ -1890,9 +2099,11 @@ function openReactionsMode(videoId) {
 }
 
 function closeReactionsMode() {
-  clearTimeout(_reactionsTimer);
+  _reactionsActive = false;
   document.getElementById('reactionsPinsLayer').innerHTML = '';
   document.getElementById('reactionsMyPin').hidden = true;
+  var shadow = document.getElementById('reactionsMyPinShadow');
+  if (shadow) shadow.hidden = true;
   if (currentView === 'reactions') {
     showView(_prevView || 'vote');
   }
@@ -2293,15 +2504,54 @@ function init() {
     } catch { /* サイレント失敗 */ }
   })();
 
-  // ReactionPin: モード切り替え・戻る
-  document.getElementById('reactionsPinsModeBtn').addEventListener('click', function() { setReactionsMode('pins'); });
-  document.getElementById('reactionsHeatmapModeBtn').addEventListener('click', function() { setReactionsMode('heatmap'); });
+  // ReactionPin: Pins / Heatmap 独立トグル
+  document.getElementById('reactionsPinsModeBtn').addEventListener('click', function() {
+    _reactionsPinsVisible = !_reactionsPinsVisible;
+    this.classList.toggle('active', _reactionsPinsVisible);
+    var pinsLayer = document.getElementById('reactionsPinsLayer');
+    if (_reactionsPinsVisible) {
+      pinsLayer.style.display = 'block';
+      startReactionsLoop(_reactionsSeeds);
+    } else {
+      _reactionsActive = false;
+      pinsLayer.style.display = 'none';
+      pinsLayer.innerHTML = '';
+    }
+  });
+  document.getElementById('reactionsHeatmapModeBtn').addEventListener('click', function() {
+    _reactionsHeatmapVisible = !_reactionsHeatmapVisible;
+    this.classList.toggle('active', _reactionsHeatmapVisible);
+    var heatmapLayer = document.getElementById('reactionsHeatmapLayer');
+    if (_reactionsHeatmapVisible) {
+      heatmapLayer.style.display = 'block';
+      renderReactionsHeatmap(_reactionsSeeds);
+    } else {
+      heatmapLayer.style.display = 'none';
+      heatmapLayer.innerHTML = '';
+    }
+  });
   document.getElementById('reactionsBackBtn').addEventListener('click', closeReactionsMode);
+
+  // ReactionPin: カラースウォッチ（統一パレット）
+  document.querySelectorAll('.rs-swatch').forEach(function(btn) {
+    var color = btn.dataset.color;
+    if (color === _reactionsPinColor) {
+      document.querySelectorAll('.rs-swatch').forEach(function(b) { b.classList.remove('active'); });
+      btn.classList.add('active');
+    }
+    btn.addEventListener('click', function() {
+      document.querySelectorAll('.rs-swatch').forEach(function(b) { b.classList.remove('active'); });
+      btn.classList.add('active');
+      _reactionsPinColor = color;
+      localStorage.setItem('reactions-pin-color', color);
+      applyPinPalette();
+    });
+  });
 
   // ReactionPin: imgWrap クリックで pin 配置
   var _rsImgWrap = document.getElementById('reactionsImgWrap');
   _rsImgWrap.addEventListener('click', function(e) {
-    if (currentView !== 'reactions' || _reactionsMode !== 'pins') return;
+    if (currentView !== 'reactions' || !_reactionsPinsVisible) return;
     var rect = _rsImgWrap.getBoundingClientRect();
     var cx = e.clientX - rect.left;
     var cy = e.clientY - rect.top;
@@ -2318,7 +2568,7 @@ function init() {
     var xp = reactionsClamp((cx - ix) / iw, 0.01, 0.99);
     var yp = reactionsClamp((cy - iy) / ih, 0.01, 0.99);
     _reactionsMyPins[_reactionsCurrentVideoId] = { x: xp, y: yp };
-    showMyReactionsPin(xp, yp);
+    showMyReactionsPin(xp, yp, true);
     if (_reactionsCurrentVideoId) postReaction(_reactionsCurrentVideoId, xp, yp);
   });
 

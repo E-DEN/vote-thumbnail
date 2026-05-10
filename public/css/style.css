@@ -2251,7 +2251,11 @@ header {
   border-radius: 50%;
   transform: translate(-50%, -50%);
   mix-blend-mode: screen;
-  background: radial-gradient(circle, rgba(255,0,80,0.28) 0%, rgba(255,0,80,0.12) 35%, rgba(255,0,80,0) 70%);
+  /* --pin-c0 は親要素 reactionsImgWrap から継承、色切り替えで即時更新 */
+  background: radial-gradient(circle,
+    color-mix(in srgb, var(--pin-c0, #ec4899) 28%, transparent) 0%,
+    color-mix(in srgb, var(--pin-c0, #ec4899) 12%, transparent) 35%,
+    transparent 70%);
   filter: blur(10px);
 }
 
@@ -2260,7 +2264,8 @@ header {
 .reactions-pin {
   position: absolute;
   pointer-events: none;
-  animation: reactionsPinFloat 24s linear forwards;
+  opacity: 0; /* Web Animations API でフェードイン制御 */
+  /* animation は JS から inline で設定 */
 }
 
 /* ピンSVG共通 */
@@ -2268,36 +2273,74 @@ header {
   display: block;
   overflow: visible;
   filter: drop-shadow(0 3px 8px rgba(0,0,0,0.45));
+  transform-origin: 50% 100%;
+  /* animation は JS から inline で設定 */
 }
 
-/* 吹き出し本体・アイコンの色（コンテキストごとに上書き） */
-.reactions-pin      .pin-balloon { fill: #ec4899; }
-.reactions-pin      .pin-icon    { fill: #fff; }
+/* 吹き出しの色: shade-0/1/2 クラスで親要素の --pin-c0/1/2 を参照 */
+.reactions-pin.shade-0 .pin-balloon { fill: var(--pin-c0, #ec4899); }
+.reactions-pin.shade-1 .pin-balloon { fill: var(--pin-c1, #f472b6); }
+.reactions-pin.shade-2 .pin-balloon { fill: var(--pin-c2, #db2777); }
+.reactions-pin .pin-icon { fill: rgba(255,255,255,0.9); }
 
+@keyframes reactionsPinDrop {
+  0%   { transform: translate(-50%, calc(-100% - var(--drop-h, 55px))); animation-timing-function: cubic-bezier(0.6,0,0.9,0.6); }
+  6%   { transform: translate(-50%, -100%); animation-timing-function: linear; }
+  100% { transform: translate(-50%, -100%); }
+}
+
+@keyframes reactionsPinSvgSquash {
+  0%   { transform: none; }
+  6%   { transform: scaleX(1.24) scaleY(0.80); animation-timing-function: cubic-bezier(0.2,0,0.4,1); }
+  14%  { transform: none; }
+  100% { transform: none; }
+}
 @keyframes reactionsPinFloat {
-  0%   { opacity: 0; translate: 0 8%; }
-  4%   { opacity: 1; translate: 0 0%; }
-  92%  { opacity: 1; translate: 0 -2%; }
-  100% { opacity: 0.06; translate: 0 -4%; }
+  0%, 100% { transform: translate(-50%, -100%); }
+  50%       { transform: translate(-50%, calc(-100% - 5px)); }
+}
+@keyframes reactionsPinColorCycle {
+  0%, 100% { fill: var(--pin-c0); }
+  33%       { fill: var(--pin-c1); }
+  66%       { fill: var(--pin-c2); }
+}
+.reactions-my-pin.color-cycling .pin-balloon {
+  animation: reactionsPinColorCycle 6s ease-in-out infinite;
+}
+
+/* クリック地点の固定影 */
+.reactions-my-pin-shadow {
+  position: absolute;
+  width: 12px;
+  height: 4px;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.18);
+  filter: blur(2px);
+  transform: translate(-50%, -50%);
+  z-index: 29;
+  pointer-events: none;
 }
 
 /* ピンカーソル（ホバー追従） - 廃止 */
 
-/* 自分のピン（固定表示） */
+/* 自分のピン（固定表示）*/
 .reactions-my-pin {
   position: absolute;
-  transform: translate(-50%, -100%);
+  /* transform はアニメーション時は keyframe、復元時は JS inline で制御 */
   z-index: 30;
   pointer-events: none;
+  opacity: 0; /* Web Animations API で制御 */
 }
 
-/* アニメーション用: transform-origin をピン先端（下中央）に */
+/* 自分のピン: パレットと同じ見た目、大きさだけ違う */
+.reactions-my-pin .pin-balloon {
+  fill: var(--pin-c0, #ec4899);
+}
+.reactions-my-pin .pin-icon { fill: rgba(255,255,255,0.9); }
 .reactions-my-pin-svg {
+  filter: drop-shadow(0 3px 12px rgba(0,0,0,0.8));
   transform-origin: 50% 100%;
 }
-
-.reactions-my-pin .pin-balloon { fill: var(--accent); }
-.reactions-my-pin .pin-icon    { fill: #fff; }
 
 /* リアクションボタン（modal-actions 内） */
 .modal-reactions-btn {
@@ -2363,20 +2406,29 @@ header {
 ===================== */
 #reactionsScreen {
   background: var(--bg);
-  padding: 0;
+  padding: 20px 56px;
   overflow: hidden;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  gap: 16px;
+  align-items: stretch;
+  justify-content: center;
+  position: relative;
 }
 .rs-img-wrap {
   flex: 1;
-  min-height: 0;
+  min-width: 0;
+  max-width: calc((100vh - 120px) * 16 / 9);
+  max-height: calc(100vh - 120px);
+  align-self: center;
   position: relative;
   overflow: hidden;
   cursor: default;
   display: flex;
   align-items: center;
   justify-content: center;
+  border-radius: 10px;
+  box-shadow: 0 6px 24px var(--shadow);
 }
 .rs-img-wrap img {
   max-width: 100%;
@@ -2385,57 +2437,126 @@ header {
   display: block;
   pointer-events: none;
   user-select: none;
+  border-radius: 10px;
 }
-.rs-controls {
+
+/* 右サイドバー (gfと同テーマ) */
+.rs-sidebar {
   flex-shrink: 0;
-  height: 52px;
-  background: #111;
-  border-top: 1px solid rgba(255,255,255,0.08);
+  width: 168px;
   display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 0 20px;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 12px;
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  overflow-y: auto;
 }
-.rs-mode-btn {
+/* 戻るボタン: 画面左上に絶対配置 */
+.rs-back-btn {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  z-index: 10;
   background: transparent;
-  border: 1px solid rgba(255,255,255,0.2);
-  border-radius: 4px;
-  color: rgba(255,255,255,0.55);
-  font-size: 13px;
-  font-weight: 600;
-  padding: 4px 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-muted);
+  font-size: 12px;
+  padding: 5px 14px;
   cursor: pointer;
   transition: color 0.15s, border-color 0.15s;
 }
-.rs-mode-btn.active, .rs-mode-btn:hover {
-  color: #fff;
-  border-color: rgba(255,255,255,0.6);
+.rs-back-btn:hover { color: var(--text); border-color: var(--text-muted); }
+/* 左側ゴースト: サイドバーと同幅で画像を真中央に保つ */
+.rs-sidebar-ghost {
+  flex-shrink: 0;
+  width: 168px;
 }
-.rs-yt-btn {
-  color: rgba(255,255,255,0.6);
-  font-size: 12px;
-  text-decoration: none;
-  padding: 4px 10px;
-  transition: color 0.15s;
-}
-.rs-yt-btn:hover { color: #fff; }
-.rs-back-btn {
-  background: transparent;
-  border: none;
-  color: rgba(255,255,255,0.45);
-  font-size: 13px;
-  cursor: pointer;
-  padding: 4px 8px;
-  transition: color 0.15s;
-}
-.rs-back-btn:hover { color: #fff; }
 .rs-title {
-  font-size: 12px;
-  color: rgba(255,255,255,0.6);
+  font-size: 11px;
+  color: var(--text-muted);
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 320px;
-  padding: 0 12px;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  line-height: 1.4;
 }
+.rs-sep {
+  height: 1px;
+  background: var(--border);
+  flex-shrink: 0;
+}
+.rs-section-title {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  user-select: none;
+}
+.rs-mode-row {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.rs-mode-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 0;
+  width: 100%;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+.rs-mode-btn.active, .rs-mode-btn:hover {
+  color: var(--text);
+  border-color: var(--text-muted);
+  background: var(--surface2);
+}
+.rs-mode-btn.active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+.rs-color-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.rs-color-label {
+  font-size: 10px;
+  color: var(--text-muted);
+  user-select: none;
+}
+.rs-swatch-row {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+.rs-swatch {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  padding: 0;
+  transition: border-color 0.12s, transform 0.12s;
+}
+.rs-swatch:hover  { transform: scale(1.18); }
+.rs-swatch.active { border-color: #fff; transform: scale(1.1); }
+.rs-yt-btn {
+  display: block;
+  color: var(--text-muted);
+  font-size: 11px;
+  text-decoration: none;
+  padding: 5px 0;
+  text-align: center;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  transition: color 0.15s, border-color 0.15s;
+}
+.rs-yt-btn:hover { color: var(--text); border-color: var(--text-muted); }
 

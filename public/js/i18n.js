@@ -105,6 +105,7 @@ registerLang('ja', '日本語', {
   'vote-counter-pre':  'これまでの投票: ',
   'vote-counter-post': ' 回',
   'no-videos-in-cat':  'このカテゴリには動画がありません。',
+  'ranking-settled':   'すべての組み合わせの評価が確定しました。',
   'tutorial-vote-text': '好きなサムネイルをクリックして投票。結果はランキングに反映されます。',
   'tutorial-got-it':    'わかった',
   // 投票ペースゲージ
@@ -140,6 +141,7 @@ registerLang('ja', '日本語', {
   'reactions-pins':    'Pins',
   'reactions-heatmap': 'Heatmap',
   'reactions-back':    '戻る',
+  'reactions-color':   'カラー',
   // ソート
   'sort-views':  '再生数',
   'sort-date':   '投稿日',
@@ -232,6 +234,7 @@ registerLang('en', 'English', {
   'vote-counter-pre':  'Votes so far: ',
   'vote-counter-post': '',
   'no-videos-in-cat': 'No videos in this category.',
+  'ranking-settled':  'All matchups have been settled.',
   'tutorial-vote-text': 'Click the thumbnail you prefer to vote. Results are reflected in the ranking.',
   'tutorial-got-it':    'Got it',
   // Vote pace gauge
@@ -266,6 +269,7 @@ registerLang('en', 'English', {
   'reactions-pins':    'Pins',
   'reactions-heatmap': 'Heatmap',
   'reactions-back':    'Back',
+  'reactions-color':   'Color',
   // Sort
   'sort-views':  'Views',
   'sort-date':   'Date',

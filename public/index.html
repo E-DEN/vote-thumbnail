@@ -153,12 +153,15 @@
 
       <!-- リアクション画面 -->
       <div id="reactionsScreen" class="screen" style="display:none">
+        <button class="rs-back-btn" id="reactionsBackBtn" data-i18n="reactions-back">戻る</button>
+        <div class="rs-sidebar-ghost"></div>
         <div class="rs-img-wrap" id="reactionsImgWrap">
           <img id="reactionsImg" src="" alt="" referrerpolicy="no-referrer">
           <div class="reactions-heatmap-layer" id="reactionsHeatmapLayer"></div>
           <div class="reactions-pins-layer" id="reactionsPinsLayer"></div>
+          <div class="reactions-my-pin-shadow" id="reactionsMyPinShadow" hidden></div>
           <div class="reactions-my-pin" id="reactionsMyPin" hidden>
-            <svg id="reactionsMyPinSvg" class="reactions-pin-svg reactions-my-pin-svg" viewBox="0 0 24 30" width="30" height="38" xmlns="http://www.w3.org/2000/svg">
+            <svg id="reactionsMyPinSvg" class="reactions-pin-svg reactions-my-pin-svg" viewBox="0 0 24 30" width="36" height="45" xmlns="http://www.w3.org/2000/svg">
               <path class="pin-balloon" d="M12,29 C5.5,21.5 1.5,17 1.5,11 a10.5,10.5,0,0,1,21,0 C22.5,17 18.5,21.5 12,29 Z"/>
               <g transform="translate(12 11) scale(0.38) translate(-12 -12)">
                 <path class="pin-icon" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
@@ -166,13 +169,26 @@
             </svg>
           </div>
         </div>
-        <div class="rs-controls">
-          <button class="rs-mode-btn active" id="reactionsPinsModeBtn" data-i18n="reactions-pins">Pins</button>
-          <button class="rs-mode-btn" id="reactionsHeatmapModeBtn" data-i18n="reactions-heatmap">Heatmap</button>
+        <div class="rs-sidebar">
           <span class="rs-title" id="reactionsTitle"></span>
+          <div class="rs-sep"></div>
+          <div class="rs-mode-row">
+            <button class="rs-mode-btn active" id="reactionsPinsModeBtn" data-i18n="reactions-pins">Pins</button>
+            <button class="rs-mode-btn" id="reactionsHeatmapModeBtn" data-i18n="reactions-heatmap">Heatmap</button>
+          </div>
+          <div class="rs-sep"></div>
+          <div class="rs-color-section">
+            <span class="rs-color-label" data-i18n="reactions-color">カラー</span>
+            <div class="rs-swatch-row">
+              <button class="rs-swatch active" data-color="#ec4899" style="background:#ec4899"></button>
+              <button class="rs-swatch" data-color="#00b0f4" style="background:#00b0f4"></button>
+              <button class="rs-swatch" data-color="#57f287" style="background:#57f287"></button>
+              <button class="rs-swatch" data-color="#f59e0b" style="background:#f59e0b"></button>
+              <button class="rs-swatch" data-color="#a855f7" style="background:#a855f7"></button>
+            </div>
+          </div>
           <div style="flex:1"></div>
-          <a class="rs-yt-btn" id="reactionsYtBtn" href="#" target="_blank" rel="noopener noreferrer" data-i18n="yt-btn">YouTube で見る</a>
-          <button class="rs-back-btn" id="reactionsBackBtn" data-i18n="reactions-back">戻る</button>
+          <a class="rs-yt-btn" id="reactionsYtBtn" href="#" target="_blank" rel="noopener noreferrer" data-i18n="yt-btn">YouTube</a>
         </div>
       </div>
 

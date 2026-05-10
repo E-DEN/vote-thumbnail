@@ -272,9 +272,11 @@ async function handleApi(request, env, url, ctx) {
     if (method === 'GET' && mPinSeeds) {
       const videoId = mPinSeeds[1];
       const rows = await env.DB.prepare(
-        'SELECT x, y FROM reactions WHERE video_id = ?'
+        'SELECT x, y FROM reactions WHERE video_id = ? ORDER BY updated_at DESC LIMIT 1000'
       ).bind(videoId).all();
-      return json({ seeds: aggregateToSeeds(rows.results) });
+      const pins = rows.results;
+      // クライアントが KDE サンプリング用に全座標を使う
+      return json({ pins, seeds: aggregateToSeeds(pins) });
     }
 
     // --- POST /api/pins ---
