@@ -1072,7 +1072,22 @@ function buildFolderItem(folder) {
 function renderSidebar() {
   syncSidebarOrder();
   const nav = document.getElementById('sidebarNav');
+  const sidebar = document.getElementById('sidebar');
+  const isCompact = sidebar.classList.contains('sidebar--compact');
+  const addWrap = document.getElementById('sidebarCompactAddWrap');
+
+  // nav内に移動済みなら先に救出する（nav.innerHTML=''で消えないよう）
+  if (addWrap && addWrap.parentNode === nav) {
+    sidebar.insertBefore(addWrap, nav);
+  }
+
   nav.innerHTML = '';
+
+  // コンパクト時: add-wrapをチャンネル一覧の先頭に配置
+  if (isCompact && addWrap) {
+    nav.appendChild(addWrap);
+  }
+
   sidebarOrder.forEach(item => {
     if (item.type === 'channel') {
       const ch = channels[item.key];

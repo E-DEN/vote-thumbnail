@@ -152,6 +152,7 @@ header {
   align-items: center;
   gap: 0;
   margin: 10px 10px 0;
+  height: 34px;
   background: var(--surface2);
   border-radius: 6px;
   overflow: hidden;
@@ -303,13 +304,13 @@ header {
   align-items: center;
   overflow-y: auto;
   overflow-x: visible;
-  padding: 12px 0 4px;
+  padding: 8px 0 4px;
 }
 .sidebar--compact .sidebar-channel-item {
   width: 50px;
-  height: 50px;
-  padding: 3px;
-  margin: 2px 0;
+  height: 52px;
+  padding: 4px 3px;
+  margin: 0;
   gap: 0;
   justify-content: center;
   border-radius: 50%;
@@ -350,11 +351,15 @@ header {
 /* コンパクト: チャンネル追加ボタン */
 .sidebar-compact-add-wrap {
   display: none;
-  justify-content: center;
-  padding: 8px 0 4px;
   flex-shrink: 0;
 }
-.sidebar--compact .sidebar-compact-add-wrap { display: flex; }
+.sidebar--compact .sidebar-compact-add-wrap {
+  display: flex;
+  height: 64px;
+  width: 50px;
+  justify-content: center;
+  align-items: center;
+}
 .sidebar-compact-add-btn {
   width: 44px;
   height: 44px;
@@ -1522,12 +1527,12 @@ header {
 .sidebar--dragging .sidebar-channel-item:hover::before { display: none; }
 .sidebar--dragging .sidebar-channel-item:hover { background: transparent; color: var(--text-muted); }
 .sidebar--compact .sidebar-folder-header {
-  width: 50px; height: 50px; padding: 3px; margin: 2px 0; gap: 0;
+  width: 50px; height: 52px; padding: 4px 3px; margin: 0; gap: 0;
   justify-content: center; border-radius: 50%; position: relative;
   transition: border-radius 0.2s, background 0.12s, color 0.12s;
 }
 .sidebar--compact .sidebar-folder-header:hover { border-radius: 30%; background: var(--surface2); }
-.sidebar--compact .sidebar-folder--open { width: 50px; background: var(--drop-hover); border-radius: 15px 15px 10px 10px; margin: 2px 0; padding-bottom: 4px; }
+.sidebar--compact .sidebar-folder--open { width: 50px; background: var(--drop-hover); border-radius: 15px 15px 10px 10px; margin: 0; padding-bottom: 4px; }
 .sidebar--compact .sidebar-folder--open > .sidebar-folder-header { margin: 0; transition: border-radius 0.2s, background 0.12s, color 0.12s; }
 .sidebar--compact .sidebar-folder--open > .sidebar-folder-header:hover { background: var(--surface2); }
 .sidebar--compact .sidebar-folder-name,
