@@ -1549,6 +1549,24 @@ header {
   transition: border-radius 0.2s, background 0.12s, color 0.12s;
 }
 .sidebar--compact .sidebar-folder-header:hover { border-radius: 30%; background: var(--surface2); }
+.sidebar--compact .sidebar-folder-header::before {
+  content: '';
+  position: absolute;
+  left: -8px;
+  top: 50%;
+  transform: translateY(-50%) scaleY(0);
+  transform-origin: center;
+  width: 4px;
+  height: 44px;
+  border-radius: 0 6px 6px 0;
+  background: #fff;
+  opacity: 0;
+  transition: transform 0.15s, opacity 0.15s;
+}
+.sidebar--compact .sidebar-folder-header:hover::before {
+  opacity: 0.4;
+  transform: translateY(-50%) scaleY(0.3);
+}
 .sidebar--compact .sidebar-folder--open { width: 50px; background: var(--drop-hover); border-radius: 15px 15px 10px 10px; margin: 0; padding-bottom: 4px; }
 .sidebar--compact .sidebar-folder--open > .sidebar-folder-header { margin: 0; transition: border-radius 0.2s, background 0.12s, color 0.12s; }
 .sidebar--compact .sidebar-folder--open > .sidebar-folder-header:hover { background: var(--surface2); }
