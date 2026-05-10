@@ -1207,12 +1207,37 @@ function buildFolderItem(folder) {
   dropZone.dataset.folderId = folder.id;
   childrenEl.appendChild(dropZone);
 
+  function applyFolderOpen(animated) {
+    if (folder.open) {
+      childrenEl.style.maxHeight = childrenEl.scrollHeight + 'px';
+    } else {
+      if (animated) childrenEl.style.maxHeight = childrenEl.scrollHeight + 'px';
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => { childrenEl.style.maxHeight = '0'; });
+      });
+    }
+  }
+  if (folder.open) {
+    // 即座に大きな値でスナップ表示（DOM挿入前でも見た目は開いた状態に）
+    childrenEl.style.maxHeight = '9999px';
+    requestAnimationFrame(() => {
+      // DOM挿入後に正確な値へ（transition無効化でアニメなし）
+      childrenEl.style.transition = 'none';
+      childrenEl.style.maxHeight = childrenEl.scrollHeight + 'px';
+      requestAnimationFrame(() => {
+        // 以降のトグル操作でtransitionが有効になる
+        childrenEl.style.transition = '';
+      });
+    });
+  }
+
   header.addEventListener('click', e => {
     if (e.target.closest('button, [contenteditable]:not([contenteditable="false"])')) return;
     folder.open = !folder.open;
     saveSidebarOrder();
     wrap.classList.toggle('sidebar-folder--open', folder.open);
     chevron.textContent = folder.open ? '\u25b4' : '\u25be';
+    applyFolderOpen(true);
   });
 
   wrap.appendChild(header);
