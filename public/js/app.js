@@ -932,6 +932,7 @@ function buildChannelItem(ch) {
   // コンパクト時のチャンネル名ツールチップ
   item.addEventListener('mouseenter', () => {
     if (!_chTooltip || !document.getElementById('sidebar').classList.contains('sidebar--compact')) return;
+    if (document.getElementById('sidebarNav').classList.contains('sidebar--dragging')) return;
     const rect = item.getBoundingClientRect();
     _chTooltip.textContent = name;
     _chTooltip.style.top = (rect.top + rect.height / 2) + 'px';
@@ -1032,6 +1033,7 @@ function buildFolderItem(folder) {
 
   header.addEventListener('mouseenter', () => {
     if (!_chTooltip || !document.getElementById('sidebar').classList.contains('sidebar--compact')) return;
+    if (document.getElementById('sidebarNav').classList.contains('sidebar--dragging')) return;
     const rect = header.getBoundingClientRect();
     _chTooltip.textContent = (folder.name ? folder.name + ' ' : '') + folder.children.length + 'ch';
     _chTooltip.style.top = (rect.top + rect.height / 2) + 'px';
@@ -1110,63 +1112,263 @@ function initSidebarDrag() {
   }
 
   function _hitTest(mouseY) {
-    for (const el of nav.querySelectorAll('.sidebar-channel-item')) {
-      if (_dragType === 'channel' && el.dataset.key === _srcKey) continue;
-      // 閉じたフォルダ内のアイテムはスキップ
-      const parentChildren = el.closest('.sidebar-folder-children');
-      if (parentChildren) {
-        const folder = parentChildren.closest('.sidebar-folder');
-        if (folder && !folder.classList.contains('sidebar-folder--open')) continue;
-        // ドラッグ中のフォルダ内のアイテムもスキップ
-        if (_dragType === 'folder' && folder && folder.dataset.folderId === _srcFolderId) continue;
+    // 表示中の全対象を DOM 順で収集
+    const items = [];
+    for (const el of nav.querySelectorAll('.sidebar-channel-item, .sidebar-folder-header')) {
+      const isHeader = el.classList.contains('sidebar-folder-header');
+      const fid = isHeader ? el.dataset.folderId : null;
+      // 自身: 要素上にいる場合は null（インジケータなし）
+      if (_dragType === 'channel' && !isHeader && el.dataset.key === _srcKey) {
+        const r = el.getBoundingClientRect();
+        if (mouseY >= r.top && mouseY <= r.bottom) return null;
+        continue;
       }
+      if (_dragType === 'folder' && fid === _srcFolderId) {
+        const r = el.getBoundingClientRect();
+        if (mouseY >= r.top && mouseY <= r.bottom) return null;
+        continue;
+      }
+      // 閉じたフォルダ内はスキップ
+      const pc = el.closest('.sidebar-folder-children');
+      if (pc) {
+        const pf = pc.closest('.sidebar-folder');
+        if (pf && !pf.classList.contains('sidebar-folder--open')) continue;
+        if (_dragType === 'folder' && pf && pf.dataset.folderId === _srcFolderId) continue;
+      }
+      items.push({ el, isHeader, fid, pc });
+    }
+
+    for (let i = 0; i < items.length; i++) {
+      const { el, isHeader, fid, pc } = items[i];
       const r = el.getBoundingClientRect();
-      if (mouseY < r.top || mouseY > r.bottom) continue;
+      const folderId = pc ? pc.dataset.folderId : null;
+      const wrap = isHeader ? el.closest('.sidebar-folder') : null;
+
+      // テリトリー: 常に要素の実際の底辺で計算（フォルダラッパー底辺は使わない）
+      const prevBot = i > 0 ? items[i - 1].el.getBoundingClientRect().bottom : -Infinity;
+      const nextTop = i < items.length - 1 ? items[i + 1].el.getBoundingClientRect().top : Infinity;
+      const topBound = (prevBot + r.top) / 2;
+      const botBound = (r.bottom + nextTop) / 2;
+
+      if (mouseY < topBound || mouseY > botBound) continue;
+
+      // ── テリトリー上端の隙間: このアイテムの before ──
+      if (mouseY < r.top) {
+        // ソース要素がこのギャップに DOM 上存在する → 挿入しても移動なし → null
+        if (_draggedEl) {
+          const prev = items[i - 1];
+          const afterPrev = !prev || !!(prev.el.compareDocumentPosition(_draggedEl) & Node.DOCUMENT_POSITION_FOLLOWING);
+          const beforeEl = !!(_draggedEl.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING);
+          if (afterPrev && beforeEl) return null;
+        }
+        if (isHeader) return _dragType === 'folder'
+          ? { action: 'folder-before', folderId: fid, el }
+          : { action: 'channel-before-folder', folderId: fid, el };
+        return { action: 'before', targetKey: el.dataset.key, folderId, el };
+      }
+
+      // ── テリトリー下端の隙間（r.bottom 〜 botBound）──
+      if (mouseY > r.bottom) {
+        if (isHeader) {
+          // フォルダヘッダー底辺〜フォルダラッパー底辺: フォルダ内部
+          const wrapBot = wrap ? wrap.getBoundingClientRect().bottom : r.bottom;
+          if (mouseY <= wrapBot) {
+            if (_dragType === 'channel') {
+              if (_srcFolderId === fid) return null; // 自分のフォルダ内部 → null
+              return { action: 'add-to-folder', folderId: fid, el };
+            }
+            continue;
+          }
+          // フォルダラッパー底辺より下: 次アイテムの before に統一
+          const next = items[i + 1];
+          if (next) {
+            const nFolderId = next.pc ? next.pc.dataset.folderId : null;
+            if (next.isHeader) return _dragType === 'folder'
+              ? { action: 'folder-before', folderId: next.fid, el: next.el }
+              : { action: 'channel-before-folder', folderId: next.fid, el: next.el };
+            return { action: 'before', targetKey: next.el.dataset.key, folderId: nFolderId, el: next.el };
+          }
+          return { action: _dragType === 'folder' ? 'folder-after' : 'channel-after-folder', folderId: fid, el: wrap || el };
+        }
+        // チャンネルアイテムの下ギャップ
+        if (folderId) {
+          const folderWrap = el.closest('.sidebar-folder');
+          // drop-bottom 付与中はパディング分(28px)を引いて自然な底辺で判定
+          const DROP_PAD = 28;
+          const rawBot = folderWrap ? folderWrap.getBoundingClientRect().bottom : r.bottom;
+          const naturalBot = (folderWrap && folderWrap.classList.contains('sidebar-folder--drop-bottom')) ? rawBot - DROP_PAD : rawBot;
+          if (mouseY > naturalBot) {
+            return { action: 'channel-after-folder', folderId, el: folderWrap || el };
+          }
+          // 同フォルダ内に次のアイテムがあれば before に統一（フォルダ末尾ではない）
+          const next = items[i + 1];
+          if (next && next.pc && next.pc.dataset.folderId === folderId) {
+            // ソースが el と next の間に DOM 上存在する → 挿入しても移動なし → null
+            if (_srcFolderId === folderId && _draggedEl) {
+              const afterEl   = !!(el.compareDocumentPosition(_draggedEl) & Node.DOCUMENT_POSITION_FOLLOWING);
+              const beforeNext = !!(_draggedEl.compareDocumentPosition(next.el) & Node.DOCUMENT_POSITION_FOLLOWING);
+              if (afterEl && beforeNext) return null;
+            }
+            return { action: 'before', targetKey: next.el.dataset.key, folderId, el: next.el };
+          }
+          // フォルダ内最後の可視アイテムのギャップ
+          // next がない = ソースがこのアイテムの直後 → ドロップしても移動なし → null
+          if (_srcFolderId === folderId) return null;
+          return { action: 'after', targetKey: el.dataset.key, folderId, el };
+        }
+        // トップレベルチャンネル: 次アイテムの before に統一
+        const next = items[i + 1];
+        if (next) {
+          // ソースが el と next の間に DOM 上存在する → 挿入しても移動なし → null
+          if (_draggedEl) {
+            const afterEl    = !!(el.compareDocumentPosition(_draggedEl) & Node.DOCUMENT_POSITION_FOLLOWING);
+            const beforeNext = !!(_draggedEl.compareDocumentPosition(next.el) & Node.DOCUMENT_POSITION_FOLLOWING);
+            if (afterEl && beforeNext) return null;
+          }
+          const nFolderId = next.pc ? next.pc.dataset.folderId : null;
+          if (next.isHeader) return _dragType === 'folder'
+            ? { action: 'folder-before', folderId: next.fid, el: next.el }
+            : { action: 'channel-before-folder', folderId: next.fid, el: next.el };
+          return { action: 'before', targetKey: next.el.dataset.key, folderId: nFolderId, el: next.el };
+        }
+        return { action: 'after', targetKey: el.dataset.key, folderId, el };
+      }
+
+      // ── アイテム本体上 ──
       const relY = (mouseY - r.top) / r.height;
-      const folderId = parentChildren ? parentChildren.dataset.folderId : null;
-      // merge-preview中は全体をmergeゾーンとして扱う
-      if (el.classList.contains('merge-preview') && _dragType === 'channel') {
-        return { action: 'merge', targetKey: el.dataset.key, folderId, el };
+      if (isHeader) {
+        if (_dragType === 'channel') {
+          if (_srcFolderId && _srcFolderId === fid) return null;
+          if (relY < 0.5) return { action: 'channel-before-folder', folderId: fid, el };
+          return { action: 'add-to-folder', folderId: fid, el };
+        }
+        if (relY < 0.5) return { action: 'folder-before', folderId: fid, el };
+        // 下半分: ギャップゾーンと統一するため次のトップレベルアイテムの before を返す
+        {
+          const next = items[i + 1];
+          if (next && !next.pc) {
+            // 次がトップレベルアイテム（フォルダ内ではない）
+            if (next.isHeader) return { action: 'folder-before', folderId: next.fid, el: next.el };
+            return { action: 'before', targetKey: next.el.dataset.key, folderId: null, el: next.el };
+          }
+          // 開いたフォルダ（次が子チャンネル）か最後のアイテム → folder-after
+          return { action: 'folder-after', folderId: fid, el: wrap || el };
+        }
       }
-      if (relY < 0.2) return { action: 'before', targetKey: el.dataset.key, folderId, el };
-      if (relY > 0.8) return { action: 'after', targetKey: el.dataset.key, folderId, el };
-      if (_dragType === 'channel') return { action: 'merge', targetKey: el.dataset.key, folderId, el };
-      return { action: 'before', targetKey: el.dataset.key, folderId, el };
-    }
-    for (const el of nav.querySelectorAll('.sidebar-folder-header')) {
-      const folderId = el.dataset.folderId;
-      if (_dragType === 'folder' && folderId === _srcFolderId) continue;
-      const r = el.getBoundingClientRect();
-      if (mouseY < r.top || mouseY > r.bottom) continue;
+      // チャンネルアイテム
       if (_dragType === 'channel') {
-        const relY = (mouseY - r.top) / r.height;
-        if (relY < 0.25) return { action: 'channel-before-folder', folderId, el };
-        if (relY > 0.75) return { action: 'channel-after-folder', folderId, el };
-        return { action: 'add-to-folder', folderId, el };
+        const canMerge = !folderId;
+
+        // フォルダ内の最後のアイテムかどうか
+        const nextItem = items[i + 1];
+        const isLastInFolder = folderId && (
+          !nextItem || !nextItem.pc || nextItem.pc.dataset.folderId !== folderId
+        );
+
+        // 上端: before
+        if (relY < 0.2) return { action: 'before', targetKey: el.dataset.key, folderId, el };
+
+        // フォルダ内最後のアイテム下半分: add-to-folder ゾーン
+        if (isLastInFolder && relY >= 0.5) {
+          // ラッパー超えチェック
+          const folderWrap = el.closest('.sidebar-folder');
+          const DROP_PAD = 28;
+          const rawBot = folderWrap ? folderWrap.getBoundingClientRect().bottom : r.bottom;
+          const naturalBot = (folderWrap && folderWrap.classList.contains('sidebar-folder--drop-bottom')) ? rawBot - DROP_PAD : rawBot;
+          if (mouseY > naturalBot) return { action: 'channel-after-folder', folderId, el: folderWrap || el };
+
+          // no-op チェック: ソースが el の直後に DOM 上存在
+          if (_draggedEl && nextItem) {
+            const afterEl    = !!(el.compareDocumentPosition(_draggedEl) & Node.DOCUMENT_POSITION_FOLLOWING);
+            const beforeNext = !!(_draggedEl.compareDocumentPosition(nextItem.el) & Node.DOCUMENT_POSITION_FOLLOWING);
+            if (afterEl && beforeNext) return null;
+          }
+          if (_srcFolderId === folderId && !nextItem) return null; // ソースが同フォルダの最後
+
+          return { action: 'after', targetKey: el.dataset.key, folderId, el };
+        }
+
+        if (relY > 0.8) {
+          // フォルダ内最終チャンネルでラッパー超え → 脱出
+          if (folderId) {
+            const folderWrap = el.closest('.sidebar-folder');
+            const DROP_PAD = 28;
+            const rawBot = folderWrap ? folderWrap.getBoundingClientRect().bottom : r.bottom;
+            const naturalBot = (folderWrap && folderWrap.classList.contains('sidebar-folder--drop-bottom')) ? rawBot - DROP_PAD : rawBot;
+            if (mouseY > naturalBot) return { action: 'channel-after-folder', folderId, el: folderWrap || el };
+          }
+          if (nextItem) {
+            if (_draggedEl) {
+              const afterEl    = !!(el.compareDocumentPosition(_draggedEl) & Node.DOCUMENT_POSITION_FOLLOWING);
+              const beforeNext = !!(_draggedEl.compareDocumentPosition(nextItem.el) & Node.DOCUMENT_POSITION_FOLLOWING);
+              if (afterEl && beforeNext) return null;
+            }
+            const nFolderId = nextItem.pc ? nextItem.pc.dataset.folderId : null;
+            if (nextItem.isHeader) return { action: 'channel-before-folder', folderId: nextItem.fid, el: nextItem.el };
+            return { action: 'before', targetKey: nextItem.el.dataset.key, folderId: nFolderId, el: nextItem.el };
+          }
+          return { action: 'after', targetKey: el.dataset.key, folderId, el };
+        }
+
+        if (canMerge) return { action: 'merge', targetKey: el.dataset.key, folderId, el };
+        return { action: 'before', targetKey: el.dataset.key, folderId, el };
       }
-      const wrap = el.closest('.sidebar-folder');
-      return (mouseY - r.top) / r.height < 0.5
-        ? { action: 'folder-before', folderId, el }
-        : { action: 'folder-after', folderId, el: wrap || el };
+      // フォルダドラッグ on チャンネルアイテム
+      if (relY < 0.5) return { action: 'before', targetKey: el.dataset.key, folderId, el };
+      // 下半分: 次アイテムの before に統一（ギャップゾーンと同じ位置）
+      {
+        const next = items[i + 1];
+        if (next) {
+          const nFolderId = next.pc ? next.pc.dataset.folderId : null;
+          if (next.isHeader) return { action: 'folder-before', folderId: next.fid, el: next.el };
+          return { action: 'before', targetKey: next.el.dataset.key, folderId: nFolderId, el: next.el };
+        }
+        return { action: 'after', targetKey: el.dataset.key, folderId, el };
+      }
     }
+
+    // フォルダ内ドロップゾーン（フォルダ末尾への追加 or 脱出）
     for (const el of nav.querySelectorAll('.sidebar-folder-drop-zone')) {
-      // 閉じたフォルダ内のドロップゾーンはスキップ
       const pc = el.closest('.sidebar-folder-children');
       if (pc) {
         const pf = pc.closest('.sidebar-folder');
         if (pf && !pf.classList.contains('sidebar-folder--open')) continue;
       }
       const r = el.getBoundingClientRect();
-      if (mouseY >= r.top - 8 && mouseY <= r.bottom + 8 && _dragType === 'channel') {
-        return { action: 'add-to-folder', folderId: el.dataset.folderId, el };
+      if (mouseY >= r.top - 12 && mouseY <= r.bottom + 12 && _dragType === 'channel') {
+        const zFolderId = el.dataset.folderId;
+        // 自分が所属するフォルダのドロップゾーン → フォルダの後ろに脱出
+        if (_srcFolderId && _srcFolderId === zFolderId) {
+          const hdr = nav.querySelector(`.sidebar-folder-header[data-folder-id="${zFolderId}"]`);
+          const wrap = hdr ? hdr.closest('.sidebar-folder') : el;
+          return { action: 'channel-after-folder', folderId: zFolderId, el: wrap || el };
+        }
+        return { action: 'add-to-folder', folderId: zFolderId, el };
       }
     }
+
     return { action: 'end' };
   }
 
   function _showDrop(mouseY) {
     const prev = _dropInfo;
     const newInfo = _hitTest(mouseY);
+
+    // _hitTest の結果に基づいて drop-bottom を付与（ポスト判定）
+    // 付与後は次フレームの _hitTest が自然底辺で正しく再判定する
+    if (_dragType === 'channel') {
+      nav.querySelectorAll('.sidebar-folder--drop-bottom').forEach(el => el.classList.remove('sidebar-folder--drop-bottom'));
+      if (newInfo && newInfo.action === 'after' && newInfo.folderId) {
+        const folder = nav.querySelector(`.sidebar-folder[data-folder-id="${newInfo.folderId}"]`);
+        if (folder) folder.classList.add('sidebar-folder--drop-bottom');
+      }
+    }
+    // ドラッグ元フォルダ上ではインジケータなし
+    if (newInfo === null) {
+      _clearState();
+      _dropInfo = null;
+      return;
+    }
     // 同じmergeターゲットなら状態を維持
     if (prev && prev.action === 'merge' && newInfo && newInfo.action === 'merge' && newInfo.targetKey === prev.targetKey) {
       _dropInfo = newInfo;
@@ -1314,6 +1516,7 @@ function initSidebarDrag() {
     if (_ghost) { _ghost.remove(); _ghost = null; }
     if (_draggedEl) { _draggedEl.style.opacity = ''; _draggedEl = null; }
     _clearState();
+    nav.querySelectorAll('.sidebar-folder--drop-bottom').forEach(el => el.classList.remove('sidebar-folder--drop-bottom'));
     nav.classList.remove('sidebar--dragging');
     _dragType = _srcKey = _srcFolderId = _dropInfo = _pending = null;
   }
@@ -1325,10 +1528,24 @@ function initSidebarDrag() {
     _srcKey = srcKey;
     _srcFolderId = srcFolderId;
     _pointerOffsetY = downY - rect.top;
-    _ghost = unit.cloneNode(true);
-    _ghost.style.cssText = `position:fixed;top:${rect.top}px;left:${rect.left}px;width:${rect.width}px;pointer-events:none;z-index:9999;opacity:0.85;box-shadow:0 6px 24px rgba(0,0,0,0.55);border-radius:8px;transition:none;`;
+    // 開いているフォルダをドラッグする場合は先に視覚的に閉じる（データは変更しない→ドロップ後に元の状態に戻る）
+    if (type === 'folder' && unit.classList.contains('sidebar-folder--open')) {
+      unit.classList.remove('sidebar-folder--open');
+      const chevron = unit.querySelector('.sidebar-folder-chevron');
+      if (chevron) chevron.textContent = '\u25be';
+    }
+    // ゴースト生成（コンパクト時はヘッダのみ）
+    let ghostSrc = unit;
+    if (type === 'folder' && document.getElementById('sidebar').classList.contains('sidebar--compact')) {
+      ghostSrc = unit.querySelector('.sidebar-folder-header') || unit;
+    }
+    _ghost = ghostSrc.cloneNode(true);
+    const ghostRect = ghostSrc.getBoundingClientRect();
+    _ghost.style.cssText = `position:fixed;top:${ghostRect.top}px;left:${ghostRect.left}px;width:${ghostRect.width}px;pointer-events:none;z-index:9999;opacity:0.85;box-shadow:0 6px 24px rgba(0,0,0,0.55);border-radius:8px;transition:none;`;
+    _pointerOffsetY = downY - ghostRect.top;
     document.body.appendChild(_ghost);
     unit.style.opacity = '0.2';
+    if (_chTooltip) _chTooltip.classList.remove('visible');
     nav.classList.add('sidebar--dragging');
     document.addEventListener('mousemove', _onMove);
     document.addEventListener('mouseup', _onUp);
@@ -1377,7 +1594,9 @@ function initSidebarDrag() {
     const type = chItem ? 'channel' : 'folder';
     const unit = chItem || fldHdr.closest('.sidebar-folder');
     _pending = { downY: e.clientY, downX: e.clientX, unit, rect: unit.getBoundingClientRect(), type,
-      srcKey: chItem ? chItem.dataset.key : null, srcFolderId: fldHdr ? fldHdr.dataset.folderId : null };
+      srcKey: chItem ? chItem.dataset.key : null,
+      srcFolderId: fldHdr ? fldHdr.dataset.folderId
+        : (chItem ? (chItem.closest('.sidebar-folder-children') || {}).dataset?.folderId || null : null) };
     document.addEventListener('mousemove', _onPendingMove);
     document.addEventListener('mouseup', _onPendingUp);
   });
@@ -1390,7 +1609,9 @@ function initSidebarDrag() {
     const unit = chItem || fldHdr.closest('.sidebar-folder');
     const touch = e.touches[0];
     _pending = { downY: touch.clientY, downX: touch.clientX, unit, rect: unit.getBoundingClientRect(), type,
-      srcKey: chItem ? chItem.dataset.key : null, srcFolderId: fldHdr ? fldHdr.dataset.folderId : null };
+      srcKey: chItem ? chItem.dataset.key : null,
+      srcFolderId: fldHdr ? fldHdr.dataset.folderId
+        : (chItem ? (chItem.closest('.sidebar-folder-children') || {}).dataset?.folderId || null : null) };
     document.addEventListener('touchmove', _onPendingMove, { passive: false });
     document.addEventListener('touchend', _onPendingUp);
   }, { passive: false });
