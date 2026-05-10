@@ -302,7 +302,7 @@ header {
   align-items: center;
   overflow-y: auto;
   overflow-x: visible;
-  padding: 4px 0;
+  padding: 12px 0 4px;
 }
 .sidebar--compact .sidebar-channel-item {
   width: 50px;
@@ -1451,7 +1451,7 @@ header {
 .sidebar-folder--open > .sidebar-folder-header { color: var(--text); }
 .sidebar-folder-preview { position: relative; width: 44px; height: 44px; flex-shrink: 0; border-radius: 50%; overflow: hidden; background: var(--surface2); }
 .sidebar-folder-preview-img {
-  position: absolute; width: 24px; height: 24px; border-radius: 50%;
+  position: absolute; width: 30px; height: 30px; border-radius: 50%;
   object-fit: cover; border: 1.5px solid var(--surface2);
 }
 .sidebar-folder-preview-img:nth-child(1) { top: 0; left: 0; }
@@ -1528,9 +1528,9 @@ header {
 .sidebar--compact .sidebar-folder--open > .sidebar-folder-header:hover { background: var(--surface2); }
 .sidebar--compact .sidebar-folder-name,
 .sidebar--compact .sidebar-folder-badge { display: none; }
-.sidebar--compact .sidebar-folder-preview { width: 44px; height: 44px; background: transparent; border-radius: 50%; overflow: hidden; }
+.sidebar--compact .sidebar-folder-preview { width: 44px; height: 44px; background: var(--surface2); border-radius: 50%; overflow: hidden; }
 .sidebar--compact .sidebar-folder-open-icon { background: transparent; border-radius: 0; }
-.sidebar--compact .sidebar-folder-preview-img { width: 30px; height: 30px; }
+.sidebar--compact .sidebar-folder--open > .sidebar-folder-header .sidebar-folder-preview { background: transparent; }
 .sidebar--compact .sidebar-folder-chevron { display: none; }
 .sidebar--compact .sidebar-folder-rename-btn { display: none; }
 .sidebar--compact .sidebar-folder-header:hover .sidebar-folder-rename-btn { display: none; }
