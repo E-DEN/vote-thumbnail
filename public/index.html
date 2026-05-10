@@ -65,8 +65,8 @@
         <img id="chAvatar" class="ch-avatar" src="" alt="" referrerpolicy="no-referrer" style="display:none">
         <span id="chName" class="ch-name" style="display:none"></span>
         <div class="ch-tabs" id="chTabs" style="display:none">
-          <button class="ch-tab active" data-view="vote" data-i18n="tab-vote">投票</button>
-          <button class="ch-tab" data-view="list" data-i18n="tab-list">一覧</button>
+          <button class="ch-tab active" data-view="list" data-i18n="tab-list">一覧</button>
+          <button class="ch-tab" data-view="vote" data-i18n="tab-vote">投票</button>
           <button class="ch-tab" data-view="ranking" data-i18n="tab-ranking">ランキング</button>
         </div>
         <div class="cat-filter" id="catFilter" style="display:none">
@@ -228,6 +228,7 @@
           <button class="settings-nav-item" data-tab="apikey">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
             <span data-i18n="settings-tab-apikey">APIキー</span>
+            <span class="settings-nav-badge" id="apikeyNavBadge" hidden></span>
           </button>
           <button class="settings-nav-item" data-tab="sidebar">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
@@ -329,5 +330,6 @@
   <script src="js/i18n.js"></script>
   <script src="js/lang.js"></script>
   <script src="js/app.js"></script>
+<div id="app-toast-container"></div>
 </body>
 </html>

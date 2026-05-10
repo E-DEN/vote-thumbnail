@@ -185,7 +185,11 @@ async function handleApi(request, env, url, ctx) {
       const toDetect = [...new Set([...newVideoIds, ...undetected.results.map(r => r.video_id)])];
       if (toDetect.length > 0) {
         await detectShortsCategories(toDetect, effectiveEnv);
-        await fetchVideoDetails(toDetect, effectiveEnv);
+        const detailResult = await fetchVideoDetails(toDetect, effectiveEnv);
+        if (detailResult?.apiKeyError) return json({ ok: true, added, rssStatus, apiKeyError: true });
+      } else if (clientApiKey) {
+        const validResult = await validateApiKey(effectiveEnv);
+        if (validResult?.apiKeyError) return json({ ok: true, added, rssStatus, apiKeyError: true });
       }
       return json({ ok: true, added, rssStatus });
     }
@@ -454,8 +458,15 @@ function parseISODuration(iso) {
   return (parseInt(m[1] || 0) * 3600) + (parseInt(m[2] || 0) * 60) + parseInt(m[3] || 0);
 }
 
+async function validateApiKey(env) {
+  if (!env.YOUTUBE_API_KEY) return { ok: true };
+  const res = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=id&id=dQw4w9WgXcQ&key=${env.YOUTUBE_API_KEY}`);
+  if (res.status === 400 || res.status === 403) return { ok: false, apiKeyError: true };
+  return { ok: true };
+}
+
 async function fetchVideoDetails(videoIds, env) {
-  if (!env.YOUTUBE_API_KEY || videoIds.length === 0) return;
+  if (!env.YOUTUBE_API_KEY || videoIds.length === 0) return { ok: true };
   // Data API は最大50件/リクエスト
   const CHUNK = 50;
   for (let i = 0; i < videoIds.length; i += CHUNK) {
@@ -463,7 +474,10 @@ async function fetchVideoDetails(videoIds, env) {
     try {
       const apiUrl = `https://www.googleapis.com/youtube/v3/videos?part=statistics%2CcontentDetails&id=${chunk.join(',')}&key=${env.YOUTUBE_API_KEY}`;
       const res = await fetch(apiUrl);
-      if (!res.ok) continue;
+      if (!res.ok) {
+        if (res.status === 400 || res.status === 403) return { ok: false, apiKeyError: true };
+        continue;
+      }
       const data = await res.json();
       for (const item of (data.items ?? [])) {
         const viewCount = parseInt(item.statistics?.viewCount ?? 0);
@@ -474,6 +488,7 @@ async function fetchVideoDetails(videoIds, env) {
       }
     } catch { /* API障害時はスキップ */ }
   }
+  return { ok: true };
 }
 
 // ---------------------------------------------------------------------------

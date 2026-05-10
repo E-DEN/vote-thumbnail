@@ -1,5 +1,28 @@
 // ---
 const BASE = 'https://www.googleapis.com/youtube/v3';
+
+// --- トースト通知 ---
+function showToast(msg, isError) {
+  const container = document.getElementById('app-toast-container');
+  if (!container) return;
+  const toast = document.createElement('div');
+  toast.className = 'app-toast ' + (isError ? 'err' : 'ok');
+  const remove = function() { toast.classList.add('out'); setTimeout(function() { toast.remove(); }, 320); };
+  if (isError) {
+    const span = document.createElement('span');
+    span.textContent = msg;
+    const btn = document.createElement('button');
+    btn.className = 'app-toast-close';
+    btn.textContent = '\u00d7';
+    btn.addEventListener('click', remove);
+    toast.appendChild(span);
+    toast.appendChild(btn);
+  } else {
+    toast.textContent = msg;
+    setTimeout(remove, 3000);
+  }
+  container.appendChild(toast);
+}
 const LS_RATING = 'thumb-ranking-elo';
 const LS_VIDEOS = 'thumb-ranking-videos';
 const LS_CHANNELS = 'thumb-ranking-channels';
@@ -9,6 +32,14 @@ const LS_RSS_ONLY = 'yt-rss-only';
 
 function getStoredApiKey() { return localStorage.getItem(LS_API_KEY) || ''; }
 function getRssOnly() { return localStorage.getItem(LS_RSS_ONLY) === '1'; }
+let _apiKeyErrorState = false;
+function markApiKeyError() {
+  _apiKeyErrorState = true;
+  const ind = document.getElementById('apikeyIndicator');
+  if (ind) ind.style.background = 'var(--err)';
+  const badge = document.getElementById('apikeyNavBadge');
+  if (badge) badge.hidden = false;
+}
 function apiKeyHeaders() {
   const k = getStoredApiKey();
   return k ? { 'X-YouTube-Api-Key': k } : {};
@@ -17,7 +48,7 @@ function apiKeyHeaders() {
 let allVideos = [];
 let currentCat = 'videos';
 let currentView = 'welcome';
-let _prevView = 'vote';
+let _prevView = 'list';
 let _pollTimer = null;
 let ratingData = {};
 let voteTotal = 0;
@@ -337,7 +368,9 @@ async function apiFetch(url) {
   const res = await fetch(url);
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new Error(body.error?.message ?? res.status);
+    const e = new Error(body.error?.message ?? res.status);
+    if (res.status === 400 || res.status === 403) e.code = 'API_KEY_INVALID';
+    throw e;
   }
   return res.json();
 }
@@ -396,7 +429,9 @@ async function getAllVideoIds(apiKey, playlistId, onProgress) {
       // 404 = プレイリストが空または非公開 → 0件として正常扱い
       if (res.status === 404) break;
       const body = await res.json().catch(() => ({}));
-      throw new Error(body.error?.message ?? String(res.status));
+      const e = new Error(body.error?.message ?? String(res.status));
+      if (res.status === 400 || res.status === 403) e.code = 'API_KEY_INVALID';
+      throw e;
     }
     const data = await res.json();
     for (const item of data.items ?? []) ids.push(item.contentDetails.videoId);
@@ -1879,17 +1914,22 @@ async function selectChannel(key) {
     _playedPairs.clear();
     const counts = { videos: 0, shorts: 0, live: 0 };
     allVideos.forEach(v => { if (counts[v.category] !== undefined) counts[v.category]++; });
-    currentCat = counts.live >= counts.videos && counts.live >= counts.shorts ? 'live'
-               : counts.shorts > counts.videos ? 'shorts' : 'videos';
+    // currentCat を維持。ただし現在のカテゴリに動画が 0 件なら有効なカテゴリに切り替え
+    if (!counts[currentCat]) {
+      currentCat = counts.live >= counts.videos && counts.live >= counts.shorts ? 'live'
+                 : counts.shorts > counts.videos ? 'shorts' : 'videos';
+    }
     document.querySelectorAll('.cat-btn').forEach(b => {
       b.classList.toggle('active', b.dataset.cat === currentCat);
     });
-    showView('vote');
+    const keepView = ['vote', 'list', 'ranking'].includes(currentView) ? currentView : 'list';
+    showView(keepView);
   } catch (e) {
     console.error('[selectChannel] FETCH ERROR:', e);
     _currentVotePair = null;
     allVideos = [];
-    showView('vote');
+    const keepView = ['vote', 'list', 'ranking'].includes(currentView) ? currentView : 'list';
+    showView(keepView);
   }
 }
 
@@ -2208,7 +2248,7 @@ function closeReactionsMode() {
   var imgWrap = document.getElementById('reactionsImgWrap');
   if (imgWrap) imgWrap.classList.remove('heatmap-visible');
   if (currentView === 'reactions') {
-    showView(_prevView || 'vote');
+    showView(_prevView || 'list');
   }
 }
 
@@ -2325,6 +2365,7 @@ async function addChannelFromSidebarInput() {
     const handle = postBody.handle;
     const existing = Object.values(channels).find(ch => ch.handle === handle);
     if (existing) {
+      showToast(t('channel-already-added', { name: existing.displayName || existing.handle || handle }));
       statusEl.textContent = '';
       statusEl.className = 'sidebar-search-status';
       renderSidebar();
@@ -2380,7 +2421,12 @@ async function addChannelFromSidebarInput() {
         statusEl.textContent = count + ' 件取得完了';
         setTimeout(() => { statusEl.textContent = ''; }, 3000);
       } catch (importErr) {
-        statusEl.textContent = importErr.message;
+        if (importErr.code === 'API_KEY_INVALID') {
+          markApiKeyError();
+          statusEl.textContent = t('err-apikey-invalid-details');
+        } else {
+          statusEl.textContent = importErr.message;
+        }
         statusEl.className = 'sidebar-search-status error';
       }
     }
@@ -2464,16 +2510,21 @@ function init() {
       if (key !== currentChannelKey) await selectChannel(key);
       try {
         const res = await fetch('/api/channels/' + key + '/refresh', { method: 'POST', headers: apiKeyHeaders() });
+        const data = await res.json().catch(() => ({}));
         if (!res.ok) {
-          const data = await res.json().catch(() => ({}));
-          console.error('refresh failed:', res.status, data.error);
+          showToast(data.error || t('err-refresh-failed'), true);
+          return;
+        }
+        if (data.apiKeyError) {
+          markApiKeyError();
+          showToast(t('err-apikey-invalid-details'), true);
         }
         allVideos = await fetchChannelVideos(key);
         _currentVotePair = null;
         if (currentView === 'vote') renderVote();
         else if (currentView === 'list') renderList();
         else if (currentView === 'ranking') renderRanking();
-      } catch (e) { console.error('refresh:', e); }
+      } catch (e) { showToast(t('err-refresh-failed'), true); console.error('refresh:', e); }
     }
   });
   document.addEventListener('click', _hideChCtxMenu);
@@ -2780,7 +2831,9 @@ document.getElementById('sidebarSearchBtn').addEventListener('click', () => {
     });
     heading.textContent = t('settings-tab-' + name);
     heading.dataset.tab = name;
-    if (name === 'apikey') showDisplayMode();
+    if (name === 'apikey') {
+      showDisplayMode();
+    }
     if (name === 'lang' && typeof rebuildLangDialog === 'function') rebuildLangDialog();
   }
 
@@ -2840,31 +2893,43 @@ document.getElementById('sidebarSearchBtn').addEventListener('click', () => {
     const hasKey = !!getStoredApiKey();
     const rssOnly = getRssOnly();
     indicator.hidden = !hasKey && !rssOnly;
-    indicator.style.background = rssOnly ? 'var(--warn)' : 'var(--ok)';
+    if (_apiKeyErrorState) indicator.style.background = 'var(--err)';
+    else indicator.style.background = rssOnly ? 'var(--warn)' : 'var(--ok)';
   }
 
   function showDisplayMode() {
     input.value = getStoredApiKey() || '';
-    input.type = 'password';
+    input.classList.add('apikey-input--masked');
     toggleBtn.innerHTML = EYE;
-    statusEl.textContent = '';
-    statusEl.style.color = '';
+    const badge = document.getElementById('apikeyNavBadge');
+    if (_apiKeyErrorState) {
+      statusEl.textContent = t('err-apikey-invalid-details');
+      statusEl.style.color = 'var(--err)';
+      if (badge) badge.hidden = false;
+    } else {
+      statusEl.textContent = '';
+      statusEl.style.color = '';
+      if (badge) badge.hidden = true;
+    }
     deleteBtn.hidden = !getStoredApiKey();
   }
 
   toggleBtn.addEventListener('click', function() {
-    const isPassword = input.type === 'password';
-    input.type = isPassword ? 'text' : 'password';
-    toggleBtn.innerHTML = isPassword ? EYE_OFF : EYE;
+    const masked = input.classList.toggle('apikey-input--masked');
+    toggleBtn.innerHTML = masked ? EYE : EYE_OFF;
   });
 
   input.addEventListener('input', function() {
+    _apiKeyErrorState = false;
     statusEl.textContent = '';
     statusEl.style.color = '';
+    const badge = document.getElementById('apikeyNavBadge');
+    if (badge) badge.hidden = true;
   });
 
   deleteBtn.addEventListener('click', function() {
     localStorage.removeItem(LS_API_KEY);
+    _apiKeyErrorState = false;
     updateIndicator();
     showDisplayMode();
   });
@@ -2882,6 +2947,9 @@ document.getElementById('sidebarSearchBtn').addEventListener('click', () => {
       return;
     }
     localStorage.setItem(LS_API_KEY, val);
+    _apiKeyErrorState = false;
+    const badge = document.getElementById('apikeyNavBadge');
+    if (badge) badge.hidden = true;
     updateIndicator();
     deleteBtn.hidden = false;
     statusEl.textContent = t('settings-apikey-saved');
