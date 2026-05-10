@@ -831,6 +831,12 @@ header {
   position: relative;
   overflow: hidden;
   border-radius: 8px;
+  box-shadow: 0 0 0 0px var(--accent), 0 0 0px 0px rgba(0,176,244,0);
+  transition: box-shadow 0.2s ease;
+}
+.vote-card:hover .tilter__figure {
+  /* box-shadow: 0 0 0 2px rgba(255,255,255,0.85), 0 0 24px 6px rgba(255,255,255,0.30); */
+  box-shadow: 0 0 0 2px var(--accent), 0 0 20px 4px rgba(0,176,244,0.45);
 }
 /* banner */
 .vote-card .card-banner {
@@ -856,7 +862,12 @@ header {
   height: 200%;
   top: -50%;
   left: -50%;
-  background-image: linear-gradient(45deg, rgba(0,0,0,0.45) 0%, rgba(255,255,255,0.15) 50%, transparent 100%);
+  background-image: linear-gradient(45deg, rgba(0,0,0,0.20) 0%, rgba(255,255,255,0.05) 50%, transparent 100%);
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.vote-card:hover .tilter__deco--shine > div {
+  opacity: 1;
 }
 /* ホバー中はCSS transitionでtiltを滑らかに追従（カード間移動時の急な傾きを防ぐ） */
 .vote-card .tilter__figure.tilt-smooth,
@@ -889,6 +900,14 @@ header {
 }
 .vote-card.loser {
   opacity: 0.32;
+}
+.vote-card.winner .tilter__figure,
+.vote-card.loser .tilter__figure {
+  box-shadow: none;
+}
+.vote-card.winner .tilter__deco--shine > div,
+.vote-card.loser .tilter__deco--shine > div {
+  opacity: 0 !important;
 }
 @keyframes flash {
   0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 70%, transparent); }
