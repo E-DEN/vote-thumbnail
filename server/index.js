@@ -190,6 +190,48 @@ async function handleApi(request, env, url, ctx) {
       return json({ ok: true, added, rssStatus });
     }
 
+    // --- POST /api/channels/:channelId/videos/batch ---
+    // クライアントが YouTube API で取得した全動画データを一括保存する
+    const mBatch = path.match(/^\/channels\/(UC[\w-]{22})\/videos\/batch$/);
+    if (method === 'POST' && mBatch) {
+      const channelId = mBatch[1];
+      const body = await request.json().catch(() => null);
+      const videos = Array.isArray(body?.videos) ? body.videos : [];
+      if (videos.length === 0) return json({ ok: true, upserted: 0 });
+
+      const CHUNK = 50;
+      let upserted = 0;
+      for (let i = 0; i < videos.length; i += CHUNK) {
+        const chunk = videos.slice(i, i + CHUNK);
+        const stmts = chunk.map(v => {
+          const videoId   = String(v.id || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 11);
+          if (videoId.length !== 11) return null;
+          const title      = String(v.title      || '').slice(0, 500);
+          const thumb      = String(v.thumb      || '').slice(0, 1000);
+          const category   = ['videos', 'shorts', 'live'].includes(v.category) ? v.category : 'videos';
+          const duration   = parseInt(v.duration)   || 0;
+          const viewCount  = parseInt(v.viewCount)  || 0;
+          const published  = String(v.publishedAt  || '').slice(0, 30);
+          return env.DB.prepare(
+            `INSERT INTO videos (video_id, channel_id, title, thumbnail_url, category, duration, view_count, published_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+             ON CONFLICT(video_id) DO UPDATE SET
+               title          = excluded.title,
+               thumbnail_url  = excluded.thumbnail_url,
+               category       = excluded.category,
+               duration       = excluded.duration,
+               view_count     = excluded.view_count,
+               published_at   = excluded.published_at`
+          ).bind(videoId, channelId, title, thumb, category, duration, viewCount, published);
+        }).filter(Boolean);
+        if (stmts.length > 0) {
+          await env.DB.batch(stmts);
+          upserted += stmts.length;
+        }
+      }
+      return json({ ok: true, upserted });
+    }
+
     // --- GET /api/channels/:channelId/videos ---
     // category パラメータ省略時は全カテゴリを返す
     const mVideos = path.match(/^\/channels\/([\w.-]+)\/videos$/);

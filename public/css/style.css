@@ -192,11 +192,11 @@ header {
   font-size: 11px;
   color: var(--text-muted);
   padding: 4px 12px 0;
-  height: 20px;
+  min-height: 20px;
   flex-shrink: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  overflow: visible;
+  line-height: 1.4;
 }
 .sidebar-search-status.error { color: var(--err); }
 .sidebar-search-status.ok    { color: var(--ok); }

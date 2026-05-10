@@ -389,7 +389,14 @@ async function getAllVideoIds(apiKey, playlistId, onProgress) {
   do {
     const params = new URLSearchParams({ part: 'contentDetails', playlistId, maxResults: 50, key: apiKey });
     if (pageToken) params.set('pageToken', pageToken);
-    const data = await apiFetch(`${BASE}/playlistItems?${params}`);
+    const res = await fetch(`${BASE}/playlistItems?${params}`);
+    if (!res.ok) {
+      // 404 = プレイリストが空または非公開 → 0件として正常扱い
+      if (res.status === 404) break;
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error?.message ?? String(res.status));
+    }
+    const data = await res.json();
     for (const item of data.items ?? []) ids.push(item.contentDetails.videoId);
     pageToken = data.nextPageToken ?? '';
     onProgress(ids.length, data.pageInfo?.totalResults ?? 0);
@@ -430,6 +437,38 @@ async function getVideoDetails(apiKey, videoIds, onProgress) {
     onProgress(Math.min(i + 50, videoIds.length), videoIds.length);
   }
   return results;
+}
+
+// --- YouTube API で全動画を取得してサーバーに一括保存 ---
+async function importAllChannelVideos(channelId, onStatus) {
+  const apiKey = getStoredApiKey();
+  if (!apiKey) throw new Error('API キーが設定されていません（設定 > API Key）');
+
+  onStatus('プレイリスト ID を取得中...');
+  const { playlistId } = await getUploadsPlaylistId(apiKey, { type: 'id', value: channelId });
+
+  onStatus('動画 ID を取得中 (0 件)...');
+  const videoIds = await getAllVideoIds(apiKey, playlistId, (done, total) => {
+    onStatus('動画 ID を取得中 (' + done + ' / ' + total + ' 件)...');
+  });
+
+  onStatus('動画情報を取得中 (0 / ' + videoIds.length + ' 件)...');
+  const videos = await getVideoDetails(apiKey, videoIds, (done, total) => {
+    onStatus('動画情報を取得中 (' + done + ' / ' + total + ' 件)...');
+  });
+
+  const BATCH = 200;
+  for (let i = 0; i < videos.length; i += BATCH) {
+    const chunk = videos.slice(i, i + BATCH);
+    onStatus('サーバーに保存中 (' + Math.min(i + BATCH, videos.length) + ' / ' + videos.length + ' 件)...');
+    const res = await fetch('/api/channels/' + channelId + '/videos/batch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ videos: chunk }),
+    });
+    if (!res.ok) throw new Error('保存エラー: ' + res.status);
+  }
+  return videos.length;
 }
 
 // --- チャンネルデータをアプリにロード ---
@@ -2327,6 +2366,22 @@ async function addChannelFromSidebarInput() {
     statusEl.textContent = '';
     renderSidebar();
     await selectChannel(ch.channel_id);
+    // API キーが設定されていれば全件取得を自動実行
+    if (getStoredApiKey()) {
+      try {
+        const count = await importAllChannelVideos(ch.channel_id, msg => { statusEl.textContent = msg; });
+        allVideos = await fetchChannelVideos(ch.channel_id);
+        _currentVotePair = null;
+        if (currentView === 'vote') renderVote();
+        else if (currentView === 'list') renderList();
+        else if (currentView === 'ranking') renderRanking();
+        statusEl.textContent = count + ' 件取得完了';
+        setTimeout(() => { statusEl.textContent = ''; }, 3000);
+      } catch (importErr) {
+        statusEl.textContent = importErr.message;
+        statusEl.className = 'sidebar-search-status error';
+      }
+    }
   } catch (e) {
     statusEl.textContent = t('error-msg', { msg: e.message });
   } finally {
@@ -2482,6 +2537,7 @@ function init() {
     if (e.key === 'Enter') _submitCompactAdd();
     if (e.key === 'Escape') { e.stopPropagation(); _closeCompactPop(); }
   });
+  applyUrlDecodePaste(document.getElementById('sidebarCompactInput'));
   document.getElementById('sidebarCompactSubmit').addEventListener('click', _submitCompactAdd);
   document.addEventListener('click', function(e) {
     if (!_compactAddPop.hidden && !_compactAddPop.contains(e.target) && e.target !== _compactAddBtn) {
@@ -2652,21 +2708,26 @@ function init() {
   setInterval(_pollRefresh, 60000);
 }
 
+// --- URL デコードペースト（全チャンネルURL入力欄共通） ---
+function applyUrlDecodePaste(el) {
+  el.addEventListener('paste', e => {
+    const text = (e.clipboardData || window.clipboardData).getData('text');
+    let decoded;
+    try { decoded = decodeURIComponent(text); } catch { decoded = text; }
+    if (decoded !== text) {
+      e.preventDefault();
+      const start = el.selectionStart, end = el.selectionEnd;
+      el.value = el.value.slice(0, start) + decoded + el.value.slice(end);
+      el.selectionStart = el.selectionEnd = start + decoded.length;
+    }
+  });
+}
+applyUrlDecodePaste(document.getElementById('sidebarSearchInput'));
+applyUrlDecodePaste(document.getElementById('welcomeHandleInput'));
+
 // --- サイドバーイベント ---
 document.getElementById('sidebarSearchInput').addEventListener('keydown', e => {
   if (e.key === 'Enter') addChannelFromSidebarInput();
-});
-document.getElementById('sidebarSearchInput').addEventListener('paste', e => {
-  const text = (e.clipboardData || window.clipboardData).getData('text');
-  let decoded;
-  try { decoded = decodeURIComponent(text); } catch { decoded = text; }
-  if (decoded !== text) {
-    e.preventDefault();
-    const el = e.currentTarget;
-    const start = el.selectionStart, end = el.selectionEnd;
-    el.value = el.value.slice(0, start) + decoded + el.value.slice(end);
-    el.selectionStart = el.selectionEnd = start + decoded.length;
-  }
 });
 document.getElementById('sidebarSearchBtn').addEventListener('click', () => {
   addChannelFromSidebarInput();
@@ -2916,15 +2977,18 @@ document.getElementById('catFilter').addEventListener('click', e => {
   const COMPACT_THRESHOLD = 100;
   const COMPACT_WIDTH = 72;
 
-  function applyCompact(w) {
-    sidebar.classList.toggle('sidebar--compact', w <= COMPACT_WIDTH);
+  function applyCompact(w, rerender) {
+    const wasCompact = sidebar.classList.contains('sidebar--compact');
+    const isNowCompact = w <= COMPACT_WIDTH;
+    sidebar.classList.toggle('sidebar--compact', isNowCompact);
+    if (rerender && wasCompact !== isNowCompact) renderSidebar();
   }
 
   const saved = localStorage.getItem(STORAGE_KEY);
   if (saved) {
     const w = parseInt(saved);
     sidebar.style.width = w + 'px';
-    applyCompact(w);
+    applyCompact(w, false);
   }
 
   let startX, startW;
@@ -2941,7 +3005,7 @@ document.getElementById('catFilter').addEventListener('click', e => {
     if (w < COMPACT_THRESHOLD) w = COMPACT_WIDTH;
     w = Math.min(400, Math.max(COMPACT_WIDTH, w));
     sidebar.style.width = w + 'px';
-    applyCompact(w);
+    applyCompact(w, true);
   }
   function onUp() {
     handle.classList.remove('dragging');
