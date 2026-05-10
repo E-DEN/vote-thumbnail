@@ -1092,6 +1092,8 @@ function initSidebarDrag() {
   let _srcFolderId = null;
   let _pointerOffsetY = 0;
   let _dropInfo = null;
+  let _mergeTimer = null;
+  let _mergeTargetKey = null;
 
   const _ind = document.createElement('div');
   _ind.className = 'sidebar-drag-indicator';
@@ -1102,6 +1104,9 @@ function initSidebarDrag() {
     _ind.style.display = 'none';
     nav.querySelectorAll('.sidebar-merge-hover').forEach(el => el.classList.remove('sidebar-merge-hover'));
     nav.querySelectorAll('.sidebar-folder-drop-hover').forEach(el => el.classList.remove('sidebar-folder-drop-hover'));
+    nav.querySelectorAll('.merge-preview').forEach(el => el.classList.remove('merge-preview'));
+    clearTimeout(_mergeTimer); _mergeTimer = null;
+    _mergeTargetKey = null;
   }
 
   function _hitTest(mouseY) {
@@ -1119,8 +1124,12 @@ function initSidebarDrag() {
       if (mouseY < r.top || mouseY > r.bottom) continue;
       const relY = (mouseY - r.top) / r.height;
       const folderId = parentChildren ? parentChildren.dataset.folderId : null;
-      if (relY < 0.3) return { action: 'before', targetKey: el.dataset.key, folderId, el };
-      if (relY > 0.7) return { action: 'after', targetKey: el.dataset.key, folderId, el };
+      // merge-preview中は全体をmergeゾーンとして扱う
+      if (el.classList.contains('merge-preview') && _dragType === 'channel') {
+        return { action: 'merge', targetKey: el.dataset.key, folderId, el };
+      }
+      if (relY < 0.2) return { action: 'before', targetKey: el.dataset.key, folderId, el };
+      if (relY > 0.8) return { action: 'after', targetKey: el.dataset.key, folderId, el };
       if (_dragType === 'channel') return { action: 'merge', targetKey: el.dataset.key, folderId, el };
       return { action: 'before', targetKey: el.dataset.key, folderId, el };
     }
@@ -1129,7 +1138,12 @@ function initSidebarDrag() {
       if (_dragType === 'folder' && folderId === _srcFolderId) continue;
       const r = el.getBoundingClientRect();
       if (mouseY < r.top || mouseY > r.bottom) continue;
-      if (_dragType === 'channel') return { action: 'add-to-folder', folderId, el };
+      if (_dragType === 'channel') {
+        const relY = (mouseY - r.top) / r.height;
+        if (relY < 0.25) return { action: 'channel-before-folder', folderId, el };
+        if (relY > 0.75) return { action: 'channel-after-folder', folderId, el };
+        return { action: 'add-to-folder', folderId, el };
+      }
       const wrap = el.closest('.sidebar-folder');
       return (mouseY - r.top) / r.height < 0.5
         ? { action: 'folder-before', folderId, el }
@@ -1151,21 +1165,38 @@ function initSidebarDrag() {
   }
 
   function _showDrop(mouseY) {
+    const prev = _dropInfo;
+    const newInfo = _hitTest(mouseY);
+    // 同じmergeターゲットなら状態を維持
+    if (prev && prev.action === 'merge' && newInfo && newInfo.action === 'merge' && newInfo.targetKey === prev.targetKey) {
+      _dropInfo = newInfo;
+      _ind.style.display = 'none';
+      return;
+    }
     _clearState();
-    _dropInfo = _hitTest(mouseY);
+    _dropInfo = newInfo;
     if (!_dropInfo) return;
     const { action, el } = _dropInfo;
     const indStyle = (r, atTop) =>
       `display:block;position:fixed;left:${r.left}px;top:${atTop ? r.top - 2 : r.bottom - 1}px;width:${r.width}px;height:3px;background:var(--accent,#4f9cf9);border-radius:2px;pointer-events:none;z-index:9998;`;
     if (action === 'before') _ind.style.cssText = indStyle(el.getBoundingClientRect(), true);
     else if (action === 'after') _ind.style.cssText = indStyle(el.getBoundingClientRect(), false);
-    else if (action === 'merge') el.classList.add('sidebar-merge-hover');
+    else if (action === 'merge') {
+      el.classList.add('sidebar-merge-hover');
+      _mergeTargetKey = _dropInfo.targetKey;
+      _mergeTimer = setTimeout(() => { el.classList.add('merge-preview'); }, 100);
+    }
     else if (action === 'add-to-folder') {
       const h = nav.querySelector(`.sidebar-folder-header[data-folder-id="${_dropInfo.folderId}"]`);
       if (h) h.classList.add('sidebar-folder-drop-hover');
     }
     else if (action === 'folder-before') _ind.style.cssText = indStyle(el.getBoundingClientRect(), true);
     else if (action === 'folder-after') _ind.style.cssText = indStyle(el.getBoundingClientRect(), false);
+    else if (action === 'channel-before-folder') _ind.style.cssText = indStyle(el.getBoundingClientRect(), true);
+    else if (action === 'channel-after-folder') {
+      const wrap = el.closest('.sidebar-folder');
+      _ind.style.cssText = indStyle((wrap || el).getBoundingClientRect(), false);
+    }
     else if (action === 'end') {
       const navR = nav.getBoundingClientRect();
       let bottom = navR.top;
@@ -1238,6 +1269,12 @@ function initSidebarDrag() {
         const f = sidebarOrder.find(i => i.type === 'folder' && i.id === folderId);
         if (f && !f.children.includes(srcKey)) f.children.push(srcKey);
         else if (!f) sidebarOrder.push({ type: 'channel', key: srcKey });
+      } else if (action === 'channel-before-folder') {
+        const ti = sidebarOrder.findIndex(i => i.type === 'folder' && i.id === folderId);
+        sidebarOrder.splice(ti < 0 ? 0 : ti, 0, { type: 'channel', key: srcKey });
+      } else if (action === 'channel-after-folder') {
+        const ti = sidebarOrder.findIndex(i => i.type === 'folder' && i.id === folderId);
+        sidebarOrder.splice(ti < 0 ? sidebarOrder.length : ti + 1, 0, { type: 'channel', key: srcKey });
       } else {
         sidebarOrder.push({ type: 'channel', key: srcKey });
       }
@@ -1277,6 +1314,7 @@ function initSidebarDrag() {
     if (_ghost) { _ghost.remove(); _ghost = null; }
     if (_draggedEl) { _draggedEl.style.opacity = ''; _draggedEl = null; }
     _clearState();
+    nav.classList.remove('sidebar--dragging');
     _dragType = _srcKey = _srcFolderId = _dropInfo = _pending = null;
   }
 
@@ -1291,6 +1329,7 @@ function initSidebarDrag() {
     _ghost.style.cssText = `position:fixed;top:${rect.top}px;left:${rect.left}px;width:${rect.width}px;pointer-events:none;z-index:9999;opacity:0.85;box-shadow:0 6px 24px rgba(0,0,0,0.55);border-radius:8px;transition:none;`;
     document.body.appendChild(_ghost);
     unit.style.opacity = '0.2';
+    nav.classList.add('sidebar--dragging');
     document.addEventListener('mousemove', _onMove);
     document.addEventListener('mouseup', _onUp);
     document.addEventListener('touchmove', _onTouchMove, { passive: false });
