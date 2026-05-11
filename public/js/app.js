@@ -2647,7 +2647,7 @@ function closeThumbModal() {
 
 // ギャラリーからリアクション全画面で開く
 function openModalReactions(v) {
-  _prevView = currentView;
+  if (currentView !== 'reactions') _prevView = currentView;
   var img = document.getElementById('reactionsImg');
   img.onload = function() { adjustReactionsLayers(); startReactionsResizeObserver(); };
   img.src = v.thumb;
@@ -2655,11 +2655,44 @@ function openModalReactions(v) {
     this.src = 'https://i.ytimg.com/vi/' + v.id + '/hqdefault.jpg';
     adjustReactionsLayers();
   };
-  document.getElementById('reactionsYtBtn').href = v.url || 'https://www.youtube.com/watch?v=' + v.id;
-  document.getElementById('reactionsTitle').textContent = v.title || '';
+  var ytUrl = v.url || 'https://www.youtube.com/watch?v=' + v.id;
+  var titleEl = document.getElementById('reactionsTitle');
+  titleEl.textContent = v.title || '';
+  titleEl.href = ytUrl;
   document.getElementById('reactionsVideoMeta').innerHTML = _buildVideoMeta(v);
   openReactionsMode(v.id);
   showView('reactions');
+  renderReactionsPlaylist(v.id);
+}
+
+function renderReactionsPlaylist(selectedId) {
+  var pool = _buildSortedPool();
+  var body = document.getElementById('reactionsPlaylistBody');
+  var countEl = document.getElementById('reactionsPlaylistCount');
+  if (!body) return;
+  body.innerHTML = '';
+  if (countEl) countEl.textContent = pool.length;
+  pool.forEach(function(v, i) {
+    var card = document.createElement('div');
+    card.className = 'rs-playlist-card' + (v.id === selectedId ? ' selected' : '');
+    var metaHtml = _buildVideoMeta(v);
+    card.innerHTML =
+      '<span class="rs-playlist-num">' + (i + 1) + '</span>' +
+      '<div class="rs-playlist-thumb">' +
+        '<img src="' + v.thumb + '" alt="" loading="lazy" referrerpolicy="no-referrer"' +
+        ' onerror="this.src=\'https://i.ytimg.com/vi/' + v.id + '/hqdefault.jpg\'">' +
+      '</div>' +
+      '<div class="rs-playlist-info">' +
+        '<div class="rs-playlist-title">' + v.title + '</div>' +
+        (metaHtml ? '<div class="rs-playlist-meta gallery-meta">' + metaHtml + '</div>' : '') +
+      '</div>';
+    card.addEventListener('click', (function(vid) {
+      return function() { openModalReactions(vid); };
+    }(v)));
+    body.appendChild(card);
+  });
+  var selected = body.querySelector('.selected');
+  if (selected) selected.scrollIntoView({ block: 'nearest' });
 }
 
 document.getElementById('modalClose').addEventListener('click', closeThumbModal);
@@ -2695,9 +2728,7 @@ function showView(view) {
     }
   });
   document.querySelectorAll('.ch-tab').forEach(btn => {
-    if (view !== 'reactions') {
-      btn.classList.toggle('active', btn.dataset.view === view);
-    }
+    btn.classList.toggle('active', btn.dataset.view === view);
   });
   if (view === 'vote') renderVote();
   else if (view === 'list') renderList();
@@ -2853,15 +2884,21 @@ function init() {
     renderList();
   });
 
-  // ソートボタン（全モード共通）
+  // ソートボタン（全モード共通: 一覧+プレイリスト）
   document.querySelectorAll('.shorts-sort-btn').forEach(function(btn) {
     btn.addEventListener('click', function() {
       _listSortOrder = btn.dataset.sort;
       localStorage.setItem(LS_SORT, _listSortOrder);
       document.querySelectorAll('.shorts-sort-btn').forEach(function(b) {
-        b.classList.toggle('active', b === btn);
+        b.classList.toggle('active', b.dataset.sort === _listSortOrder);
       });
-      if (_listMode === 'grid') { _renderGrid(); } else { renderList(); }
+      if (currentView === 'reactions') {
+        renderReactionsPlaylist(_reactionsCurrentVideoId);
+      } else if (_listMode === 'grid') {
+        _renderGrid();
+      } else {
+        renderList();
+      }
     });
   });
 
@@ -3081,7 +3118,7 @@ function init() {
       imgWrap.classList.remove('heatmap-visible');
     }
   });
-  document.getElementById('reactionsBackBtn').addEventListener('click', closeReactionsMode);
+  // reactionsBackBtn removed (reactions is now a tab)
 
   // ReactionPin: カラースウォッチ（統一パレット）
   document.querySelectorAll('.rs-swatch').forEach(function(btn) {
@@ -3100,10 +3137,20 @@ function init() {
     });
   });
 
-  // ReactionPin: imgWrap クリックで pin 配置
+  // ReactionPin: imgWrap クリックで pin 配置（好きピン OFF 時はクリックで自動 ON）
   var _rsImgWrap = document.getElementById('reactionsImgWrap');
   _rsImgWrap.addEventListener('click', function(e) {
-    if (currentView !== 'reactions' || !_reactionsPinsVisible) return;
+    if (currentView !== 'reactions') return;
+    if (!_reactionsPinsVisible) {
+      // 好きピンをONにする
+      _reactionsPinsVisible = true;
+      localStorage.setItem(LS_PINS_VISIBLE, '1');
+      document.getElementById('reactionsPinsModeBtn').classList.add('active');
+      document.getElementById('reactionsPinsLayer').style.display = 'block';
+      startReactionsLoop();
+      var saved = _reactionsMyPins[_reactionsCurrentVideoId];
+      if (saved) showMyReactionsPin(saved.x, saved.y, true);
+    }
     var rect = _rsImgWrap.getBoundingClientRect();
     var cx = e.clientX - rect.left;
     var cy = e.clientY - rect.top;
@@ -3400,7 +3447,19 @@ document.getElementById('sidebarSearchBtn').addEventListener('click', () => {
 // --- チャンネルヘッダーのタブ ---
 document.getElementById('channelHeader').addEventListener('click', e => {
   const tab = e.target.closest('.ch-tab');
-  if (tab) showView(tab.dataset.view);
+  if (!tab) return;
+  const view = tab.dataset.view;
+  if (view === 'reactions') {
+    if (!_reactionsCurrentVideoId) {
+      const pool = filteredVideos();
+      if (pool.length > 0) openModalReactions(pool[0]);
+      return;
+    }
+    showView('reactions');
+    renderReactionsPlaylist(_reactionsCurrentVideoId);
+    return;
+  }
+  showView(view);
 });
 
 // --- カテゴリフィルタ ---
@@ -3413,6 +3472,7 @@ document.getElementById('catFilter').addEventListener('click', e => {
   if (currentView === 'vote') renderVote();
   else if (currentView === 'list') renderList();
   else if (currentView === 'ranking') renderRanking();
+  else if (currentView === 'reactions') renderReactionsPlaylist(_reactionsCurrentVideoId);
 });
 
 // --- チュートリアル ---
@@ -3476,32 +3536,43 @@ document.getElementById('catFilter').addEventListener('click', e => {
   }
 })();
 
-// --- リアクションサイドバーリサイズ ---
+// --- リアクションプレイリストリサイズ ---
 (function() {
-  const handle  = document.getElementById('rsSidebarResizeHandle');
-  const sidebar = document.querySelector('.rs-sidebar');
-  const STORAGE_KEY = 'rs-sidebar-width';
-  const MIN_W = 120, MAX_W = 360;
+  const handle   = document.querySelector('.rs-playlist-resize-handle');
+  const playlist = document.querySelector('.rs-playlist');
+  if (!handle || !playlist) return;
+  const STORAGE_KEY = 'rs-playlist-width';
+  const MIN_W = 160, MAX_W = 400;
 
   const saved = localStorage.getItem(STORAGE_KEY);
-  if (saved) sidebar.style.width = Math.min(MAX_W, Math.max(MIN_W, parseInt(saved))) + 'px';
+  if (saved) playlist.style.width = Math.min(MAX_W, Math.max(MIN_W, parseInt(saved))) + 'px';
 
-  let startX, startW;
-  handle.addEventListener('mousedown', e => {
+  let startX, startW, pendingW = null, rafId = null;
+  handle.addEventListener('mousedown', function(e) {
     e.preventDefault();
     startX = e.clientX;
-    startW = sidebar.offsetWidth;
+    startW = playlist.offsetWidth;
     handle.classList.add('dragging');
+    playlist.style.willChange = 'width';
     document.addEventListener('mousemove', onMove);
     document.addEventListener('mouseup', onUp);
   });
   function onMove(e) {
-    const w = Math.min(MAX_W, Math.max(MIN_W, startW - (e.clientX - startX)));
-    sidebar.style.width = w + 'px';
+    pendingW = Math.min(MAX_W, Math.max(MIN_W, startW - (e.clientX - startX)));
+    if (!rafId) rafId = requestAnimationFrame(applyWidth);
+  }
+  function applyWidth() {
+    rafId = null;
+    if (pendingW !== null) {
+      playlist.style.width = pendingW + 'px';
+      pendingW = null;
+    }
   }
   function onUp() {
     handle.classList.remove('dragging');
-    localStorage.setItem(STORAGE_KEY, sidebar.offsetWidth);
+    playlist.style.willChange = '';
+    if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
+    localStorage.setItem(STORAGE_KEY, playlist.offsetWidth);
     document.removeEventListener('mousemove', onMove);
     document.removeEventListener('mouseup', onUp);
   }

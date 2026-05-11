@@ -5,15 +5,15 @@
   --surface2:   #35373c;
   --accent:     #00b0f4;
   --accent2:    #38d9f5;
-  --ok:         #57f287;
-  --err:        #f04747;
-  --warn:       #e8a000;
+  --ok:         #23a55a;
+  --err:        #f23f43;
+  --warn:       #f0b232;
   --text:       #dbdee1;
   --text-muted: #80848e;
   --border:     #3f4147;
   --shadow:     rgba(0,0,0,0.55);
   --drop-hover: rgba(0,176,244,0.09);
-  --drop-ok:    rgba(87,242,135,0.08);
+  --drop-ok:    rgba(35,165,90,0.10);
 }
 :root[data-theme="light"] {
   --bg:         #f2f3f5;
@@ -2530,24 +2530,28 @@ header {
   flex-direction: row;
   align-items: stretch;
   position: relative;
+  scrollbar-gutter: auto;
 }
 .rs-main {
   flex: 1;
-  min-width: 0;
+  min-width: 320px;
   position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   padding: 16px;
   gap: 12px;
+  overflow-y: auto;
+  scrollbar-width: none;
 }
+.rs-main::-webkit-scrollbar { display: none; }
 .rs-img-wrap {
   position: relative;
   border-radius: 14px;
   overflow: hidden;
   box-shadow: 0 8px 40px rgba(0,0,0,0.75), 0 0 0 1px rgba(255,255,255,0.06);
-  width: min(95%, calc((100vh - 130px) * 0.95 * 16 / 9));
+  width: min(95%, calc((100vh - 160px) * 16 / 9));
   will-change: transform;
   transform: translateZ(0);
   isolation: isolate;
@@ -2659,8 +2663,8 @@ header {
   line-height: 1.4;
 }
 .rs-video-info {
-  width: min(95%, calc((100vh - 130px) * 0.95 * 16 / 9));
-  padding: 10px 2px 0;
+  width: min(95%, calc((100vh - 160px) * 16 / 9));
+  padding: 4px 2px 0;
 }
 .rs-video-title {
   font-size: 14px;
@@ -2672,7 +2676,11 @@ header {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  text-decoration: none;
+  cursor: pointer;
+  transition: color 0.15s;
 }
+a.rs-video-title:hover { color: var(--accent); }
 .rs-video-meta {
   display: flex;
   gap: 8px;
@@ -2804,6 +2812,189 @@ header {
   transition: color 0.15s, border-color 0.15s;
 }
 .rs-yt-btn:hover { color: var(--text); border-color: var(--text-muted); }
+/* toolbar variant: inline, no padding */
+.rs-yt-btn--toolbar {
+  display: inline-block;
+  padding: 4px 10px;
+  white-space: nowrap;
+  margin-left: auto;
+}
+
+/* インラインツールバー (rs-mainの画像下) */
+.rs-toolbar {
+  width: min(95%, calc((100vh - 160px) * 16 / 9));
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 2px 0;
+}
+.rs-toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.rs-toolbar-group--slider {
+  gap: 6px;
+}
+.rs-toolbar-sep {
+  width: 1px;
+  height: 16px;
+  background: var(--border);
+  flex-shrink: 0;
+}
+.rs-toolbar-label {
+  font-size: 11px;
+  color: var(--text);
+  white-space: nowrap;
+}
+/* toolbar context: mode buttons inline */
+.rs-toolbar .rs-mode-btn {
+  width: auto;
+  padding: 4px 10px;
+}
+.rs-toolbar .rs-slider {
+  width: 80px;
+}
+
+/* プレイリストパネル (reactionsScreen 右) */
+.rs-playlist {
+  position: relative;
+  flex-shrink: 0;
+  width: 220px;
+  min-width: 160px;
+  max-width: 400px;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+}
+.rs-playlist-resize-handle {
+  position: absolute;
+  top: 0;
+  left: -3px;
+  width: 6px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 10;
+  background: transparent;
+  transition: background 0.15s;
+}
+.rs-playlist-resize-handle:hover,
+.rs-playlist-resize-handle.dragging {
+  background: var(--accent);
+  opacity: 0.5;
+}
+.rs-playlist-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.rs-playlist-count {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 400;
+}
+.rs-playlist-sort {
+  display: flex;
+  gap: 4px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+.rs-playlist-body {
+  flex: 1;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+.rs-playlist-body::-webkit-scrollbar { width: 4px; }
+.rs-playlist-body::-webkit-scrollbar-track { background: transparent; }
+.rs-playlist-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+.rs-playlist-card {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--border);
+  transition: background 0.15s;
+}
+.rs-playlist-card:hover { background: var(--surface2); }
+.rs-playlist-card.selected { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.rs-playlist-num {
+  font-size: 11px;
+  color: var(--text);
+  min-width: 18px;
+  text-align: right;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+.rs-playlist-thumb {
+  position: relative;
+  flex-shrink: 0;
+  width: 72px;
+  height: 40px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--surface2);
+}
+.rs-playlist-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.rs-playlist-dur {
+  position: absolute;
+  bottom: 2px;
+  right: 3px;
+  font-size: 10px;
+  background: rgba(0,0,0,0.75);
+  color: #fff;
+  border-radius: 2px;
+  padding: 0 3px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.5;
+}
+.rs-playlist-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.rs-playlist-title {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.rs-playlist-card:hover .rs-playlist-title,
+.rs-playlist-card.selected .rs-playlist-title { color: var(--text); }
+.rs-playlist-meta {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.rs-playlist-meta .gallery-meta-item {
+  color: var(--text-muted);
+  font-size: 10px;
+}
+.rs-playlist-meta .gallery-meta-item svg {
+  width: 10px;
+  height: 10px;
+}
 
 /* トースト通知 */
 #app-toast-container {

@@ -68,6 +68,7 @@
           <button class="ch-tab active" data-view="list" data-i18n="tab-list">一覧</button>
           <button class="ch-tab" data-view="vote" data-i18n="tab-vote">投票</button>
           <button class="ch-tab" data-view="ranking" data-i18n="tab-ranking">ランキング</button>
+          <button class="ch-tab" data-view="reactions" data-i18n="tab-reactions">リアクション</button>
         </div>
         <div class="cat-filter" id="catFilter" style="display:none">
           <button class="cat-btn active" data-cat="videos" data-i18n="cat-videos">動画</button>
@@ -145,7 +146,6 @@
       <!-- リアクション画面 -->
       <div id="reactionsScreen" class="screen" style="display:none">
         <div class="rs-main">
-        <button class="rs-back-btn" id="reactionsBackBtn" data-i18n="reactions-back">戻る</button>
         <div class="rs-img-wrap" id="reactionsImgWrap">
           <img id="reactionsImg" src="" alt="" referrerpolicy="no-referrer">
           <div class="reactions-heatmap-layer" id="reactionsHeatmapLayer"></div>
@@ -161,44 +161,44 @@
             <span class="reactions-my-pin-label" data-i18n="reactions-you">あなた</span>
           </div>
         </div><!-- /.rs-img-wrap -->
+        <div class="rs-toolbar">
+          <div class="rs-toolbar-group">
+            <button class="rs-mode-btn active" id="reactionsPinsModeBtn" data-i18n="reactions-pins">Pins</button>
+            <button class="rs-mode-btn" id="reactionsHeatmapModeBtn" data-i18n="reactions-heatmap">Heatmap</button>
+          </div>
+          <div class="rs-toolbar-sep"></div>
+          <div class="rs-toolbar-group">
+            <button class="rs-swatch active" data-color="#ec4899" style="background:#ec4899"></button>
+            <button class="rs-swatch" data-color="#00b0f4" style="background:#00b0f4"></button>
+            <button class="rs-swatch" data-color="#57f287" style="background:#57f287"></button>
+            <button class="rs-swatch" data-color="#f59e0b" style="background:#f59e0b"></button>
+            <button class="rs-swatch" data-color="#a855f7" style="background:#a855f7"></button>
+          </div>
+          <div class="rs-toolbar-sep"></div>
+          <div class="rs-toolbar-group rs-toolbar-group--slider">
+            <span class="rs-toolbar-label" data-i18n="reactions-max-pins">最大ピン数</span>
+            <input type="range" id="reactionsPinCountSlider" class="rs-slider" min="5" max="30" step="5" value="10">
+            <span class="rs-slider-val" id="reactionsPinCountVal">10</span>
+          </div>
+        </div>
         <div class="rs-video-info">
-          <div class="rs-video-title" id="reactionsTitle"></div>
+          <a class="rs-video-title" id="reactionsTitle" href="#" target="_blank" rel="noopener noreferrer"></a>
           <div class="rs-video-meta" id="reactionsVideoMeta"></div>
         </div>
         </div><!-- /.rs-main -->
-        <div class="rs-sidebar">
-          <div class="rs-sidebar-resize-handle" id="rsSidebarResizeHandle"></div>
-          <div class="rs-sep"></div>
-          <div class="rs-card">
-            <div class="rs-card-title" data-i18n="reactions-mode-label">表示</div>
-            <div class="rs-mode-row">
-              <button class="rs-mode-btn active" id="reactionsPinsModeBtn" data-i18n="reactions-pins">Pins</button>
-              <button class="rs-mode-btn" id="reactionsHeatmapModeBtn" data-i18n="reactions-heatmap">Heatmap</button>
-            </div>
+        <div class="rs-playlist">
+          <div class="rs-playlist-resize-handle"></div>
+          <div class="rs-playlist-header">
+            <span data-i18n="tab-list">一覧</span>
+            <span class="rs-playlist-count" id="reactionsPlaylistCount"></span>
           </div>
-          <div class="rs-sep"></div>
-          <div class="rs-card">
-            <div class="rs-card-title" data-i18n="reactions-color">カラー</div>
-            <div class="rs-swatch-row">
-              <button class="rs-swatch active" data-color="#ec4899" style="background:#ec4899"></button>
-              <button class="rs-swatch" data-color="#00b0f4" style="background:#00b0f4"></button>
-              <button class="rs-swatch" data-color="#57f287" style="background:#57f287"></button>
-              <button class="rs-swatch" data-color="#f59e0b" style="background:#f59e0b"></button>
-              <button class="rs-swatch" data-color="#a855f7" style="background:#a855f7"></button>
-            </div>
+          <div class="rs-playlist-sort" id="reactionsPlaylistSort">
+            <button class="shorts-sort-btn" data-sort="views" data-i18n="sort-views"></button>
+            <button class="shorts-sort-btn" data-sort="date" data-i18n="sort-date"></button>
+            <button class="shorts-sort-btn" data-sort="rating" data-i18n="sort-rating"></button>
+            <button class="shorts-sort-btn" data-sort="random" data-i18n="sort-random"></button>
           </div>
-          <div class="rs-sep"></div>
-          <div class="rs-card">
-            <div class="rs-ctrl-row">
-              <div class="rs-card-title" data-i18n="reactions-max-pins">最大ピン数</div>
-              <span class="rs-slider-val" id="reactionsPinCountVal">10</span>
-            </div>
-            <input type="range" id="reactionsPinCountSlider" class="rs-slider" min="5" max="30" step="5" value="10">
-          </div>
-          <div style="flex:1"></div>
-          <div class="rs-card rs-card--footer">
-            <a class="rs-yt-btn" id="reactionsYtBtn" href="#" target="_blank" rel="noopener noreferrer" data-i18n="yt-btn">YouTube</a>
-          </div>
+          <div class="rs-playlist-body" id="reactionsPlaylistBody"></div>
         </div>
       </div>
 
