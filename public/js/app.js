@@ -56,8 +56,8 @@ let channels = {};
 let currentChannelKey = null;
 let sidebarOrder = [];
 let _chTooltip = null;
-let _ctxMenu = null;
-let _ctxMenuKey = null;
+let _shiftHeld = false;
+const _refreshingKeys = new Set();
 
 // --- ReactionPin グローバル状態 ---
 var _reactionsSessionId = (function() {
@@ -1070,20 +1070,69 @@ function getTopRankedVideo(key) {
 // --- サイドバー ---
 // コンパクト状態を維持
 
-function _hideChCtxMenu() {
-  if (_ctxMenu) _ctxMenu.hidden = true;
-  _ctxMenuKey = null;
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Shift' || _shiftHeld) return;
+  _shiftHeld = true;
+  const hov = document.querySelector('.ch-action-delete:hover');
+  if (hov) _setChDelBtnIcon(hov, 'trash-2');
+});
+document.addEventListener('keyup', e => {
+  if (e.key !== 'Shift') return;
+  _shiftHeld = false;
+  const hov = document.querySelector('.ch-action-delete:hover');
+  if (hov) _setChDelBtnIcon(hov, 'x');
+});
+
+function _setChDelBtnIcon(btn, icon) {
+  if (!btn) return;
+  btn.innerHTML = `<i data-lucide="${icon}"></i>`;
+  if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [btn] });
 }
 
-function _showChCtxMenu(key, x, y) {
-  _ctxMenuKey = key;
-  if (!_ctxMenu) return;
-  _ctxMenu.hidden = false;
-  // 画面端に収まるよう位置調整
-  const mw = _ctxMenu.offsetWidth || 160;
-  const mh = _ctxMenu.offsetHeight || 80;
-  _ctxMenu.style.left = (x + mw > window.innerWidth ? x - mw : x) + 'px';
-  _ctxMenu.style.top  = (y + mh > window.innerHeight ? y - mh : y) + 'px';
+function _startRefreshSpinner(btn) {
+  btn.innerHTML = '<span class="ch-spinner"></span>';
+  btn.disabled = true;
+}
+
+function _stopRefreshSpinner(btn) {
+  btn.innerHTML = '<i data-lucide="refresh-cw"></i>';
+  btn.disabled = false;
+  if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [btn] });
+}
+
+function _showChDelPopup(anchorBtn, msg, onConfirm, okClass) {
+  document.querySelectorAll('.ch-del-popup').forEach(p => p.remove());
+  const popup = document.createElement('div');
+  popup.className = 'ch-del-popup';
+  const msgEl = document.createElement('span');
+  msgEl.className = 'ch-del-popup-msg';
+  msgEl.textContent = msg;
+  const btnRow = document.createElement('div');
+  btnRow.className = 'ch-del-popup-btns';
+  const okBtn = document.createElement('button');
+  okBtn.className = 'ch-del-popup-ok' + (okClass ? ' ' + okClass : '');
+  okBtn.textContent = okClass === 'ch-del-popup-ok--refresh' ? t('folder-refresh-confirm-btn') : t('ch-delete-confirm-btn');
+  const cancelBtn = document.createElement('button');
+  cancelBtn.className = 'ch-del-popup-cancel';
+  cancelBtn.textContent = t('ch-delete-cancel-btn');
+  btnRow.append(okBtn, cancelBtn);
+  popup.append(msgEl, btnRow);
+  document.body.appendChild(popup);
+  const rect = anchorBtn.getBoundingClientRect();
+  const pw = popup.offsetWidth, ph = popup.offsetHeight;
+  let left = rect.right - pw;
+  let top = rect.bottom + 4;
+  if (left < 4) left = 4;
+  if (top + ph > window.innerHeight - 4) top = rect.top - ph - 4;
+  popup.style.left = left + 'px';
+  popup.style.top = top + 'px';
+  const close = () => popup.remove();
+  okBtn.addEventListener('click', e => { e.stopPropagation(); close(); onConfirm(); });
+  cancelBtn.addEventListener('click', e => { e.stopPropagation(); close(); });
+  setTimeout(() => {
+    const outside = e => { if (!popup.contains(e.target)) { close(); document.removeEventListener('click', outside, true); } };
+    document.addEventListener('click', outside, true);
+  }, 0);
 }
 
 function deleteChannel(key) {
@@ -1116,6 +1165,16 @@ function deleteChannel(key) {
   renderSidebar();
 }
 
+function deleteFolder(folderId) {
+  const idx = sidebarOrder.findIndex(item => item.type === 'folder' && item.id === folderId);
+  if (idx === -1) return;
+  const folder = sidebarOrder[idx];
+  const channelItems = folder.children.map(key => ({ type: 'channel', key }));
+  sidebarOrder.splice(idx, 1, ...channelItems);
+  saveSidebarOrder();
+  renderSidebar();
+}
+
 function _calcSidebarSlide(el) {
   el.querySelectorAll('.name-inner').forEach(inner => {
     const outer = inner.parentElement;
@@ -1141,10 +1200,59 @@ function buildChannelItem(ch) {
     ? `<img class="sidebar-ch-avatar" src="${ch.avatar}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'">`
     : `<div class="sidebar-ch-avatar"></div>`;
   item.innerHTML = `${avatarEl}<span class="sidebar-ch-name"><span class="name-inner">${name}</span></span>`;
+
+  // アクションボタン
+  const actions = document.createElement('div');
+  actions.className = 'ch-actions';
+
+  const refreshBtn = document.createElement('button');
+  refreshBtn.className = 'ch-action-btn ch-action-refresh';
+  refreshBtn.title = t('ch-refresh-title');
+  refreshBtn.innerHTML = '<i data-lucide="refresh-cw"></i>';
+
+  const deleteBtn = document.createElement('button');
+  deleteBtn.className = 'ch-action-btn ch-action-delete';
+  deleteBtn.title = t('ch-delete-title');
+  deleteBtn.innerHTML = '<i data-lucide="x"></i>';
+
+  actions.append(refreshBtn, deleteBtn);
+  item.appendChild(actions);
+  if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [refreshBtn, deleteBtn] });
+
   item.addEventListener('click', () => selectChannel(ch.key));
-  item.addEventListener('contextmenu', e => {
-    e.preventDefault();
-    _showChCtxMenu(ch.key, e.clientX, e.clientY);
+
+  refreshBtn.addEventListener('click', async e => {
+    e.stopPropagation();
+    const key = ch.key;
+    if (_refreshingKeys.has(key)) return;
+    _refreshingKeys.add(key);
+    if (key !== currentChannelKey) await selectChannel(key);
+    _startRefreshSpinner(refreshBtn);
+    try {
+      const res = await fetch('/api/channels/' + key + '/refresh', { method: 'POST', headers: apiKeyHeaders() });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { showToast(data.error || t('err-refresh-failed'), true); return; }
+      if (data.apiKeyError) { markApiKeyError(); showToast(t('err-apikey-invalid-details'), true); }
+      allVideos = await fetchChannelVideos(key);
+      _currentVotePair = null;
+      if (currentView === 'vote') renderVote();
+      else if (currentView === 'list') renderList();
+      else if (currentView === 'ranking') renderRanking();
+    } catch (err) { showToast(t('err-refresh-failed'), true); console.error('refresh:', err); }
+    finally { _refreshingKeys.delete(key); _stopRefreshSpinner(refreshBtn); }
+  });
+
+  deleteBtn.addEventListener('mouseenter', () => { if (_shiftHeld) _setChDelBtnIcon(deleteBtn, 'trash-2'); });
+  deleteBtn.addEventListener('mouseleave', () => { _setChDelBtnIcon(deleteBtn, 'x'); });
+  deleteBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    const key = ch.key;
+    const doDelete = () => deleteChannel(key);
+    if (e.shiftKey) {
+      doDelete();
+    } else {
+      _showChDelPopup(deleteBtn, t('ch-delete-confirm').replace('{name}', name), doDelete);
+    }
   });
   // コンパクト時のチャンネル名ツールチップ
   item.addEventListener('mouseenter', () => {
@@ -1198,18 +1306,83 @@ function buildFolderItem(folder) {
   nameEl.appendChild(nameInnerEl);
   header.appendChild(nameEl);
 
-  const renameBtn = document.createElement('button');
-  renameBtn.type = 'button';
-  renameBtn.className = 'sidebar-folder-rename-btn';
-  renameBtn.title = 'リネーム';
-  renameBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
-  renameBtn.addEventListener('click', function(e) { e.stopPropagation(); startRename(); });
-  header.appendChild(renameBtn);
+  const folderActions = document.createElement('div');
+  folderActions.className = 'ch-actions';
 
-  const chevron = document.createElement('span');
-  chevron.className = 'sidebar-folder-chevron';
-  chevron.textContent = folder.open ? '\u25b4' : '\u25be';
-  header.appendChild(chevron);
+  const folderRenameBtn = document.createElement('button');
+  folderRenameBtn.className = 'ch-action-btn ch-action-rename';
+  folderRenameBtn.title = t('folder-rename-title');
+  folderRenameBtn.innerHTML = '<i data-lucide="pencil"></i>';
+
+  const folderRefreshBtn = document.createElement('button');
+  folderRefreshBtn.className = 'ch-action-btn ch-action-refresh';
+  folderRefreshBtn.title = t('folder-refresh-title');
+  folderRefreshBtn.innerHTML = '<i data-lucide="refresh-cw"></i>';
+
+  const folderDeleteBtn = document.createElement('button');
+  folderDeleteBtn.className = 'ch-action-btn ch-action-delete';
+  folderDeleteBtn.title = t('folder-delete-title');
+  folderDeleteBtn.innerHTML = '<i data-lucide="x"></i>';
+
+  folderActions.append(folderRenameBtn, folderRefreshBtn, folderDeleteBtn);
+  header.appendChild(folderActions);
+  if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [folderRenameBtn, folderRefreshBtn, folderDeleteBtn] });
+
+  folderRenameBtn.addEventListener('click', e => { e.stopPropagation(); startRename(); });
+
+  folderRefreshBtn.addEventListener('click', async e => {
+    e.stopPropagation();
+    const doRefresh = async () => {
+      const keys = [...folder.children].filter(k => !_refreshingKeys.has(k));
+      if (!keys.length) return;
+      keys.forEach(k => _refreshingKeys.add(k));
+      _startRefreshSpinner(folderRefreshBtn);
+      try {
+        for (const key of keys) {
+          // 子チャンネルアイテムのリフレッシュボタンにもスピナーを表示
+          const chItem = document.querySelector(`.sidebar-channel-item[data-key="${key}"]`);
+          const chRefBtn = chItem?.querySelector('.ch-action-refresh');
+          if (chRefBtn) _startRefreshSpinner(chRefBtn);
+          try {
+            const res = await fetch('/api/channels/' + key + '/refresh', { method: 'POST', headers: apiKeyHeaders() });
+            const data = await res.json().catch(() => ({}));
+            if (data.apiKeyError) { markApiKeyError(); showToast(t('err-apikey-invalid-details'), true); if (chRefBtn) _stopRefreshSpinner(chRefBtn); _refreshingKeys.delete(key); break; }
+          } catch (err) { console.error('folder refresh:', err); }
+          _refreshingKeys.delete(key);
+          if (chRefBtn) _stopRefreshSpinner(chRefBtn);
+        }
+        if (folder.children.includes(currentChannelKey)) {
+          allVideos = await fetchChannelVideos(currentChannelKey);
+          _currentVotePair = null;
+          if (currentView === 'vote') renderVote();
+          else if (currentView === 'list') renderList();
+          else if (currentView === 'ranking') renderRanking();
+        }
+        showToast(t('folder-refresh-done'));
+      } finally { _stopRefreshSpinner(folderRefreshBtn); }
+    };
+    if (e.shiftKey) {
+      await doRefresh();
+    } else {
+      const count = folder.children.length;
+      const msg = t('folder-refresh-confirm').replace('{name}', folder.name || '').replace('{count}', count);
+      _showChDelPopup(folderRefreshBtn, msg, doRefresh, 'ch-del-popup-ok--refresh');
+    }
+  });
+
+  folderDeleteBtn.addEventListener('mouseenter', () => { if (_shiftHeld) _setChDelBtnIcon(folderDeleteBtn, 'trash-2'); });
+  folderDeleteBtn.addEventListener('mouseleave', () => { _setChDelBtnIcon(folderDeleteBtn, 'x'); });
+  folderDeleteBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    const fid = folder.id;
+    const fname = folder.name || '';
+    const doDelete = () => deleteFolder(fid);
+    if (e.shiftKey) {
+      doDelete();
+    } else {
+      _showChDelPopup(folderDeleteBtn, t('folder-delete-confirm').replace('{name}', fname), doDelete);
+    }
+  });
 
   function startRename() {
     if (nameEl.contentEditable === 'plaintext-only' || nameEl.contentEditable === 'true') return;
@@ -1312,7 +1485,6 @@ function buildFolderItem(folder) {
     folder.open = !folder.open;
     saveSidebarOrder();
     wrap.classList.toggle('sidebar-folder--open', folder.open);
-    chevron.textContent = folder.open ? '\u25b4' : '\u25be';
     applyFolderOpen(true);
   });
 
@@ -2491,46 +2663,6 @@ function init() {
   _chTooltip.className = 'ch-tooltip';
   document.body.appendChild(_chTooltip);
 
-  // サイドバーチャンネル右クリックメニュー
-  _ctxMenu = document.createElement('div');
-  _ctxMenu.className = 'ch-ctx-menu';
-  _ctxMenu.hidden = true;
-  _ctxMenu.innerHTML =
-    '<button class="ch-ctx-item" data-action="refresh">動画を再取得</button>' +
-    '<button class="ch-ctx-item ch-ctx-item--danger" data-action="delete">削除</button>';
-  document.body.appendChild(_ctxMenu);
-  _ctxMenu.addEventListener('click', async e => {
-    const btn = e.target.closest('[data-action]');
-    if (!btn || !_ctxMenuKey) return;
-    const key = _ctxMenuKey;
-    _hideChCtxMenu();
-    if (btn.dataset.action === 'delete') {
-      deleteChannel(key);
-    } else if (btn.dataset.action === 'refresh') {
-      if (key !== currentChannelKey) await selectChannel(key);
-      try {
-        const res = await fetch('/api/channels/' + key + '/refresh', { method: 'POST', headers: apiKeyHeaders() });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) {
-          showToast(data.error || t('err-refresh-failed'), true);
-          return;
-        }
-        if (data.apiKeyError) {
-          markApiKeyError();
-          showToast(t('err-apikey-invalid-details'), true);
-        }
-        allVideos = await fetchChannelVideos(key);
-        _currentVotePair = null;
-        if (currentView === 'vote') renderVote();
-        else if (currentView === 'list') renderList();
-        else if (currentView === 'ranking') renderRanking();
-      } catch (e) { showToast(t('err-refresh-failed'), true); console.error('refresh:', e); }
-    }
-  });
-  document.addEventListener('click', _hideChCtxMenu);
-  document.addEventListener('contextmenu', e => {
-    if (!e.target.closest('.sidebar-channel-item')) _hideChCtxMenu();
-  });
 
   // コンパクトモード: チャンネル追加ポップオーバーを生成
   const _compactAddBtn = document.getElementById('sidebarCompactAddBtn');

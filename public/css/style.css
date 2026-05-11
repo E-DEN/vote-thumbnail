@@ -481,34 +481,95 @@ header {
 }
 .ch-tooltip.visible { opacity: 1; transform: translateX(0) translateY(-50%); }
 /* チャンネル右クリックメニュー */
-.ch-ctx-menu {
+/* チャンネルアクションボタン */
+.ch-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+  overflow: hidden;
+  max-width: 0;
+  opacity: 0;
+  margin-left: -5px;
+  transition: opacity 0.15s ease;
+}
+.sidebar-channel-item:hover .ch-actions,
+.sidebar-folder-header:hover .ch-actions,
+.sidebar-channel-item:has(.ch-spinner) .ch-actions,
+.sidebar-folder-header:has(.ch-spinner) .ch-actions {
+  max-width: 60px;
+  opacity: 1;
+  margin-left: 0;
+}
+.sidebar--compact .ch-actions { display: none; }
+.ch-action-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  pointer-events: none;
+  transition: color 0.15s;
+}
+.sidebar-channel-item:hover .ch-action-btn,
+.sidebar-folder-header:hover .ch-action-btn { pointer-events: auto; }
+.ch-action-btn svg { width: 11px; height: 11px; }
+.ch-action-rename:hover  { color: #f0a040; }
+.ch-action-refresh:hover { color: var(--accent); }
+.ch-action-delete:hover  { color: #f04747; }
+.sidebar-channel-item:not(:hover):has(.ch-spinner) .ch-action-delete,
+.sidebar-folder-header:not(:hover):has(.ch-spinner) .ch-action-delete,
+.sidebar-folder-header:not(:hover):has(.ch-spinner) .ch-action-rename {
+  display: none;
+}
+.ch-action-btn:active { transform: scale(0.88); transition: transform 0.07s, color 0.15s; }
+.ch-action-btn:disabled { opacity: 0.6; pointer-events: none; }
+@keyframes ch-spin { to { transform: rotate(360deg); } }
+.ch-spinner {
+  display: inline-block;
+  width: 10px; height: 10px;
+  border: 1.5px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: ch-spin 0.7s linear infinite;
+  vertical-align: middle;
+}
+/* 削除確認ポップアップ */
+.ch-del-popup {
   position: fixed;
   z-index: 10000;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 8px;
-  padding: 4px 0;
-  min-width: 150px;
-  box-shadow: 0 4px 16px var(--shadow);
-}
-.ch-ctx-item {
-  display: block;
-  width: 100%;
-  padding: 8px 16px;
-  text-align: left;
-  background: transparent;
-  border: none;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  box-shadow: 0 4px 18px rgba(0,0,0,0.45);
+  font-size: 11px;
   color: var(--text);
-  font-size: 13px;
+  max-width: 220px;
+}
+.ch-del-popup-msg { line-height: 1.4; }
+.ch-del-popup-btns { display: flex; gap: 6px; justify-content: flex-end; }
+.ch-del-popup-ok, .ch-del-popup-cancel {
+  font-size: 11px;
+  font-family: inherit;
+  padding: 3px 10px;
+  border-radius: 5px;
   cursor: pointer;
-  border-radius: 0;
-  transition: background 0.1s;
+  transition: opacity 0.12s;
 }
-.ch-ctx-item:hover {
-  background: var(--surface2);
-}
-.ch-ctx-item--danger { color: var(--err); }
-.ch-ctx-item--danger:hover { background: var(--err); color: #fff; }
+.ch-del-popup-ok:hover, .ch-del-popup-cancel:hover { opacity: 0.8; }
+.ch-del-popup-ok { background: #e5534b; border: 1px solid #c0392b; color: #fff; }
+.ch-del-popup-ok--refresh { background: var(--accent) !important; border-color: var(--accent2, #357abd) !important; }
+.ch-del-popup-cancel { background: var(--surface2); border: 1px solid var(--border); color: var(--text); }
 
 /* --- Main area --- */
 .main-area {
@@ -1573,17 +1634,6 @@ header {
   min-width: 40px;
 }
 .sidebar-folder-badge { font-size: 11px; color: var(--text-muted); }
-.sidebar-folder-chevron { font-size: 11px; color: var(--text-muted); margin-left: auto; }
-.sidebar-folder-rename-btn {
-  display: none;
-  align-items: center; justify-content: center;
-  width: 20px; height: 20px; flex-shrink: 0;
-  border: none; background: transparent;
-  color: var(--text-muted); padding: 0;
-  border-radius: 3px; cursor: pointer;
-}
-.sidebar-folder-rename-btn:hover { background: var(--border); color: var(--text); }
-.sidebar-folder-header:hover .sidebar-folder-rename-btn { display: flex; }
 .sidebar-folder-drop-zone { display: none; }
 .sidebar-folder--drop-bottom > .sidebar-folder-children { padding-bottom: 28px !important; }
 .sidebar--dragging .sidebar-channel-item:hover::before { display: none; }
