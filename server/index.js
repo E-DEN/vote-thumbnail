@@ -47,13 +47,16 @@ async function handleApi(request, env, url, ctx) {
   const cors = {
     'Access-Control-Allow-Origin':  allowedOrigin,
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, X-YouTube-Api-Key',
+    'Access-Control-Allow-Headers': 'Content-Type, X-YouTube-Api-Key, X-RSS-Only',
   };
   if (method === 'OPTIONS') return new Response(null, { headers: cors });
 
-  // クライアントから渡された API キーを優先使用
+  // クライアントから渡された API キーを優先使用 / X-RSS-Only: 1 なら API キー無効化
   const clientApiKey = request.headers.get('X-YouTube-Api-Key');
-  const effectiveEnv = clientApiKey ? { ...env, YOUTUBE_API_KEY: clientApiKey } : env;
+  const rssOnly = request.headers.get('X-RSS-Only') === '1';
+  const effectiveEnv = rssOnly
+    ? { ...env, YOUTUBE_API_KEY: null }
+    : clientApiKey ? { ...env, YOUTUBE_API_KEY: clientApiKey } : env;
 
   function json(data, status = 200) {
     return new Response(JSON.stringify(data), {
@@ -177,7 +180,14 @@ async function handleApi(request, env, url, ctx) {
         ).bind(channelId, handle, title, iconUrl).run();
         exists = { channel_id: channelId };
       }
-      const { added, rssStatus, newVideoIds, allVideoIds } = await fetchAndSaveRss(channelId, effectiveEnv);
+      const { added, updated: rssUpdated, rssStatus, newVideoIds, allVideoIds } = await fetchAndSaveRss(channelId, effectiveEnv);
+      // APIキーがあれば全動画をPlaylist APIで取得・補完する (RSSは最新15件のみ)
+      let apiAllVideoIds = allVideoIds;
+      if (effectiveEnv.YOUTUBE_API_KEY) {
+        const apiResult = await fetchAllVideosViaApi(channelId, effectiveEnv);
+        if (apiResult?.apiKeyError) return json({ ok: true, added, rssStatus, apiKeyError: true });
+        if (apiResult.videoIds.length > 0) apiAllVideoIds = apiResult.videoIds;
+      }
       // 新規動画 + 既存の未判定動画 (duration=0) をまとめてカテゴリ判定
       const undetected = await env.DB.prepare(
         "SELECT video_id FROM videos WHERE channel_id = ? AND duration = 0 LIMIT 20"
@@ -186,8 +196,8 @@ async function handleApi(request, env, url, ctx) {
       if (toDetect.length > 0) {
         await detectShortsCategories(toDetect, effectiveEnv);
       }
-      // APIキーがあればRSS全動画(新旧)のview_count/durationを更新
-      const toUpdate = [...new Set([...allVideoIds, ...toDetect])];
+      // APIキーがあれば全動画のview_count/durationを更新
+      const toUpdate = [...new Set([...apiAllVideoIds, ...toDetect])];
       if (toUpdate.length > 0) {
         const detailResult = await fetchVideoDetails(toUpdate, effectiveEnv);
         if (detailResult?.apiKeyError) return json({ ok: true, added, rssStatus, apiKeyError: true });
@@ -195,7 +205,11 @@ async function handleApi(request, env, url, ctx) {
         const validResult = await validateApiKey(effectiveEnv);
         if (validResult?.apiKeyError) return json({ ok: true, added, rssStatus, apiKeyError: true });
       }
-      return json({ ok: true, added, rssStatus });
+      // DB上の総動画数を返す
+      const countRow = await env.DB.prepare(
+        'SELECT COUNT(*) AS cnt FROM videos WHERE channel_id = ?'
+      ).bind(channelId).first();
+      return json({ ok: true, added, updated: rssOnly ? rssUpdated : 0, rssStatus, total: countRow?.cnt ?? 0 });
     }
 
     // --- POST /api/channels/:channelId/videos/batch ---
@@ -382,7 +396,7 @@ async function fetchAndSaveRss(channelId, env) {
     `https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`,
     { headers: { 'User-Agent': 'Mozilla/5.0' } }
   );
-  if (!res.ok) return { added: 0, rssStatus: res.status, newVideoIds: [] };
+  if (!res.ok) return { added: 0, rssStatus: res.status, newVideoIds: [], allVideoIds: [] };
   const xml = await res.text();
 
   // <entry> ブロックをすべて抽出
@@ -393,6 +407,7 @@ async function fetchAndSaveRss(channelId, env) {
     const videoIdMatch   = entry.match(/<yt:videoId>([\w-]{11})<\/yt:videoId>/);
     const titleMatch     = entry.match(/<title>([^<]*)<\/title>/);
     const publishedMatch = entry.match(/<published>([^<]+)<\/published>/);
+    const viewsMatch     = entry.match(/<media:statistics views="(\d+)"/);
     if (!videoIdMatch) continue;
     const videoId = videoIdMatch[1];
     items.push({
@@ -400,10 +415,11 @@ async function fetchAndSaveRss(channelId, env) {
       title:        titleMatch     ? titleMatch[1]     : '',
       publishedAt:  publishedMatch ? publishedMatch[1] : null,
       thumbnailUrl: `https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg`,
+      viewCount:    viewsMatch     ? parseInt(viewsMatch[1]) : 0,
     });
   }
 
-  if (items.length === 0) return { added: 0, rssStatus: 200, newVideoIds: [] };
+  if (items.length === 0) return { added: 0, rssStatus: 200, newVideoIds: [], allVideoIds: [] };
 
   // 新規動画のみ INSERT (category は後でバックグラウンド判定)
   const placeholders = items.map(() => '?').join(',');
@@ -413,6 +429,82 @@ async function fetchAndSaveRss(channelId, env) {
   const existingIds = new Set(existing.results.map(r => r.video_id));
   const newItems = items.filter(i => !existingIds.has(i.videoId));
 
+  for (const { videoId, title, publishedAt, thumbnailUrl, viewCount } of newItems) {
+    await env.DB.prepare(
+      `INSERT INTO videos (video_id, channel_id, title, thumbnail_url, category, published_at, view_count)
+       VALUES (?, ?, ?, ?, 'videos', ?, ?)
+       ON CONFLICT(video_id) DO NOTHING`
+    ).bind(videoId, channelId, title, thumbnailUrl, publishedAt, viewCount).run();
+  }
+
+  // 既存動画の view_count も RSS 値で更新 (API キーなし環境向け)
+  const existingItems = items.filter(i => existingIds.has(i.videoId) && i.viewCount > 0);
+  let updated = 0;
+  for (const { videoId, viewCount } of existingItems) {
+    const r = await env.DB.prepare(
+      'UPDATE videos SET view_count = ? WHERE video_id = ? AND view_count < ?'
+    ).bind(viewCount, videoId, viewCount).run();
+    updated += r.meta?.changes ?? 0;
+  }
+
+  // last_checked を更新
+  await env.DB.prepare(
+    "UPDATE channels SET last_checked = datetime('now') WHERE channel_id = ?"
+  ).bind(channelId).run();
+
+  return { added: newItems.length, updated, rssStatus: 200, newVideoIds: newItems.map(i => i.videoId), allVideoIds: items.map(i => i.videoId) };
+}
+
+// ---------------------------------------------------------------------------
+// YouTube Data API v3 の playlistItems でチャンネル全動画を取得・保存
+// RSSは最新15件のみなので、APIキーがある場合はこちらで全件補完する
+// ---------------------------------------------------------------------------
+async function fetchAllVideosViaApi(channelId, env) {
+  if (!env.YOUTUBE_API_KEY) return { ok: true, videoIds: [] };
+  // uploads プレイリスト ID は UC→UU に置換
+  const uploadsPlaylistId = 'UU' + channelId.slice(2);
+  const allItems = [];
+  let pageToken = '';
+  try {
+    do {
+      let apiUrl = `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&playlistId=${uploadsPlaylistId}&maxResults=50&key=${env.YOUTUBE_API_KEY}`;
+      if (pageToken) apiUrl += '&pageToken=' + encodeURIComponent(pageToken);
+      const res = await fetch(apiUrl);
+      if (!res.ok) {
+        if (res.status === 400 || res.status === 403) return { ok: false, apiKeyError: true, videoIds: [] };
+        break;
+      }
+      const data = await res.json();
+      for (const item of (data.items ?? [])) {
+        const snippet = item.snippet ?? {};
+        const videoId = snippet.resourceId?.videoId;
+        if (!videoId || videoId.length !== 11) continue;
+        allItems.push({
+          videoId,
+          title:       String(snippet.title ?? '').slice(0, 500),
+          publishedAt: snippet.publishedAt ?? null,
+          thumbnailUrl: `https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg`,
+        });
+      }
+      pageToken = data.nextPageToken ?? '';
+    } while (pageToken);
+  } catch { return { ok: true, videoIds: [] }; }
+
+  if (allItems.length === 0) return { ok: true, videoIds: [] };
+
+  // 既存チェック (D1 バインド上限100件ずつ)
+  const CHUNK = 100;
+  const existingIds = new Set();
+  for (let i = 0; i < allItems.length; i += CHUNK) {
+    const chunk = allItems.slice(i, i + CHUNK);
+    const placeholders = chunk.map(() => '?').join(',');
+    const rows = await env.DB.prepare(
+      `SELECT video_id FROM videos WHERE video_id IN (${placeholders})`
+    ).bind(...chunk.map(x => x.videoId)).all();
+    rows.results.forEach(r => existingIds.add(r.video_id));
+  }
+  const newItems = allItems.filter(i => !existingIds.has(i.videoId));
+
   for (const { videoId, title, publishedAt, thumbnailUrl } of newItems) {
     await env.DB.prepare(
       `INSERT INTO videos (video_id, channel_id, title, thumbnail_url, category, published_at)
@@ -421,12 +513,7 @@ async function fetchAndSaveRss(channelId, env) {
     ).bind(videoId, channelId, title, thumbnailUrl, publishedAt).run();
   }
 
-  // last_checked を更新
-  await env.DB.prepare(
-    "UPDATE channels SET last_checked = datetime('now') WHERE channel_id = ?"
-  ).bind(channelId).run();
-
-  return { added: newItems.length, rssStatus: 200, newVideoIds: newItems.map(i => i.videoId), allVideoIds: items.map(i => i.videoId) };
+  return { ok: true, videoIds: allItems.map(i => i.videoId) };
 }
 
 // ---------------------------------------------------------------------------

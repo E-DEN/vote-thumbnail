@@ -742,8 +742,8 @@ function _buildVideoMeta(v) {
 }
 function _buildPinDot(v) {
   var hasPinned = !!_reactionsMyPins[v.id];
-  var dotColor = hasPinned ? (_reactionsPinColor || '#ec4899') : 'transparent';
-  var dot = '<span class="gallery-meta-pin-dot" style="background:' + dotColor + '"></span>';
+  if (!hasPinned) return '';
+  var dot = '<span class="gallery-meta-pin-dot" style="background:' + (_reactionsPinColor || '#ec4899') + '"></span>';
   return '<span class="gallery-meta-item">' + _SVG_PIN + dot + '</span>';
 }
 // ギャラリーオーバーレイ用: 単位なし短縮表記
@@ -1262,10 +1262,14 @@ function buildChannelItem(ch) {
     if (key !== currentChannelKey) await selectChannel(key);
     _startRefreshSpinner(refreshBtn);
     try {
-      const res = await fetch('/api/channels/' + key + '/refresh', { method: 'POST', headers: apiKeyHeaders() });
+      const res = await fetch('/api/channels/' + key + '/refresh', { method: 'POST', headers: getRssOnly() ? { 'X-RSS-Only': '1' } : apiKeyHeaders() });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) { showToast(data.error || t('err-refresh-failed'), true); return; }
       if (data.apiKeyError) { markApiKeyError(); showToast(t('err-apikey-invalid-details'), true); }
+      const toastMsg = getRssOnly()
+        ? t('refresh-done-rss').replace('{changed}', (data.added ?? 0) + (data.updated ?? 0))
+        : t('refresh-done-api').replace('{total}', data.total ?? '?');
+      showToast(toastMsg);
       allVideos = await fetchChannelVideos(key);
       _currentVotePair = null;
       if (currentView === 'vote') renderVote();
@@ -1378,15 +1382,21 @@ function buildFolderItem(folder) {
       keys.forEach(k => _refreshingKeys.add(k));
       _startRefreshSpinner(folderRefreshBtn);
       try {
+        let totalVideos = 0;
+        let addedVideos = 0;
+        let updatedVideos = 0;
         for (const key of keys) {
           // 子チャンネルアイテムのリフレッシュボタンにもスピナーを表示
           const chItem = document.querySelector(`.sidebar-channel-item[data-key="${key}"]`);
           const chRefBtn = chItem?.querySelector('.ch-action-refresh');
           if (chRefBtn) _startRefreshSpinner(chRefBtn);
           try {
-            const res = await fetch('/api/channels/' + key + '/refresh', { method: 'POST', headers: apiKeyHeaders() });
+            const res = await fetch('/api/channels/' + key + '/refresh', { method: 'POST', headers: getRssOnly() ? { 'X-RSS-Only': '1' } : apiKeyHeaders() });
             const data = await res.json().catch(() => ({}));
             if (data.apiKeyError) { markApiKeyError(); showToast(t('err-apikey-invalid-details'), true); if (chRefBtn) _stopRefreshSpinner(chRefBtn); _refreshingKeys.delete(key); break; }
+            if (data.total != null) totalVideos += data.total;
+            if (data.added != null) addedVideos += data.added;
+            if (data.updated != null) updatedVideos += data.updated;
           } catch (err) { console.error('folder refresh:', err); }
           _refreshingKeys.delete(key);
           if (chRefBtn) _stopRefreshSpinner(chRefBtn);
@@ -1398,7 +1408,10 @@ function buildFolderItem(folder) {
           else if (currentView === 'list') renderList();
           else if (currentView === 'ranking') renderRanking();
         }
-        showToast(t('folder-refresh-done'));
+        const toastMsg = getRssOnly()
+          ? t('refresh-done-rss').replace('{changed}', addedVideos + updatedVideos)
+          : t('refresh-done-api').replace('{total}', totalVideos);
+        showToast(toastMsg);
       } finally { _stopRefreshSpinner(folderRefreshBtn); }
     };
     if (e.shiftKey) {
@@ -2821,7 +2834,7 @@ async function addChannelFromSidebarInput() {
   try {
     const res = await fetch('/api/channels', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...apiKeyHeaders() },
+      headers: { 'Content-Type': 'application/json', ...(getRssOnly() ? { 'X-RSS-Only': '1' } : apiKeyHeaders()) },
       body: JSON.stringify(postBody),
     });
     const data = await res.json();
@@ -2847,7 +2860,10 @@ async function addChannelFromSidebarInput() {
     }
     document.getElementById('sidebarSearchInput').value = '';
     statusEl.textContent = '';
-    renderSidebar();
+    // nav.innerHTML='' による全破棄を避け、新規アイテムのみ追加する（ホバー状態保持）
+    const _nav = document.getElementById('sidebarNav');
+    const _newItem = buildChannelItem(channels[ch.channel_id]);
+    _nav.appendChild(_newItem);
     await selectChannel(ch.channel_id);
     // API キーが設定されていれば全件取得を自動実行
     if (getStoredApiKey() && !getRssOnly()) {
