@@ -2657,6 +2657,7 @@ function openModalReactions(v) {
   };
   document.getElementById('reactionsYtBtn').href = v.url || 'https://www.youtube.com/watch?v=' + v.id;
   document.getElementById('reactionsTitle').textContent = v.title || '';
+  document.getElementById('reactionsVideoMeta').innerHTML = _buildVideoMeta(v);
   openReactionsMode(v.id);
   showView('reactions');
 }
