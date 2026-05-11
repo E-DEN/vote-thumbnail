@@ -7,7 +7,8 @@
     "doc": "docs"
   },
   "scripts": {
-    "dev":    "wrangler dev --port 8787",
+    "dev":     "wrangler dev --port 8787",
+    "dev:hot": "concurrently \"wrangler dev --port 8787\" \"browser-sync start --proxy localhost:8787 --files ./public --port 3000 --no-open\"",
     "db:init": "wrangler d1 execute vote-thumbnail --local --file=db/schema.sql",
     "db:seed": "wrangler d1 execute vote-thumbnail --local --file=db/seed.sql",
     "deploy": "wrangler deploy"
@@ -16,6 +17,8 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
+    "browser-sync": "^3.0.4",
+    "concurrently": "^9.2.1",
     "wrangler": "^4.88.0"
   }
 }

@@ -2975,8 +2975,11 @@ document.getElementById('sidebarSearchBtn').addEventListener('click', () => {
   const dataStatusEl = document.getElementById('sidebarDataStatus');
 
   exportBtn.addEventListener('click', function() {
-    const data = localStorage.getItem(LS_SIDEBAR_ORDER) || '[]';
-    const blob = new Blob([data], { type: 'application/json' });
+    const exportData = {
+      sidebarOrder: JSON.parse(localStorage.getItem(LS_SIDEBAR_ORDER) || '[]'),
+      channels: JSON.parse(localStorage.getItem(LS_CHANNELS) || '{}'),
+    };
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -2999,8 +3002,13 @@ document.getElementById('sidebarSearchBtn').addEventListener('click', () => {
     reader.onload = function(ev) {
       try {
         const parsed = JSON.parse(ev.target.result);
-        if (!Array.isArray(parsed)) throw new Error();
-        localStorage.setItem(LS_SIDEBAR_ORDER, JSON.stringify(parsed));
+        if (!parsed || !Array.isArray(parsed.sidebarOrder)) throw new Error();
+        localStorage.setItem(LS_SIDEBAR_ORDER, JSON.stringify(parsed.sidebarOrder));
+        if (parsed.channels) {
+          loadChannels();
+          Object.assign(channels, parsed.channels);
+          saveChannels();
+        }
         loadSidebarOrder();
         renderSidebar();
         dataStatusEl.textContent = t('settings-data-imported');
