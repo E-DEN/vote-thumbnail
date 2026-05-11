@@ -900,6 +900,15 @@ header {
   box-shadow: 0 0 0 0px var(--accent), 0 0 0px 0px rgba(0,176,244,0);
   transition: box-shadow 0.2s ease;
 }
+.vote-card .tilter__figure::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba(0,0,0,0.48) 0%, rgba(0,0,0,0.12) 60%, transparent 100%);
+  pointer-events: none;
+  border-radius: inherit;
+  z-index: 1;
+}
 .vote-card:hover .tilter__figure {
   /* box-shadow: 0 0 0 2px rgba(255,255,255,0.85), 0 0 24px 6px rgba(255,255,255,0.30); */
   box-shadow: 0 0 0 2px var(--accent), 0 0 20px 4px rgba(0,176,244,0.45);
@@ -954,23 +963,8 @@ header {
   font-weight: 700;
   line-height: 1.35;
   color: rgba(255,255,255,.97);
-  text-shadow:
-    0 1px 0   rgba(255,255,255,.10),
-    0 1px 3px rgba(0,0,0,.99),
-    0 4px 12px rgba(0,0,0,.90),
-    0 10px 28px rgba(0,0,0,.65),
-    0 0 10px rgba(255,255,255,.14),
-    0 0 28px rgba(255,255,255,.09),
-    0 0 56px rgba(255,255,255,.06);
+  text-shadow: none;
   pointer-events: none;
-}
-.vote-card .tilter__caption::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(to top, rgba(0,0,0,0.62) 0%, rgba(0,0,0,0.18) 60%, transparent 100%);
-  z-index: -1;
-  border-radius: inherit;
 }
 .vote-card.winner {
   filter: drop-shadow(0 0 8px var(--ok)) drop-shadow(0 8px 24px var(--drop-ok));
@@ -2517,28 +2511,29 @@ header {
   position: relative;
 }
 .rs-img-wrap {
+  position: relative;
   flex: 1;
   min-width: 0;
-  max-width: calc((100vh - 120px) * 16 / 9);
-  max-height: calc(100vh - 120px);
   align-self: center;
-  position: relative;
-  overflow: hidden;
-  cursor: default;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 10px;
-  box-shadow: 0 6px 24px var(--shadow);
+  max-width: calc((100vh - 120px) * 16 / 9);
+  max-height: calc(100vh - 120px);
+  overflow: visible;
+  cursor: default;
 }
 .rs-img-wrap img {
-  max-width: 100%;
-  max-height: 100%;
-  object-fit: contain;
   display: block;
+  max-width: 100%;
+  max-height: calc(100vh - 120px);
+  width: auto;
+  height: auto;
+  object-fit: contain;
   pointer-events: none;
   user-select: none;
   border-radius: 10px;
+  box-shadow: 0 6px 24px var(--shadow);
 }
 
 /* 右サイドバー (gfと同テーマ) */

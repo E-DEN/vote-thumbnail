@@ -29,6 +29,13 @@ const LS_CHANNELS = 'thumb-ranking-channels';
 const LS_SIDEBAR_ORDER = 'thumb-sidebar-order';
 const LS_API_KEY  = 'yt-api-key';
 const LS_RSS_ONLY = 'yt-rss-only';
+const LS_CAT  = 'thumb-cat';
+const LS_VIEW = 'thumb-view';
+const LS_SORT = 'thumb-sort';
+const LS_MAX_PINS       = 'thumb-max-pins';
+const LS_PINS_VISIBLE   = 'thumb-pins-visible';
+const LS_HEATMAP_VISIBLE = 'thumb-heatmap-visible';
+const LS_SETTINGS_TAB   = 'thumb-settings-tab';
 
 function getStoredApiKey() { return localStorage.getItem(LS_API_KEY) || ''; }
 function getRssOnly() { return localStorage.getItem(LS_RSS_ONLY) === '1'; }
@@ -46,7 +53,7 @@ function apiKeyHeaders() {
 }
 
 let allVideos = [];
-let currentCat = 'videos';
+let currentCat = localStorage.getItem(LS_CAT) || 'videos';
 let currentView = 'welcome';
 let _prevView = 'list';
 let _pollTimer = null;
@@ -73,8 +80,8 @@ var _reactionsSessionId = (function() {
 })();
 let _reactionsCurrentVideoId = null;
 let _reactionsActive = false;     // 投下ストリーム制御フラグ
-let _reactionsPinsVisible    = true;
-let _reactionsHeatmapVisible = false;
+let _reactionsPinsVisible    = localStorage.getItem(LS_PINS_VISIBLE) !== '0';
+let _reactionsHeatmapVisible = localStorage.getItem(LS_HEATMAP_VISIBLE) === '1';
 let _reactionsSeeds = [];
 let _reactionsPins  = [];       // DB全ピン座標 (KDEサンプリング用)
 let _reactionsKde   = null;     // KDE重みキャッシュ
@@ -747,7 +754,7 @@ function fmtDuration(sec) {
 // --- 一覧 ---
 var _listMode = localStorage.getItem('thumb-list-mode') || 'gallery';
 var _shortsObserver = null;
-var _listSortOrder = 'views';     // 'date' | 'views' | 'rating' | 'random'
+var _listSortOrder = localStorage.getItem(LS_SORT) || 'views';  // 'date' | 'views' | 'rating' | 'random'
 var _listPage = 0;                // 読み込み済みページ数
 var _LIST_PAGE_SIZE = 50;
 var _listSortedPool = [];         // ソート済み全件キャッシュ
@@ -2097,17 +2104,20 @@ async function selectChannel(key) {
     if (!counts[currentCat]) {
       currentCat = counts.live >= counts.videos && counts.live >= counts.shorts ? 'live'
                  : counts.shorts > counts.videos ? 'shorts' : 'videos';
+      localStorage.setItem(LS_CAT, currentCat);
     }
     document.querySelectorAll('.cat-btn').forEach(b => {
       b.classList.toggle('active', b.dataset.cat === currentCat);
     });
-    const keepView = ['vote', 'list', 'ranking'].includes(currentView) ? currentView : 'list';
+    const savedView = localStorage.getItem(LS_VIEW) || 'list';
+    const keepView = CAT_VIEWS.includes(currentView) ? currentView : savedView;
     showView(keepView);
   } catch (e) {
     console.error('[selectChannel] FETCH ERROR:', e);
     _currentVotePair = null;
     allVideos = [];
-    const keepView = ['vote', 'list', 'ranking'].includes(currentView) ? currentView : 'list';
+    const savedView = localStorage.getItem(LS_VIEW) || 'list';
+    const keepView = CAT_VIEWS.includes(currentView) ? currentView : savedView;
     showView(keepView);
   }
 }
@@ -2238,7 +2248,7 @@ function renderReactionsHeatmap() {
   oCtx.filter = 'none';
 }
 
-let REACTIONS_MAX_PINS = 10;
+let REACTIONS_MAX_PINS = parseInt(localStorage.getItem(LS_MAX_PINS), 10) || 10;
 
 function setSquashIntensity(v) {
   var sx = (1 + 0.24 * v).toFixed(3);
@@ -2548,19 +2558,20 @@ function showMyReactionsPin(x, y, withAnim) {
 
 function openReactionsMode(videoId) {
   if (!videoId) return;
-  _reactionsCurrentVideoId    = videoId;
-  _reactionsPinsVisible        = true;
-  _reactionsHeatmapVisible     = false;
+  _reactionsCurrentVideoId = videoId;
   _reactionsPins = [];
   _reactionsKde  = null;
-  document.getElementById('reactionsPinsModeBtn').classList.add('active');
-  document.getElementById('reactionsHeatmapModeBtn').classList.remove('active');
-  document.getElementById('reactionsHeatmapLayer').style.display = 'none';
-  document.getElementById('reactionsPinsLayer').style.display    = 'block';
+  // 保存済みのトグル状態を DOM に反映（ハードリセットしない）
+  document.getElementById('reactionsPinsModeBtn').classList.toggle('active', _reactionsPinsVisible);
+  document.getElementById('reactionsHeatmapModeBtn').classList.toggle('active', _reactionsHeatmapVisible);
+  document.getElementById('reactionsHeatmapLayer').style.display = _reactionsHeatmapVisible ? 'block' : 'none';
+  document.getElementById('reactionsPinsLayer').style.display    = _reactionsPinsVisible ? 'block' : 'none';
   document.getElementById('reactionsMyPin').hidden = true;
+  var myPinShadow = document.getElementById('reactionsMyPinShadow');
+  if (myPinShadow) myPinShadow.hidden = true;
   // 自分の保存済みピンを復元（アニメーションなし）
   var saved = _reactionsMyPins[videoId];
-  if (saved) showMyReactionsPin(saved.x, saved.y, false);
+  if (saved && _reactionsPinsVisible) showMyReactionsPin(saved.x, saved.y, false);
   // パレットをCSS変数に適用（ヒートマップ・ピン両方が --pin-c0/1/2 を継承）
   applyPinPalette();
   // seeds 取得してアニメーション開始（サーバーからの自分のピン復元も含む）
@@ -2568,10 +2579,15 @@ function openReactionsMode(videoId) {
     _reactionsSeeds = seeds;
     // サーバーから my_pin が復元された場合は表示を更新（ローカルになかった場合のみ）
     var serverSaved = _reactionsMyPins[videoId];
-    if (serverSaved && document.getElementById('reactionsMyPin').hidden) {
+    if (serverSaved && document.getElementById('reactionsMyPin').hidden && _reactionsPinsVisible) {
       showMyReactionsPin(serverSaved.x, serverSaved.y, false);
     }
-    startReactionsLoop();
+    if (_reactionsPinsVisible) startReactionsLoop();
+    if (_reactionsHeatmapVisible) {
+      document.getElementById('reactionsHeatmapLayer').style.display = 'block';
+      renderReactionsHeatmap();
+      document.getElementById('reactionsImgWrap').classList.add('heatmap-visible');
+    }
   });
 }
 
@@ -2654,6 +2670,7 @@ const CAT_VIEWS = ['vote', 'list', 'ranking'];
 
 function showView(view) {
   currentView = view;
+  if (CAT_VIEWS.includes(view)) localStorage.setItem(LS_VIEW, view);
   SCREENS.forEach(s => {
     const el = document.getElementById(s + 'Screen');
     if (!el) return;
@@ -2790,6 +2807,14 @@ function applyTheme(theme) {
 
 // --- 初期化 ---
 function init() {
+  // 保存済み状態を即座に DOM へ反映（チャンネル選択前の切り替わりを防ぐ）
+  document.querySelectorAll('.cat-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.cat === currentCat);
+  });
+  document.querySelectorAll('.shorts-sort-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.sort === _listSortOrder);
+  });
+
   // 一覧モード切り替えボタンの初期状態を反映
   var _galBtn  = document.getElementById('listModeGalleryBtn');
   var _gridBtn = document.getElementById('listModeGridBtn');
@@ -2816,6 +2841,7 @@ function init() {
   document.querySelectorAll('.shorts-sort-btn').forEach(function(btn) {
     btn.addEventListener('click', function() {
       _listSortOrder = btn.dataset.sort;
+      localStorage.setItem(LS_SORT, _listSortOrder);
       document.querySelectorAll('.shorts-sort-btn').forEach(function(b) {
         b.classList.toggle('active', b === btn);
       });
@@ -2981,8 +3007,11 @@ function init() {
     var slider = document.getElementById('reactionsPinCountSlider');
     var valEl  = document.getElementById('reactionsPinCountVal');
     if (!slider) return;
+    slider.value = REACTIONS_MAX_PINS;
+    valEl.textContent = REACTIONS_MAX_PINS;
     slider.addEventListener('input', function() {
       REACTIONS_MAX_PINS = parseInt(this.value, 10);
+      localStorage.setItem(LS_MAX_PINS, this.value);
       valEl.textContent = this.value;
     });
   })();
@@ -2990,6 +3019,7 @@ function init() {
   // ReactionPin: Pins / Heatmap 独立トグル
   document.getElementById('reactionsPinsModeBtn').addEventListener('click', function() {
     _reactionsPinsVisible = !_reactionsPinsVisible;
+    localStorage.setItem(LS_PINS_VISIBLE, _reactionsPinsVisible ? '1' : '0');
     this.classList.toggle('active', _reactionsPinsVisible);
     var pinsLayer   = document.getElementById('reactionsPinsLayer');
     var myPin       = document.getElementById('reactionsMyPin');
@@ -3010,6 +3040,7 @@ function init() {
   });
   document.getElementById('reactionsHeatmapModeBtn').addEventListener('click', function() {
     _reactionsHeatmapVisible = !_reactionsHeatmapVisible;
+    localStorage.setItem(LS_HEATMAP_VISIBLE, _reactionsHeatmapVisible ? '1' : '0');
     this.classList.toggle('active', _reactionsHeatmapVisible);
     var heatmapLayer = document.getElementById('reactionsHeatmapLayer');
     var imgWrap = document.getElementById('reactionsImgWrap');
@@ -3127,11 +3158,12 @@ document.getElementById('sidebarSearchBtn').addEventListener('click', () => {
   const closeBtn      = document.getElementById('settingsModalClose');
   const heading       = document.getElementById('settingsModalHeading');
 
-  var _currentTab = 'display';
+  var _currentTab = localStorage.getItem(LS_SETTINGS_TAB) || 'display';
 
   // ---- タブ切り替え ----
   function switchTab(name) {
     _currentTab = name;
+    localStorage.setItem(LS_SETTINGS_TAB, name);
     document.querySelectorAll('.settings-nav-item').forEach(function(el) {
       el.classList.toggle('active', el.dataset.tab === name);
     });
@@ -3349,6 +3381,7 @@ document.getElementById('catFilter').addEventListener('click', e => {
   const btn = e.target.closest('.cat-btn');
   if (!btn) return;
   currentCat = btn.dataset.cat;
+  localStorage.setItem(LS_CAT, currentCat);
   document.querySelectorAll('.cat-btn').forEach(b => b.classList.toggle('active', b === btn));
   if (currentView === 'vote') renderVote();
   else if (currentView === 'list') renderList();
