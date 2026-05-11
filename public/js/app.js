@@ -1271,6 +1271,10 @@ function buildChannelItem(ch) {
   return item;
 }
 
+function randomFolderColor() {
+  return Math.floor(Math.random() * 360);
+}
+
 function buildFolderItem(folder) {
   const wrap = document.createElement('div');
   wrap.className = 'sidebar-folder' + (folder.open ? ' sidebar-folder--open' : '');
@@ -1283,6 +1287,9 @@ function buildFolderItem(folder) {
 
   const preview = document.createElement('div');
   preview.className = 'sidebar-folder-preview';
+  if (folder.color != null) {
+    wrap.style.setProperty('--folder-tint', 'hsla(' + folder.color + ',60%,45%,0.18)');
+  }
   folder.children.slice(0, 2).forEach(key => {
     const ch = channels[key];
     if (!ch) return;
@@ -1903,7 +1910,7 @@ function initSidebarDrag() {
           if (tgtIdx >= 0) {
             const tgtCh = channels[targetKey];
             const defaultName = tgtCh ? (tgtCh.displayName || tgtCh.handle || targetKey) : '';
-            sidebarOrder.splice(tgtIdx, 1, { type: 'folder', id: 'f_' + Date.now(), open: false, name: defaultName, children: [targetKey, srcKey] });
+            sidebarOrder.splice(tgtIdx, 1, { type: 'folder', id: 'f_' + Date.now(), open: false, name: defaultName, color: randomFolderColor(), children: [targetKey, srcKey] });
           } else { sidebarOrder.push({ type: 'channel', key: srcKey }); }
         }
       } else if (action === 'add-to-folder') {
