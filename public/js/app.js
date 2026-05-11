@@ -1026,7 +1026,7 @@ function renderRankingItems(sorted, maxRating, minRating, range, from, to) {
         <img src="${v.thumb}" alt="" loading="lazy" class="${rd > 200 ? 'rd-high' : rd > 100 ? 'rd-mid' : 'rd-low'}" onerror="this.src='https://i.ytimg.com/vi/${v.id}/hqdefault.jpg'">
       </div>
       <div class="rank-meta">
-        <div class="rank-title"><a href="${videoUrl}" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:none;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='inherit'">${v.title}</a></div>
+        <div class="rank-title">${v.title}</div>
         <div class="rank-stats">
           <span>${t('wins-fmt', { w: wins, b: battles })}${battles > 0 ? t('winrate-fmt', { r: wr }) : ''}</span>
         </div>
@@ -1034,6 +1034,8 @@ function renderRankingItems(sorted, maxRating, minRating, range, from, to) {
         <div class="rank-bar-bg"><div class="rank-bar-fill" style="width:${barPct}%"></div></div>
       </div>
     `;
+    item.style.cursor = 'pointer';
+    item.addEventListener('click', () => openModalReactions(v));
     list.appendChild(item);
   });
 }
@@ -2570,7 +2572,9 @@ function openReactionsMode(videoId) {
   _reactionsCurrentVideoId = videoId;
   _reactionsPins = [];
   _reactionsKde  = null;
-  // 保存済みのトグル状態を DOM に反映（ハードリセットしない）
+  // 毎回 Pins=ON / Heatmap=OFF で初期化
+  _reactionsPinsVisible    = true;
+  _reactionsHeatmapVisible = false;
   document.getElementById('reactionsPinsModeBtn').classList.toggle('active', _reactionsPinsVisible);
   document.getElementById('reactionsHeatmapModeBtn').classList.toggle('active', _reactionsHeatmapVisible);
   document.getElementById('reactionsHeatmapLayer').style.display = _reactionsHeatmapVisible ? 'block' : 'none';
@@ -2690,7 +2694,9 @@ function showView(view) {
     }
   });
   document.querySelectorAll('.ch-tab').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.view === view);
+    if (view !== 'reactions') {
+      btn.classList.toggle('active', btn.dataset.view === view);
+    }
   });
   if (view === 'vote') renderVote();
   else if (view === 'list') renderList();
@@ -2959,6 +2965,11 @@ function init() {
     currentChannelKey = null;
     allVideos = [];
     document.querySelectorAll('.sidebar-channel-item').forEach(el => el.classList.remove('active'));
+    document.getElementById('chNoSelect').style.display = '';
+    document.getElementById('chAvatar').style.display = 'none';
+    document.getElementById('chName').style.display = 'none';
+    document.getElementById('chTabs').style.display = 'none';
+    document.getElementById('catFilter').style.display = 'none';
     showView('welcome');
   });
 
@@ -3018,10 +3029,16 @@ function init() {
     if (!slider) return;
     slider.value = REACTIONS_MAX_PINS;
     valEl.textContent = REACTIONS_MAX_PINS;
+    function updateFill(v) {
+      var pct = (v - parseFloat(slider.min)) / (parseFloat(slider.max) - parseFloat(slider.min)) * 100;
+      slider.style.setProperty('--fill', pct.toFixed(1) + '%');
+    }
+    updateFill(REACTIONS_MAX_PINS);
     slider.addEventListener('input', function() {
       REACTIONS_MAX_PINS = parseInt(this.value, 10);
       localStorage.setItem(LS_MAX_PINS, this.value);
       valEl.textContent = this.value;
+      updateFill(this.value);
     });
   })();
 
@@ -3449,6 +3466,37 @@ document.getElementById('catFilter').addEventListener('click', e => {
     w = Math.min(400, Math.max(COMPACT_WIDTH, w));
     sidebar.style.width = w + 'px';
     applyCompact(w, true);
+  }
+  function onUp() {
+    handle.classList.remove('dragging');
+    localStorage.setItem(STORAGE_KEY, sidebar.offsetWidth);
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onUp);
+  }
+})();
+
+// --- リアクションサイドバーリサイズ ---
+(function() {
+  const handle  = document.getElementById('rsSidebarResizeHandle');
+  const sidebar = document.querySelector('.rs-sidebar');
+  const STORAGE_KEY = 'rs-sidebar-width';
+  const MIN_W = 120, MAX_W = 360;
+
+  const saved = localStorage.getItem(STORAGE_KEY);
+  if (saved) sidebar.style.width = Math.min(MAX_W, Math.max(MIN_W, parseInt(saved))) + 'px';
+
+  let startX, startW;
+  handle.addEventListener('mousedown', e => {
+    e.preventDefault();
+    startX = e.clientX;
+    startW = sidebar.offsetWidth;
+    handle.classList.add('dragging');
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+  function onMove(e) {
+    const w = Math.min(MAX_W, Math.max(MIN_W, startW - (e.clientX - startX)));
+    sidebar.style.width = w + 'px';
   }
   function onUp() {
     handle.classList.remove('dragging');

@@ -144,8 +144,8 @@
 
       <!-- リアクション画面 -->
       <div id="reactionsScreen" class="screen" style="display:none">
+        <div class="rs-main">
         <button class="rs-back-btn" id="reactionsBackBtn" data-i18n="reactions-back">戻る</button>
-        <div class="rs-sidebar-ghost"></div>
         <div class="rs-img-wrap" id="reactionsImgWrap">
           <img id="reactionsImg" src="" alt="" referrerpolicy="no-referrer">
           <div class="reactions-heatmap-layer" id="reactionsHeatmapLayer"></div>
@@ -161,16 +161,23 @@
             <span class="reactions-my-pin-label" data-i18n="reactions-you">あなた</span>
           </div>
         </div>
+        </div><!-- /.rs-main -->
         <div class="rs-sidebar">
-          <span class="rs-title" id="reactionsTitle"></span>
-          <div class="rs-sep"></div>
-          <div class="rs-mode-row">
-            <button class="rs-mode-btn active" id="reactionsPinsModeBtn" data-i18n="reactions-pins">Pins</button>
-            <button class="rs-mode-btn" id="reactionsHeatmapModeBtn" data-i18n="reactions-heatmap">Heatmap</button>
+          <div class="rs-sidebar-resize-handle" id="rsSidebarResizeHandle"></div>
+          <div class="rs-card">
+            <span class="rs-title" id="reactionsTitle"></span>
           </div>
           <div class="rs-sep"></div>
-          <div class="rs-color-section">
-            <span class="rs-color-label" data-i18n="reactions-color">カラー</span>
+          <div class="rs-card">
+            <div class="rs-card-title" data-i18n="reactions-mode-label">表示</div>
+            <div class="rs-mode-row">
+              <button class="rs-mode-btn active" id="reactionsPinsModeBtn" data-i18n="reactions-pins">Pins</button>
+              <button class="rs-mode-btn" id="reactionsHeatmapModeBtn" data-i18n="reactions-heatmap">Heatmap</button>
+            </div>
+          </div>
+          <div class="rs-sep"></div>
+          <div class="rs-card">
+            <div class="rs-card-title" data-i18n="reactions-color">カラー</div>
             <div class="rs-swatch-row">
               <button class="rs-swatch active" data-color="#ec4899" style="background:#ec4899"></button>
               <button class="rs-swatch" data-color="#00b0f4" style="background:#00b0f4"></button>
@@ -180,15 +187,17 @@
             </div>
           </div>
           <div class="rs-sep"></div>
-          <div class="rs-slider-section">
-            <div class="rs-slider-label-row">
-              <span class="rs-color-label" data-i18n="reactions-max-pins">最大ピン数</span>
+          <div class="rs-card">
+            <div class="rs-ctrl-row">
+              <div class="rs-card-title" data-i18n="reactions-max-pins">最大ピン数</div>
               <span class="rs-slider-val" id="reactionsPinCountVal">10</span>
             </div>
             <input type="range" id="reactionsPinCountSlider" class="rs-slider" min="5" max="30" step="5" value="10">
           </div>
           <div style="flex:1"></div>
-          <a class="rs-yt-btn" id="reactionsYtBtn" href="#" target="_blank" rel="noopener noreferrer" data-i18n="yt-btn">YouTube</a>
+          <div class="rs-card rs-card--footer">
+            <a class="rs-yt-btn" id="reactionsYtBtn" href="#" target="_blank" rel="noopener noreferrer" data-i18n="yt-btn">YouTube</a>
+          </div>
         </div>
       </div>
 
