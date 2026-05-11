@@ -177,7 +177,7 @@ async function handleApi(request, env, url, ctx) {
         ).bind(channelId, handle, title, iconUrl).run();
         exists = { channel_id: channelId };
       }
-      const { added, rssStatus, newVideoIds } = await fetchAndSaveRss(channelId, effectiveEnv);
+      const { added, rssStatus, newVideoIds, allVideoIds } = await fetchAndSaveRss(channelId, effectiveEnv);
       // 新規動画 + 既存の未判定動画 (duration=0) をまとめてカテゴリ判定
       const undetected = await env.DB.prepare(
         "SELECT video_id FROM videos WHERE channel_id = ? AND duration = 0 LIMIT 20"
@@ -185,7 +185,11 @@ async function handleApi(request, env, url, ctx) {
       const toDetect = [...new Set([...newVideoIds, ...undetected.results.map(r => r.video_id)])];
       if (toDetect.length > 0) {
         await detectShortsCategories(toDetect, effectiveEnv);
-        const detailResult = await fetchVideoDetails(toDetect, effectiveEnv);
+      }
+      // APIキーがあればRSS全動画(新旧)のview_count/durationを更新
+      const toUpdate = [...new Set([...allVideoIds, ...toDetect])];
+      if (toUpdate.length > 0) {
+        const detailResult = await fetchVideoDetails(toUpdate, effectiveEnv);
         if (detailResult?.apiKeyError) return json({ ok: true, added, rssStatus, apiKeyError: true });
       } else if (clientApiKey) {
         const validResult = await validateApiKey(effectiveEnv);
@@ -313,6 +317,16 @@ async function handleApi(request, env, url, ctx) {
       return json({ ok: true, winner: newW, loser: newL });
     }
 
+    // --- GET /api/pins/my ---
+    if (method === 'GET' && path === '/pins/my') {
+      const sessionId = url.searchParams.get('session') || '';
+      if (!sessionId) return json({ pins: [] });
+      const rows = await env.DB.prepare(
+        'SELECT video_id, x, y FROM reactions WHERE session_id = ?'
+      ).bind(sessionId).all();
+      return json({ pins: rows.results.map(function(r) { return { video_id: r.video_id, x: r.x, y: r.y }; }) });
+    }
+
     // --- GET /api/pins/:videoId/seeds ---
     const mPinSeeds = path.match(/^\/pins\/([\w-]{11})\/seeds$/);
     if (method === 'GET' && mPinSeeds) {
@@ -412,7 +426,7 @@ async function fetchAndSaveRss(channelId, env) {
     "UPDATE channels SET last_checked = datetime('now') WHERE channel_id = ?"
   ).bind(channelId).run();
 
-  return { added: newItems.length, rssStatus: 200, newVideoIds: newItems.map(i => i.videoId) };
+  return { added: newItems.length, rssStatus: 200, newVideoIds: newItems.map(i => i.videoId), allVideoIds: items.map(i => i.videoId) };
 }
 
 // ---------------------------------------------------------------------------

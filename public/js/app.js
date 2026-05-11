@@ -719,6 +719,13 @@ function fmtViews(n) {
 var _SVG_EYE  = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
 var _SVG_CLK  = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>';
 var _SVG_STAR = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>';
+var _SVG_PIN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z"/><circle cx="12" cy="10" r="3"/></svg>';
+var _ratingRankMap = {};
+function _rebuildRatingRankMap() {
+  var pool = filteredVideos().slice().sort(function(a, b) { return getRating(b.id) - getRating(a.id); });
+  _ratingRankMap = {};
+  pool.forEach(function(v, i) { _ratingRankMap[v.id] = i + 1; });
+}
 function _buildVideoMeta(v) {
   var items = [];
   if (v.viewCount) {
@@ -728,10 +735,16 @@ function _buildVideoMeta(v) {
     items.push('<span class="gallery-meta-item">' + _SVG_CLK + fmtRelTime(v.publishedAt) + '</span>');
   }
   var rating = getRating(v.id);
-  if (rating !== 1500) {
-    items.push('<span class="gallery-meta-item">' + _SVG_STAR + Math.round(rating) + '</span>');
-  }
+  var rank = _ratingRankMap[v.id];
+  var rankStr = rank ? '<span class="gallery-meta-rank">(#' + rank + ')</span>' : '';
+  items.push('<span class="gallery-meta-item">' + _SVG_STAR + Math.round(rating) + rankStr + '</span>');
   return items.join('');
+}
+function _buildPinDot(v) {
+  var hasPinned = !!_reactionsMyPins[v.id];
+  var dotColor = hasPinned ? (_reactionsPinColor || '#ec4899') : 'transparent';
+  var dot = '<span class="gallery-meta-pin-dot" style="background:' + dotColor + '"></span>';
+  return '<span class="gallery-meta-item">' + _SVG_PIN + dot + '</span>';
 }
 // ギャラリーオーバーレイ用: 単位なし短縮表記
 function fmtViewsShort(n) {
@@ -778,6 +791,7 @@ var _GALLERY_PATTERNS = [
 ];
 
 function renderList() {
+  _rebuildRatingRankMap();
   if (_listMode === 'grid') { _renderGrid(); return; }
   // ギャラリーモード
   var grid = document.getElementById('listGrid');
@@ -845,7 +859,7 @@ function _appendGalleryPage() {
     slice.forEach(function(v) {
       var cell = document.createElement('div');
       cell.className = 'gallery-cell--short';
-      var _meta = _buildVideoMeta(v);
+      var _meta = _buildVideoMeta(v) + _buildPinDot(v);
       cell.innerHTML =
         '<img src="' + v.thumb + '" alt="" loading="lazy"' +
         ' onerror="this.src=\'https://i.ytimg.com/vi/' + v.id + '/hqdefault.jpg\'"' +
@@ -882,7 +896,7 @@ function _appendGalleryPage() {
             ' referrerpolicy="no-referrer">' +
             '<div class="gallery-overlay">' +
               '<div class="gallery-title">' + v.title + '</div>' +
-              (function(){ var m = _buildVideoMeta(v); return m ? '<div class="gallery-meta">' + m + '</div>' : ''; }()) +
+              (function(){ var m = _buildVideoMeta(v) + _buildPinDot(v); return m ? '<div class="gallery-meta">' + m + '</div>' : ''; }()) +
             '</div>' +
           '</div>';
         cell.addEventListener('click', (function(vid) {
@@ -972,7 +986,7 @@ function _appendGridPage() {
     var durHtml = v.duration
       ? '<span class="list-duration">' + fmtDuration(v.duration) + '</span>'
       : '';
-    var metaHtml = _buildVideoMeta(v);
+    var metaHtml = _buildVideoMeta(v) + _buildPinDot(v);
     var card = document.createElement('div');
     card.className = 'list-card' + (v.category === 'shorts' ? ' list-card--short' : '');
     card.innerHTML =
@@ -984,7 +998,7 @@ function _appendGridPage() {
       '</div>' +
       '<div class="list-info">' +
         '<div class="list-info-text">' +
-          '<div class="list-info-title">' + v.title + '</div>' +
+          '<div class="list-info-title" title="' + v.title.replace(/"/g, '&quot;') + '">' + v.title + '</div>' +
           (metaHtml ? '<div class="list-info-meta gallery-meta">' + metaHtml + '</div>' : '') +
         '</div>' +
       '</div>';
@@ -1015,7 +1029,7 @@ function renderRankingItems(sorted, maxRating, minRating, range, from, to) {
     const views = v.viewCount ? fmtViews(v.viewCount) : '';
     const date  = v.publishedAt ? fmtRelTime(v.publishedAt) : '';
     const viewDate = [views, date].filter(Boolean).join(' · ');
-    const metaHtml = _buildVideoMeta(v);
+    const metaHtml = _buildVideoMeta(v) + _buildPinDot(v);
     const item = document.createElement('div');
     item.className = `rank-item${idx < 3 ? ` rank-${idx+1}` : ''}`;
     item.innerHTML = `
@@ -1041,6 +1055,7 @@ function renderRankingItems(sorted, maxRating, minRating, range, from, to) {
 }
 
 function renderRanking() {
+  _rebuildRatingRankMap();
   const pool = filteredVideos();
   const sorted = [...pool].sort((a, b) => getRating(b.id) - getRating(a.id));
   const maxRating = sorted.length ? getRating(sorted[0].id) : 1500;
@@ -2107,6 +2122,7 @@ async function selectChannel(key) {
 
   try {
     allVideos = await fetchChannelVideos(key);
+    await loadMyPins();
     _currentVotePair = null; // チャンネル切り替え時はペアをリセット
     _playedPairs.clear();
     const counts = { videos: 0, shorts: 0, live: 0 };
@@ -2145,6 +2161,19 @@ function reactionsRandGauss() {
   while (u === 0) u = Math.random();
   while (g === 0) g = Math.random();
   return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * g);
+}
+
+async function loadMyPins() {
+  try {
+    var resp = await fetch('/api/pins/my?session=' + encodeURIComponent(_reactionsSessionId));
+    if (!resp.ok) return;
+    var data = await resp.json();
+    (data.pins || []).forEach(function(p) {
+      if (!_reactionsMyPins[p.video_id]) {
+        _reactionsMyPins[p.video_id] = { x: p.x, y: p.y };
+      }
+    });
+  } catch(e) {}
 }
 
 async function loadReactionSeeds(videoId) {
@@ -2475,6 +2504,10 @@ function startReactionsResizeObserver() {
   if (!wrap || typeof ResizeObserver === 'undefined') return;
   _reactionsResizeObserver = new ResizeObserver(function() {
     adjustReactionsLayers();
+    var saved = _reactionsMyPins[_reactionsCurrentVideoId];
+    if (saved && !document.getElementById('reactionsMyPin').hidden) {
+      showMyReactionsPin(saved.x, saved.y, false);
+    }
   });
   _reactionsResizeObserver.observe(wrap);
 }
@@ -2658,16 +2691,23 @@ function openModalReactions(v) {
   var titleEl = document.getElementById('reactionsTitle');
   titleEl.textContent = v.title || '';
   titleEl.href = ytUrl;
-  document.getElementById('reactionsVideoMeta').innerHTML = _buildVideoMeta(v);
+  document.getElementById('reactionsVideoMeta').innerHTML = _buildVideoMeta(v) + _buildPinDot(v);
   openReactionsMode(v.id);
   showView('reactions');
   renderReactionsPlaylist(v.id);
 }
 
+function _refreshVideoMeta() {
+  var v = (allVideos || []).find(function(x) { return x.id === _reactionsCurrentVideoId; });
+  var el = document.getElementById('reactionsVideoMeta');
+  if (v && el) el.innerHTML = _buildVideoMeta(v) + _buildPinDot(v);
+}
+
 function renderReactionsPlaylist(selectedId) {
+  _rebuildRatingRankMap();
   var pool = _buildSortedPool();
-  var body = document.getElementById('reactionsPlaylistBody');
   var countEl = document.getElementById('reactionsPlaylistCount');
+  var body = document.getElementById('reactionsPlaylistBody');
   if (!body) return;
   body.innerHTML = '';
   if (countEl) countEl.textContent = pool.length;
@@ -2675,15 +2715,16 @@ function renderReactionsPlaylist(selectedId) {
     var card = document.createElement('div');
     card.className = 'rs-playlist-card' + (v.id === selectedId ? ' selected' : '');
     var metaHtml = _buildVideoMeta(v);
+    var pinDot = _buildPinDot(v);
     card.innerHTML =
-      '<span class="rs-playlist-num">' + (i + 1) + '</span>' +
+      '<div class="rs-playlist-num-wrap"><span class="rs-playlist-num">' + (i + 1) + '</span></div>' +
       '<div class="rs-playlist-thumb">' +
         '<img src="' + v.thumb + '" alt="" loading="lazy" referrerpolicy="no-referrer"' +
         ' onerror="this.src=\'https://i.ytimg.com/vi/' + v.id + '/hqdefault.jpg\'">' +
       '</div>' +
       '<div class="rs-playlist-info">' +
         '<div class="rs-playlist-title">' + v.title + '</div>' +
-        (metaHtml ? '<div class="rs-playlist-meta gallery-meta">' + metaHtml + '</div>' : '') +
+        '<div class="rs-playlist-meta gallery-meta">' + metaHtml + pinDot + '</div>' +
       '</div>';
     card.addEventListener('click', (function(vid) {
       return function() { openModalReactions(vid); };
@@ -3137,6 +3178,9 @@ function init() {
       localStorage.setItem('reactions-pin-color', color);
       applyPinPalette();
       if (_reactionsHeatmapVisible) renderReactionsHeatmap();
+      // プレイリストのピンドット色を即時更新
+      renderReactionsPlaylist(_reactionsCurrentVideoId);
+      _refreshVideoMeta();
     });
   });
 
@@ -3172,6 +3216,8 @@ function init() {
     _reactionsMyPins[_reactionsCurrentVideoId] = { x: xp, y: yp };
     showMyReactionsPin(xp, yp, true);
     if (_reactionsCurrentVideoId) postReaction(_reactionsCurrentVideoId, xp, yp);
+    renderReactionsPlaylist(_reactionsCurrentVideoId);
+    _refreshVideoMeta();
   });
 
   // 1分ごとに list/ranking 画面の動画を再取得して新着を反映
@@ -3539,46 +3585,6 @@ document.getElementById('catFilter').addEventListener('click', e => {
   }
 })();
 
-// --- リアクションプレイリストリサイズ ---
-(function() {
-  const handle   = document.querySelector('.rs-playlist-resize-handle');
-  const playlist = document.querySelector('.rs-playlist');
-  if (!handle || !playlist) return;
-  const STORAGE_KEY = 'rs-playlist-width';
-  const MIN_W = 160, MAX_W = 400;
-
-  const saved = localStorage.getItem(STORAGE_KEY);
-  if (saved) playlist.style.width = Math.min(MAX_W, Math.max(MIN_W, parseInt(saved))) + 'px';
-
-  let startX, startW, pendingW = null, rafId = null;
-  handle.addEventListener('mousedown', function(e) {
-    e.preventDefault();
-    startX = e.clientX;
-    startW = playlist.offsetWidth;
-    handle.classList.add('dragging');
-    playlist.style.willChange = 'width';
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onUp);
-  });
-  function onMove(e) {
-    pendingW = Math.min(MAX_W, Math.max(MIN_W, startW - (e.clientX - startX)));
-    if (!rafId) rafId = requestAnimationFrame(applyWidth);
-  }
-  function applyWidth() {
-    rafId = null;
-    if (pendingW !== null) {
-      playlist.style.width = pendingW + 'px';
-      pendingW = null;
-    }
-  }
-  function onUp() {
-    handle.classList.remove('dragging');
-    playlist.style.willChange = '';
-    if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
-    localStorage.setItem(STORAGE_KEY, playlist.offsetWidth);
-    document.removeEventListener('mousemove', onMove);
-    document.removeEventListener('mouseup', onUp);
-  }
-})();
+// --- リアクションプレイリストリサイズ（無効）---
 
 init();
