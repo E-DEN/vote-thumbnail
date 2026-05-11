@@ -646,6 +646,9 @@ function renderVote() {
     var caption = card.querySelector('.tilter__caption');
     var shine   = card.querySelector('.tilter__deco--shine > div');
 
+    var _tiltRaf = null;
+    var _tiltNx = 0, _tiltNy = 0;
+
     card.addEventListener('mouseenter', function() {
       // 戻りアニメが進行中ならキャンセルし、CSS transitionを有効化
       anime.remove([fig, caption, shine]);
@@ -656,15 +659,21 @@ function renderVote() {
 
     card.addEventListener('mousemove', function(e) {
       var rect = card.getBoundingClientRect();
-      // -0.5〜0.5に正規化（CSS transitionが滑らかに追いつく）
-      var nx = (e.clientX - rect.left) / rect.width  - 0.5;
-      var ny = (e.clientY - rect.top)  / rect.height - 0.5;
-      fig.style.transform     = 'rotateX(' + (-ny * 12 * _tiltScale) + 'deg) rotateY(' + (nx * 16 * _tiltScale) + 'deg)';
-      caption.style.transform = 'translateX(' + (nx * 28 * _tiltScale) + 'px) translateY(' + (ny * 28 * _tiltScale) + 'px)';
-      shine.style.transform   = 'translateX(' + (nx * 100 * _tiltScale) + 'px) translateY(' + (ny * 100 * _tiltScale) + 'px)';
+      // -0.5〜0.5に正規化
+      _tiltNx = (e.clientX - rect.left) / rect.width  - 0.5;
+      _tiltNy = (e.clientY - rect.top)  / rect.height - 0.5;
+      if (_tiltRaf) return;
+      _tiltRaf = requestAnimationFrame(function() {
+        _tiltRaf = null;
+        fig.style.transform     = 'rotateX(' + (-_tiltNy * 12 * _tiltScale) + 'deg) rotateY(' + (_tiltNx * 16 * _tiltScale) + 'deg)';
+        caption.style.transform = 'translateX(' + (_tiltNx * 28 * _tiltScale) + 'px) translateY(' + (_tiltNy * 28 * _tiltScale) + 'px)';
+        shine.style.transform   = 'translateX(' + (_tiltNx * 100 * _tiltScale) + 'px) translateY(' + (_tiltNy * 100 * _tiltScale) + 'px)';
+      });
     });
 
     card.addEventListener('mouseleave', function() {
+      // 進行中の RAF をキャンセル
+      if (_tiltRaf) { cancelAnimationFrame(_tiltRaf); _tiltRaf = null; }
       // CSS transitionを無効化してからanime.jsのelasticで戻す
       fig.classList.remove('tilt-smooth');
       caption.classList.remove('tilt-smooth');
