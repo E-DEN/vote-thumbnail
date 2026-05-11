@@ -114,6 +114,7 @@ registerLang('ja', '日本語', {
   'pace-fast':    '速い',
   'pace-blazing': '猛速',
   // ランキング
+  'ranking-desc':   'レーティング（勝率ベース）の高い順に並んでいます。',
   'ranking-h2':     'ランキング',
   'rank-subtitle':  '{count} 件 / {cat}',
   'more-btn':       'もっと見る（あと {n} 件）',
@@ -264,6 +265,7 @@ registerLang('en', 'English', {
   'pace-fast':    'Fast',
   'pace-blazing': 'Blazing',
   // Ranking
+  'ranking-desc':  'Sorted by rating (win-rate based), highest first.',
   'ranking-h2':    'Ranking',
   'rank-subtitle': '{count} items / {cat}',
   'more-btn':      'Show more ({n} remaining)',

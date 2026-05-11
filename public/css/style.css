@@ -1004,6 +1004,8 @@ header {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 16px;
+  flex-wrap: wrap;
+  gap: 4px;
 }
 .ranking-header h2 {
   font-size: 15px;
@@ -1013,6 +1015,12 @@ header {
 .ranking-header small {
   font-size: 12px;
   color: var(--text-muted);
+}
+.ranking-desc {
+  width: 100%;
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 0;
 }
 .rank-list {
   display: flex;
@@ -2344,20 +2352,10 @@ header {
 
 /* ヒートマップ表示中: サムネイル画像を暗くする */
 #reactionsImg {
-  transition: opacity 0.3s ease;
+  transition: opacity 0.3s ease, filter 0.3s ease;
 }
 .rs-img-wrap.heatmap-visible #reactionsImg {
-  opacity: 0.2;
-}
-
-/* ライトモード: canvasヒートマップが見えるよう暗幕オーバーレイを追加 */
-:root[data-theme="light"] .rs-img-wrap.heatmap-visible .reactions-heatmap-layer::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: rgba(0,0,0,0.55);
-  pointer-events: none;
-  z-index: 0;
+  opacity: 0.14;
 }
 
 /* pin アニメーション */
@@ -2550,7 +2548,7 @@ header {
   position: relative;
   border-radius: 14px;
   overflow: hidden;
-  box-shadow: 0 8px 40px rgba(0,0,0,0.75), 0 0 0 1px rgba(255,255,255,0.06);
+  box-shadow: 0 6px 24px rgba(0,0,0,0.50), 0 0 0 1px rgba(255,255,255,0.06);
   width: min(95%, calc((100vh - 160px) * 16 / 9));
   will-change: transform;
   transform: translateZ(0);
@@ -2783,7 +2781,7 @@ a.rs-video-title:hover { color: var(--accent); }
   background: var(--accent);
   cursor: pointer;
   border: none;
-  box-shadow: 0 0 0 2px var(--surface);
+  box-shadow: 0 0 0 2px var(--bg);
   margin-top: -4px;
   transition: transform 0.1s;
 }
@@ -2794,7 +2792,7 @@ a.rs-video-title:hover { color: var(--accent); }
   background: var(--accent);
   cursor: pointer;
   border: none;
-  box-shadow: 0 0 0 2px var(--surface);
+  box-shadow: 0 0 0 2px var(--bg);
 }
 .rs-slider::-webkit-slider-thumb:hover { transform: scale(1.2); }
 .rs-slider::-moz-range-thumb:hover     { transform: scale(1.2); }

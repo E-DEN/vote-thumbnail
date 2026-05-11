@@ -1,0 +1,166 @@
+﻿<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>Heatmap filter mock</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: sans-serif; background: #1e1f22; color: #dbdee1; padding: 24px; }
+  body.light { background: #f2f3f5; color: #2e3338; }
+
+  h1 { font-size: 15px; margin-bottom: 16px; }
+
+  .controls {
+    display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 24px;
+    background: #2b2d31; padding: 16px; border-radius: 10px;
+  }
+  body.light .controls { background: #ffffff; border: 1px solid #d4d7dc; }
+
+  .ctrl { display: flex; flex-direction: column; gap: 4px; min-width: 160px; }
+  .ctrl label { font-size: 12px; color: #80848e; }
+  .ctrl .row { display: flex; align-items: center; gap: 8px; }
+  .ctrl input[type=range] { flex: 1; }
+  .ctrl .val { font-size: 12px; width: 36px; text-align: right; }
+
+  .toggle-row { display: flex; gap: 8px; margin-bottom: 16px; }
+  button {
+    padding: 6px 14px; border-radius: 6px; border: 1px solid #3f4147;
+    background: #2b2d31; color: #dbdee1; cursor: pointer; font-size: 13px;
+  }
+  body.light button { background: #fff; color: #2e3338; border-color: #d4d7dc; }
+  button.active { border-color: #00b0f4; color: #00b0f4; }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 20px;
+  }
+  .card { display: flex; flex-direction: column; gap: 8px; }
+  .card h2 { font-size: 12px; color: #80848e; }
+  .img-wrap {
+    position: relative; border-radius: 10px; overflow: hidden;
+    box-shadow: 0 6px 24px rgba(0,0,0,0.5);
+  }
+  .img-wrap img {
+    display: block; width: 100%;
+    transition: filter 0.2s ease, opacity 0.2s ease;
+  }
+  .heatmap-overlay {
+    position: absolute; inset: 0; pointer-events: none;
+    background: radial-gradient(ellipse 40% 35% at 55% 45%, rgba(0,176,244,0.7) 0%, rgba(0,176,244,0.3) 40%, transparent 70%),
+                radial-gradient(ellipse 25% 20% at 25% 70%, rgba(0,176,244,0.5) 0%, rgba(0,176,244,0.2) 40%, transparent 70%);
+    filter: blur(18px);
+    mix-blend-mode: screen;
+  }
+
+  /* --- presets applied via JS --- */
+</style>
+</head>
+<body>
+
+<h1>Heatmap image filter - 比較モック</h1>
+
+<div class="toggle-row">
+  <button id="themeBtn">ライトモード</button>
+</div>
+
+<div class="controls" id="customControls">
+  <div class="ctrl">
+    <label>grayscale</label>
+    <div class="row">
+      <input type="range" id="sGray" min="0" max="1" step="0.05" value="0.5">
+      <span class="val" id="vGray">0.50</span>
+    </div>
+  </div>
+  <div class="ctrl">
+    <label>brightness</label>
+    <div class="row">
+      <input type="range" id="sBright" min="0.3" max="2" step="0.05" value="0.85">
+      <span class="val" id="vBright">0.85</span>
+    </div>
+  </div>
+  <div class="ctrl">
+    <label>contrast</label>
+    <div class="row">
+      <input type="range" id="sCont" min="0.1" max="1.5" step="0.05" value="0.6">
+      <span class="val" id="vCont">0.60</span>
+    </div>
+  </div>
+  <div class="ctrl">
+    <label>opacity (透過のみ版)</label>
+    <div class="row">
+      <input type="range" id="sOpacity" min="0" max="1" step="0.05" value="0.2">
+      <span class="val" id="vOpacity">0.20</span>
+    </div>
+  </div>
+</div>
+
+<div class="grid">
+  <div class="card">
+    <h2>現在の filter (スライダー)</h2>
+    <div class="img-wrap">
+      <img id="imgCustom" src="https://i.ytimg.com/vi/dQw4w9WgXcQ/maxresdefault.jpg" alt="">
+      <div class="heatmap-overlay"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>透過のみ (opacity スライダー)</h2>
+    <div class="img-wrap">
+      <img id="imgOpacity" src="https://i.ytimg.com/vi/dQw4w9WgXcQ/maxresdefault.jpg" alt="">
+      <div class="heatmap-overlay"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>参考: 変更なし (ヒートマップなし)</h2>
+    <div class="img-wrap">
+      <img id="imgNone" src="https://i.ytimg.com/vi/dQw4w9WgXcQ/maxresdefault.jpg" alt="">
+    </div>
+  </div>
+</div>
+
+<script>
+  const imgCustom  = document.getElementById('imgCustom');
+  const imgOpacity = document.getElementById('imgOpacity');
+
+  const sGray   = document.getElementById('sGray');
+  const sBright = document.getElementById('sBright');
+  const sCont   = document.getElementById('sCont');
+  const sOpacity = document.getElementById('sOpacity');
+
+  function updateCustom() {
+    const g = parseFloat(sGray.value);
+    const b = parseFloat(sBright.value);
+    const c = parseFloat(sCont.value);
+    document.getElementById('vGray').textContent   = g.toFixed(2);
+    document.getElementById('vBright').textContent = b.toFixed(2);
+    document.getElementById('vCont').textContent   = c.toFixed(2);
+    imgCustom.style.filter = `grayscale(${g}) brightness(${b}) contrast(${c})`;
+    // コンソールに現在値を出力
+    console.log(`filter: grayscale(${g}) brightness(${b}) contrast(${c})`);
+  }
+
+  function updateOpacity() {
+    const o = parseFloat(sOpacity.value);
+    document.getElementById('vOpacity').textContent = o.toFixed(2);
+    imgOpacity.style.opacity = o;
+    imgOpacity.style.filter  = '';
+  }
+
+  sGray.addEventListener('input', updateCustom);
+  sBright.addEventListener('input', updateCustom);
+  sCont.addEventListener('input', updateCustom);
+  sOpacity.addEventListener('input', updateOpacity);
+
+  updateCustom();
+  updateOpacity();
+
+  // テーマ切り替え
+  document.getElementById('themeBtn').addEventListener('click', function() {
+    document.body.classList.toggle('light');
+    this.textContent = document.body.classList.contains('light') ? 'ダークモード' : 'ライトモード';
+  });
+</script>
+</body>
+</html>

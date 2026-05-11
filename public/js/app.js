@@ -2292,7 +2292,7 @@ function makeReactionsPinEl(x, y, density) {
   const szH      = Math.round(sz * 1.25);
   // densityでシェード頭数を連続値として決定
   var shadeIdx = d >= 0.67 ? 2 : d >= 0.34 ? 1 : 0;
-  // パレットの明暗両カラーを連続補間（density=0→山色, density=1→谷色）
+  // 選択スウォッチ色をベースにdensityでシェードを補間
   var palette = PIN_PALETTES[_reactionsPinColor] || PIN_PALETTES['#ec4899'];
   function hexToRgb(h) {
     h = h.replace('#','');
@@ -2640,7 +2640,6 @@ function openThumbModal({ v, idx, rating, wins, battles, wr, barPct, videoUrl, m
 }
 
 function closeThumbModal() {
-  closeReactionsMode();
   document.getElementById('thumbModal').classList.remove('open');
   document.body.style.overflow = '';
 }
@@ -2701,7 +2700,6 @@ document.getElementById('thumbModal').addEventListener('click', e => {
 });
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
-    if (currentView === 'reactions') { closeReactionsMode(); return; }
     closeThumbModal();
   }
 });
@@ -3072,11 +3070,16 @@ function init() {
       slider.style.setProperty('--fill', pct.toFixed(1) + '%');
     }
     updateFill(REACTIONS_MAX_PINS);
+    var _pinSliderDebounce = null;
     slider.addEventListener('input', function() {
       REACTIONS_MAX_PINS = parseInt(this.value, 10);
       localStorage.setItem(LS_MAX_PINS, this.value);
       valEl.textContent = this.value;
       updateFill(this.value);
+      if (_reactionsPinsVisible) {
+        clearTimeout(_pinSliderDebounce);
+        _pinSliderDebounce = setTimeout(function() { startReactionsLoop(); }, 400);
+      }
     });
   })();
 
