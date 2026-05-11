@@ -458,39 +458,46 @@ async function fetchAndSaveRss(channelId, env) {
 // ---------------------------------------------------------------------------
 // YouTube Data API v3 の playlistItems でチャンネル全動画を取得・保存
 // RSSは最新15件のみなので、APIキーがある場合はこちらで全件補完する
+// Shorts/Live専用プレイリストも取得してカテゴリを正確に設定する
 // ---------------------------------------------------------------------------
-async function fetchAllVideosViaApi(channelId, env) {
-  if (!env.YOUTUBE_API_KEY) return { ok: true, videoIds: [] };
-  // uploads プレイリスト ID は UC→UU に置換
-  const uploadsPlaylistId = 'UU' + channelId.slice(2);
-  const allItems = [];
+async function _fetchPlaylistVideoIds(playlistId, apiKey) {
+  const ids = new Set();
   let pageToken = '';
   try {
     do {
-      let apiUrl = `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&playlistId=${uploadsPlaylistId}&maxResults=50&key=${env.YOUTUBE_API_KEY}`;
-      if (pageToken) apiUrl += '&pageToken=' + encodeURIComponent(pageToken);
-      const res = await fetch(apiUrl);
-      if (!res.ok) {
-        if (res.status === 400 || res.status === 403) return { ok: false, apiKeyError: true, videoIds: [] };
-        break;
-      }
+      let url = `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&playlistId=${playlistId}&maxResults=50&key=${apiKey}`;
+      if (pageToken) url += '&pageToken=' + encodeURIComponent(pageToken);
+      const res = await fetch(url);
+      if (!res.ok) break;
       const data = await res.json();
       for (const item of (data.items ?? [])) {
-        const snippet = item.snippet ?? {};
-        const videoId = snippet.resourceId?.videoId;
-        if (!videoId || videoId.length !== 11) continue;
-        allItems.push({
-          videoId,
-          title:       String(snippet.title ?? '').slice(0, 500),
-          publishedAt: snippet.publishedAt ?? null,
-          thumbnailUrl: `https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg`,
-        });
+        const videoId = item.snippet?.resourceId?.videoId;
+        if (videoId && videoId.length === 11) ids.add(videoId);
       }
       pageToken = data.nextPageToken ?? '';
     } while (pageToken);
-  } catch { return { ok: true, videoIds: [] }; }
+  } catch { /* サイレント失敗 */ }
+  return ids;
+}
 
-  if (allItems.length === 0) return { ok: true, videoIds: [] };
+async function fetchAllVideosViaApi(channelId, env) {
+  if (!env.YOUTUBE_API_KEY) return { ok: true, videoIds: [] };
+  const suffix = channelId.slice(2);
+  // uploads / shorts / live の各プレイリストを並行取得
+  const [allIds, shortsIds, liveIds] = await Promise.all([
+    _fetchPlaylistVideoIds('UU' + suffix, env.YOUTUBE_API_KEY),
+    _fetchPlaylistVideoIds('UUSH' + suffix, env.YOUTUBE_API_KEY),
+    _fetchPlaylistVideoIds('UULV' + suffix, env.YOUTUBE_API_KEY),
+  ]);
+  if (allIds.size === 0) {
+    // apiKeyError かどうかは uploads プレイリストが空の場合で区別できないためスキップ
+    return { ok: true, videoIds: [] };
+  }
+
+  const allItems = [...allIds].map(videoId => ({
+    videoId,
+    category: liveIds.has(videoId) ? 'live' : shortsIds.has(videoId) ? 'shorts' : 'videos',
+  }));
 
   // 既存チェック (D1 バインド上限100件ずつ)
   const CHUNK = 100;
@@ -505,12 +512,19 @@ async function fetchAllVideosViaApi(channelId, env) {
   }
   const newItems = allItems.filter(i => !existingIds.has(i.videoId));
 
-  for (const { videoId, title, publishedAt, thumbnailUrl } of newItems) {
+  for (const { videoId, category } of newItems) {
     await env.DB.prepare(
       `INSERT INTO videos (video_id, channel_id, title, thumbnail_url, category, published_at)
-       VALUES (?, ?, ?, ?, 'videos', ?)
+       VALUES (?, ?, '', ?, ?, NULL)
        ON CONFLICT(video_id) DO NOTHING`
-    ).bind(videoId, channelId, title, thumbnailUrl, publishedAt).run();
+    ).bind(videoId, channelId, `https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg`, category).run();
+  }
+
+  // 既存動画のカテゴリも更新 (shorts/live の場合のみ上書き)
+  for (const { videoId, category } of allItems.filter(i => existingIds.has(i.videoId) && i.category !== 'videos')) {
+    await env.DB.prepare(
+      "UPDATE videos SET category = ? WHERE video_id = ? AND category = 'videos'"
+    ).bind(category, videoId).run();
   }
 
   return { ok: true, videoIds: allItems.map(i => i.videoId) };
@@ -573,7 +587,7 @@ async function fetchVideoDetails(videoIds, env) {
   for (let i = 0; i < videoIds.length; i += CHUNK) {
     const chunk = videoIds.slice(i, i + CHUNK);
     try {
-      const apiUrl = `https://www.googleapis.com/youtube/v3/videos?part=statistics%2CcontentDetails&id=${chunk.join(',')}&key=${env.YOUTUBE_API_KEY}`;
+      const apiUrl = `https://www.googleapis.com/youtube/v3/videos?part=statistics%2CcontentDetails%2Csnippet&id=${chunk.join(',')}&key=${env.YOUTUBE_API_KEY}`;
       const res = await fetch(apiUrl);
       if (!res.ok) {
         if (res.status === 400 || res.status === 403) return { ok: false, apiKeyError: true };
@@ -583,9 +597,17 @@ async function fetchVideoDetails(videoIds, env) {
       for (const item of (data.items ?? [])) {
         const viewCount = parseInt(item.statistics?.viewCount ?? 0);
         const duration  = parseISODuration(item.contentDetails?.duration);
-        await env.DB.prepare(
-          'UPDATE videos SET view_count = ?, duration = ? WHERE video_id = ?'
-        ).bind(viewCount, duration, item.id).run();
+        // liveBroadcastContent でライブ判定 (カテゴリはプレイリスト判定優先のため live のみ上書き)
+        const lbc = item.snippet?.liveBroadcastContent ?? 'none';
+        if (lbc === 'live' || lbc === 'upcoming') {
+          await env.DB.prepare(
+            "UPDATE videos SET view_count = ?, duration = ?, category = 'live' WHERE video_id = ?"
+          ).bind(viewCount, duration, item.id).run();
+        } else {
+          await env.DB.prepare(
+            'UPDATE videos SET view_count = ?, duration = ? WHERE video_id = ?'
+          ).bind(viewCount, duration, item.id).run();
+        }
       }
     } catch { /* API障害時はスキップ */ }
   }
