@@ -143,6 +143,7 @@ registerLang('ja', '日本語', {
   'reactions-back':    '戻る',
   'reactions-color':   'カラー',
   'reactions-you':     'あなた',
+  'reactions-max-pins': '最大ピン数',
   // ソート
   'sort-views':  '再生数',
   'sort-date':   '投稿日',
@@ -289,6 +290,7 @@ registerLang('en', 'English', {
   'reactions-back':    'Back',
   'reactions-color':   'Color',
   'reactions-you':     'You',
+  'reactions-max-pins': 'Max Pins',
   // Sort
   'sort-views':  'Views',
   'sort-date':   'Date',

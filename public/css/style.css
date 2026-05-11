@@ -2330,16 +2330,14 @@ header {
   opacity: 0.2;
 }
 
-.reactions-heatmap-blob {
+/* ライトモード: canvasヒートマップが見えるよう暗幕オーバーレイを追加 */
+:root[data-theme="light"] .rs-img-wrap.heatmap-visible .reactions-heatmap-layer::before {
+  content: '';
   position: absolute;
-  border-radius: 50%;
-  transform: translate(-50%, -50%);
-  /* 画像が暗くなった上に乗るので mix-blend-mode は normal */
-  background: radial-gradient(circle,
-    color-mix(in srgb, var(--pin-c0, #ec4899) 55%, transparent) 0%,
-    color-mix(in srgb, var(--pin-c0, #ec4899) 28%, transparent) 40%,
-    transparent 70%);
-  filter: blur(12px);
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  pointer-events: none;
+  z-index: 0;
 }
 
 /* pin アニメーション */
@@ -2360,10 +2358,10 @@ header {
   /* animation は JS から inline で設定 */
 }
 
-/* 吹き出しの色: shade-0/1/2 クラスで親要素の --pin-c0/1/2 を参照 */
-.reactions-pin.shade-0 .pin-balloon { fill: var(--pin-c0, #ec4899); }
-.reactions-pin.shade-1 .pin-balloon { fill: var(--pin-c1, #f472b6); }
-.reactions-pin.shade-2 .pin-balloon { fill: var(--pin-c2, #db2777); }
+/* 吹き出しの色: density 低→中→高 = 淡→中→深紅（密集するほど色が濃くなる） */
+.reactions-pin.shade-0 .pin-balloon { fill: var(--pin-c0, #fda4af); } /* 低密度: rose-300 */
+.reactions-pin.shade-1 .pin-balloon { fill: var(--pin-c1, #f43f5e); } /* 中密度: rose-500 */
+.reactions-pin.shade-2 .pin-balloon { fill: var(--pin-c2, #9f1239); } /* 高密度: rose-900 */
 .reactions-pin .pin-icon { fill: rgba(255,255,255,0.9); }
 
 @keyframes reactionsPinDrop {
@@ -2649,6 +2647,27 @@ header {
 }
 .rs-swatch:hover  { transform: scale(1.18); }
 .rs-swatch.active { border-color: #fff; transform: scale(1.1); }
+.rs-slider-section {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.rs-slider-label-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.rs-slider-val {
+  font-size: 10px;
+  color: var(--text-muted);
+  min-width: 20px;
+  text-align: right;
+}
+.rs-slider {
+  width: 100%;
+  accent-color: var(--accent, #ec4899);
+  cursor: pointer;
+}
 .rs-yt-btn {
   display: block;
   color: var(--text-muted);

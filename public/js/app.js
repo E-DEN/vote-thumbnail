@@ -2144,19 +2144,94 @@ async function postReaction(videoId, x, y) {
   } catch { /* サイレント失敗 */ }
 }
 
-function renderReactionsHeatmap(seeds) {
-  const layer = document.getElementById('reactionsHeatmapLayer');
-  layer.innerHTML = '';
-  for (const p of seeds) {
-    const blob = document.createElement('div');
-    blob.className = 'reactions-heatmap-blob';
-    const size = 100 * p.density + 60;
-    blob.style.cssText = 'left:' + (p.x * 100) + '%;top:' + (p.y * 100) + '%;width:' + size + 'px;height:' + size + 'px;';
-    layer.appendChild(blob);
+// ピンをグリッドでクラスタリングし、各セルの代表点(重心に最も近いDB値)と件数を返す
+// → ヒートマップ描画とピン表示で同じ結果を共有するために切り出し
+function computeReactionClusters(pins) {
+  var GRID = 10;
+  var cellPins = {};
+  for (var pi = 0; pi < pins.length; pi++) {
+    var p = pins[pi];
+    var cx = Math.min(GRID - 1, Math.floor(p.x * GRID));
+    var cy = Math.min(GRID - 1, Math.floor(p.y * GRID));
+    var ckey = cx + ',' + cy;
+    if (!cellPins[ckey]) cellPins[ckey] = [];
+    cellPins[ckey].push(p);
   }
+  var cellKeys = Object.keys(cellPins);
+  var clusters = [];
+  for (var ci = 0; ci < cellKeys.length; ci++) {
+    var cell = cellPins[cellKeys[ci]];
+    var sumX = 0, sumY = 0;
+    for (var k = 0; k < cell.length; k++) { sumX += cell[k].x; sumY += cell[k].y; }
+    var centX = sumX / cell.length, centY = sumY / cell.length;
+    var best = cell[0], bestDist = Infinity;
+    for (var k = 0; k < cell.length; k++) {
+      var dx = cell[k].x - centX, dy = cell[k].y - centY;
+      var d = dx * dx + dy * dy;
+      if (d < bestDist) { bestDist = d; best = cell[k]; }
+    }
+    clusters.push({ pin: best, pins: cell, count: cell.length, cent: { x: centX, y: centY } });
+  }
+  clusters.sort(function(a, b) { return b.count - a.count; });
+  return clusters;
 }
 
-let REACTIONS_MAX_PINS = 30;
+// ヒートマップ用 offscreen canvas（ピン度数取得に常時使用）
+var _heatmapOffscreenCanvas = null;
+
+function renderReactionsHeatmap() {
+  var layer = document.getElementById('reactionsHeatmapLayer');
+  layer.innerHTML = '';
+  if (!_reactionsPins || _reactionsPins.length === 0) return;
+
+  var w = layer.offsetWidth;
+  var h = layer.offsetHeight;
+  if (!w || !h) return;
+
+  // 表示用 canvas
+  var canvas = document.createElement('canvas');
+  canvas.width  = w;
+  canvas.height = h;
+  canvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;filter:blur(18px);';
+  layer.appendChild(canvas);
+
+  var ctx = canvas.getContext('2d');
+  ctx.globalCompositeOperation = 'lighter';
+
+  var hex = (_reactionsPinColor || '#ec4899').replace('#', '');
+  var cr = parseInt(hex.slice(0, 2), 16);
+  var cg = parseInt(hex.slice(2, 4), 16);
+  var cb = parseInt(hex.slice(4, 6), 16);
+
+  var radius = Math.min(w, h) * 0.22;
+  var alpha = Math.min(0.25, 4.0 / _reactionsPins.length);
+
+  for (var i = 0; i < _reactionsPins.length; i++) {
+    var p  = _reactionsPins[i];
+    var cx = p.x * w;
+    var cy = p.y * h;
+    var grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
+    grad.addColorStop(0,   'rgba(' + cr + ',' + cg + ',' + cb + ',' + alpha.toFixed(4) + ')');
+    grad.addColorStop(0.3, 'rgba(' + cr + ',' + cg + ',' + cb + ',' + (alpha * 0.6).toFixed(4) + ')');
+    grad.addColorStop(0.7, 'rgba(' + cr + ',' + cg + ',' + cb + ',' + (alpha * 0.15).toFixed(4) + ')');
+    grad.addColorStop(1,   'rgba(' + cr + ',' + cg + ',' + cb + ',0)');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // offscreenコピーを保持（ヒートマップ非表示時もdensity参照用）
+  _heatmapOffscreenCanvas = document.createElement('canvas');
+  _heatmapOffscreenCanvas.width  = w;
+  _heatmapOffscreenCanvas.height = h;
+  var oCtx = _heatmapOffscreenCanvas.getContext('2d');
+  oCtx.filter = 'blur(18px)';
+  oCtx.drawImage(canvas, 0, 0);
+  oCtx.filter = 'none';
+}
+
+let REACTIONS_MAX_PINS = 10;
 
 function setSquashIntensity(v) {
   var sx = (1 + 0.24 * v).toFixed(3);
@@ -2180,16 +2255,36 @@ function setSquashIntensity(v) {
   }
 }
 
-function makeReactionsPinEl(x, y) {
-  const scale    = 0.75 + Math.random() * 0.6;
+function makeReactionsPinEl(x, y, density) {
+  // density(0〜1): 高いほど大きい・濃い色。ランダム幅は±20%
+  var d = density != null ? density : 0.5;
+  var baseScale = 0.6 + 0.8 * d;
+  const scale    = baseScale + (Math.random() - 0.5) * 0.4;
   const sz       = Math.round(20 * scale);
   const szH      = Math.round(sz * 1.25);
-  const shadeIdx = Math.floor(Math.random() * 3);
+  // densityでシェード頭数を連続値として決定
+  var shadeIdx = d >= 0.67 ? 2 : d >= 0.34 ? 1 : 0;
+  // パレットの明暗両カラーを連続補間（density=0→山色, density=1→谷色）
+  var palette = PIN_PALETTES[_reactionsPinColor] || PIN_PALETTES['#ec4899'];
+  function hexToRgb(h) {
+    h = h.replace('#','');
+    return [parseInt(h.slice(0,2),16), parseInt(h.slice(2,4),16), parseInt(h.slice(4,6),16)];
+  }
+  var cLight = hexToRgb(palette[1]); // shade-1 中間色
+  var cDark  = hexToRgb(palette[2]); // shade-2 濃色
+  var t = Math.max(0, (d - 0.1) / 0.9); // 0.1以下は明るいまま
+  var r = Math.round(cLight[0] + (cDark[0] - cLight[0]) * t);
+  var g = Math.round(cLight[1] + (cDark[1] - cLight[1]) * t);
+  var b = Math.round(cLight[2] + (cDark[2] - cLight[2]) * t);
+  var pinColor = 'rgb(' + r + ',' + g + ',' + b + ')';
   const el       = document.createElement('div');
   el.className   = 'reactions-pin shade-' + shadeIdx;
   el.dataset.x   = x;
   el.dataset.y   = y;
-  el.style.cssText = 'left:' + (x * 100) + '%;top:' + (y * 100) + '%;--drop-h:' + DROP_HEIGHT + 'px;';
+  // viewBox 0 0 24 30 でピン先端は y=29、translate(-50%,-100%) は底辺を座標に合わせる
+  // → 先端は底辺より szH/30 px 上にある分を top に加算して補正
+  var tipGap = szH / 30;
+  el.style.cssText = 'left:' + (x * 100) + '%;top:calc(' + (y * 100) + '% + ' + tipGap.toFixed(2) + 'px);--drop-h:' + DROP_HEIGHT + 'px;';
   el.style.animation = 'reactionsPinDrop ' + DROP_SPEED + 's linear forwards';
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   svg.setAttribute('class', 'reactions-pin-svg');
@@ -2198,7 +2293,7 @@ function makeReactionsPinEl(x, y) {
   svg.setAttribute('height', szH);
   svg.style.animation = 'reactionsPinSvgSquash ' + DROP_SPEED + 's linear forwards';
   svg.innerHTML =
-    '<path class="pin-balloon" d="M12,29 C5.5,21.5 1.5,17 1.5,11 a10.5,10.5,0,0,1,21,0 C22.5,17 18.5,21.5 12,29 Z"/>' +
+    '<path class="pin-balloon" style="fill:' + pinColor + '" d="M12,29 C5.5,21.5 1.5,17 1.5,11 a10.5,10.5,0,0,1,21,0 C22.5,17 18.5,21.5 12,29 Z"/>' +
     '<g transform="translate(12 11) scale(0.38) translate(-12 -12)">' +
       '<path class="pin-icon" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>' +
     '</g>';
@@ -2229,23 +2324,84 @@ function startReactionsLoop() {
   var pins = _reactionsPins.slice();
   if (pins.length === 0) return;
 
-  // シャッフル
-  for (var i = pins.length - 1; i > 0; i--) {
-    var j = Math.floor(Math.random() * (i + 1));
-    var tmp = pins[i]; pins[i] = pins[j]; pins[j] = tmp;
+  // クラスタ密度をピンの重みに使った重みつきサンプリング
+  // → 密集エリアのピンほど選ばれやすく、実DBの座標をそのまま使う
+  var clusters = computeReactionClusters(pins);
+  var maxCount = clusters.length > 0 ? clusters[0].count : 1;
+  // 各ピンをどのクラスタセルに属するかで重み付け
+  var GRID = 10;
+  var cellWeight = {};
+  for (var ci = 0; ci < clusters.length; ci++) {
+    var cl = clusters[ci];
+    var cx0 = Math.min(GRID - 1, Math.floor(cl.pin.x * GRID));
+    var cy0 = Math.min(GRID - 1, Math.floor(cl.pin.y * GRID));
+    // セルキーを逆引きするためpinsから再計算
+    cellWeight[cx0 + ',' + cy0] = cl.count / maxCount;
   }
-  var toShow = pins.slice(0, REACTIONS_MAX_PINS);
+  // 重み = density^0.5 (適度に平準化しつつ濃い方を優先)
+  var weighted = pins.map(function(p) {
+    var cx = Math.min(GRID - 1, Math.floor(p.x * GRID));
+    var cy = Math.min(GRID - 1, Math.floor(p.y * GRID));
+    var w = cellWeight[cx + ',' + cy] || 0.01;
+    return { p: p, w: Math.sqrt(w) };
+  });
+
+  // 重みつき非復元サンプリング (Reservoir-like: ソートキー = rand^(1/w))
+  weighted.sort(function(a, b) {
+    return Math.pow(Math.random(), 1 / b.w) - Math.pow(Math.random(), 1 / a.w);
+  });
+  var placed = weighted.slice(0, REACTIONS_MAX_PINS).map(function(item) {
+    return { x: item.p.x, y: item.p.y, density: item.w * item.w }; // w=√density なので density=w²
+  });
+
+  // canvasピクセルでdensityを上書き
+  // offscreen canvasが未生成の場合は先に描画（ヒートマップOFF時も対応）
+  var samplingCanvas = _heatmapOffscreenCanvas;
+  if (!samplingCanvas) {
+    // offscreen専用でヒートマップを描画してサンプリングに使う
+    var layer = document.getElementById('reactionsHeatmapLayer');
+    var tempW = layer ? layer.offsetWidth : 400;
+    var tempH = layer ? layer.offsetHeight : 300;
+    if (tempW && tempH) {
+      renderReactionsHeatmap();
+      samplingCanvas = _heatmapOffscreenCanvas;
+    }
+  }
+  if (samplingCanvas) {
+    var hW = samplingCanvas.width, hH = samplingCanvas.height;
+    var rCtx = samplingCanvas.getContext('2d');
+    var maxA = 0;
+    var alphas = placed.map(function(pin) {
+      var px = Math.round(pin.x * hW), py = Math.round(pin.y * hH);
+      var d = rCtx.getImageData(Math.max(0,px-1), Math.max(0,py-1), 3, 3).data;
+      var a = 0;
+      for (var k = 3; k < d.length; k += 4) a = Math.max(a, d[k]);
+      if (a > maxA) maxA = a;
+      return a;
+    });
+    if (maxA > 0) {
+      for (var ai = 0; ai < placed.length; ai++) {
+        placed[ai].density = alphas[ai] / maxA;
+      }
+    }
+  }
+
+  // 表示順をシャッフルして投下が均等に見えるようにする
+  for (var si = placed.length - 1; si > 0; si--) {
+    var sj = Math.floor(Math.random() * (si + 1));
+    var st = placed[si]; placed[si] = placed[sj]; placed[sj] = st;
+  }
 
   _reactionsActive = true;
   var emitted = 0;
 
   function spawnOne() {
-    if (!_reactionsActive || emitted >= toShow.length) {
+    if (!_reactionsActive || emitted >= placed.length) {
       _reactionsActive = false;
       return;
     }
-    var pin = toShow[emitted++];
-    pinsLayer.appendChild(makeReactionsPinEl(pin.x, pin.y));
+    var pin = placed[emitted++];
+    pinsLayer.appendChild(makeReactionsPinEl(pin.x, pin.y, pin.density));
     var delay = 80 + Math.random() * 200;
     setTimeout(spawnOne, delay);
   }
@@ -2279,6 +2435,8 @@ function adjustReactionsLayers() {
     el.style.right  = 'auto';
     el.style.bottom = 'auto';
   });
+  // ヒートマップ表示中はcanvasを再描画（サイズ変更でバッファが古くなるため）
+  if (_reactionsHeatmapVisible) renderReactionsHeatmap();
 }
 
 var _reactionsResizeObserver = null;
@@ -2811,6 +2969,17 @@ function init() {
     } catch { /* サイレント失敗 */ }
   })();
 
+  // ピン最大数スライダ
+  (function() {
+    var slider = document.getElementById('reactionsPinCountSlider');
+    var valEl  = document.getElementById('reactionsPinCountVal');
+    if (!slider) return;
+    slider.addEventListener('input', function() {
+      REACTIONS_MAX_PINS = parseInt(this.value, 10);
+      valEl.textContent = this.value;
+    });
+  })();
+
   // ReactionPin: Pins / Heatmap 独立トグル
   document.getElementById('reactionsPinsModeBtn').addEventListener('click', function() {
     _reactionsPinsVisible = !_reactionsPinsVisible;
@@ -2821,9 +2990,9 @@ function init() {
     if (_reactionsPinsVisible) {
       pinsLayer.style.display = 'block';
       startReactionsLoop();
-      // 保存済みの自分のピンを復元
+      // 保存済みの自分のピンを落下アニメーション付きで復元
       var saved = _reactionsMyPins[_reactionsCurrentVideoId];
-      if (saved) showMyReactionsPin(saved.x, saved.y, false);
+      if (saved) showMyReactionsPin(saved.x, saved.y, true);
     } else {
       _reactionsActive = false;
       pinsLayer.style.display = 'none';
@@ -2839,7 +3008,7 @@ function init() {
     var imgWrap = document.getElementById('reactionsImgWrap');
     if (_reactionsHeatmapVisible) {
       heatmapLayer.style.display = 'block';
-      renderReactionsHeatmap(_reactionsSeeds);
+      renderReactionsHeatmap();
       imgWrap.classList.add('heatmap-visible');
     } else {
       heatmapLayer.style.display = 'none';
@@ -2862,6 +3031,7 @@ function init() {
       _reactionsPinColor = color;
       localStorage.setItem('reactions-pin-color', color);
       applyPinPalette();
+      if (_reactionsHeatmapVisible) renderReactionsHeatmap();
     });
   });
 
