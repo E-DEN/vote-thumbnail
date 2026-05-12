@@ -1049,9 +1049,7 @@ function renderRankingItems(sorted, maxRating, minRating, range, from, to) {
     const barPct = Math.round((rating - minRating) / range * 100);
     const lowRd = rd > 150;
     const videoUrl = v.url ?? `https://www.youtube.com/watch?v=${v.id}`;
-    const medalEmoji = idx === 0 ? '??' : idx === 1 ? '??' : idx === 2 ? '??' : '';
-    const medal = medalEmoji || (idx + 1);
-    const rankNum = idx < 3 ? medalEmoji : idx + 1;
+    const rankNum = idx < 3 ? idx + 1 : idx + 1;
     const views = v.viewCount ? fmtViews(v.viewCount) : '';
     const date  = v.publishedAt ? fmtRelTime(v.publishedAt) : '';
     const viewDate = [views, date].filter(Boolean).join(' · ');
@@ -2726,11 +2724,16 @@ function closeThumbModal() {
 function openModalReactions(v) {
   if (currentView !== 'reactions') _prevView = currentView;
   var img = document.getElementById('reactionsImg');
-  img.onload = function() { adjustReactionsLayers(); startReactionsResizeObserver(); };
+  img.onload = function() {
+    requestAnimationFrame(function() {
+      adjustReactionsLayers();
+      startReactionsResizeObserver();
+    });
+  };
   img.src = v.thumb;
   img.onerror = function() {
     this.src = 'https://i.ytimg.com/vi/' + v.id + '/hqdefault.jpg';
-    adjustReactionsLayers();
+    requestAnimationFrame(adjustReactionsLayers);
   };
   var ytUrl = v.url || 'https://www.youtube.com/watch?v=' + v.id;
   var titleEl = document.getElementById('reactionsTitle');
@@ -2762,12 +2765,11 @@ function renderReactionsPlaylist(selectedId) {
     var metaHtml = _buildVideoMeta(v);
     var pinDot = _buildPinDot(v);
     card.innerHTML =
-      '<div class="rs-playlist-num-wrap"><span class="rs-playlist-num">' + (i + 1) + '</span></div>' +
       '<div class="rs-playlist-thumb">' +
         '<img src="' + v.thumb + '" alt="" loading="lazy" referrerpolicy="no-referrer"' +
         ' onerror="this.src=\'https://i.ytimg.com/vi/' + v.id + '/hqdefault.jpg\'">' +
       '</div>' +
-      '<div class="rs-playlist-info">' +
+      '<div class="rs-playlist-info" title="' + v.title.replace(/"/g, '&quot;') + '">' +
         '<div class="rs-playlist-title">' + v.title + '</div>' +
         '<div class="rs-playlist-meta gallery-meta">' + metaHtml + pinDot + '</div>' +
       '</div>';
