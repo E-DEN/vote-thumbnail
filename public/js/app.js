@@ -29,8 +29,9 @@ const LS_CHANNELS = 'thumb-ranking-channels';
 const LS_SIDEBAR_ORDER = 'thumb-sidebar-order';
 const LS_API_KEY  = 'yt-api-key';
 const LS_RSS_ONLY = 'yt-rss-only';
-const LS_CAT  = 'thumb-cat';
-const LS_VIEW = 'thumb-view';
+const LS_CAT      = 'thumb-cat';
+const LS_VIEW     = 'thumb-view';
+const LS_VOTE_PAIR = 'thumb-vote-pair';
 const LS_SORT = 'thumb-sort';
 const LS_MAX_PINS       = 'thumb-max-pins';
 const LS_PINS_VISIBLE   = 'thumb-pins-visible';
@@ -605,18 +606,43 @@ function updatePaceGauge() {
   lbl.textContent = t(level.labelKey);
 }
 
-var _currentVotePair = null; // 画面遷移で再抽選しないためキャッシュ
+function _loadVotePairByCat() {
+  try { return JSON.parse(localStorage.getItem(LS_VOTE_PAIR)) || {}; } catch(e) { return {}; }
+}
+function _saveVotePairByCat(d) {
+  try { localStorage.setItem(LS_VOTE_PAIR, JSON.stringify(d)); } catch(e) {}
+}
+var _votePairByCat = _loadVotePairByCat(); // カテゴリごとのペアキャッシュ（localStorage永続化）
 var _playedPairs = new Set(); // セッション内の対戦済みペア
 
 function _pairKey(idA, idB) {
   return idA < idB ? idA + '|' + idB : idB + '|' + idA;
 }
 
+// _currentVotePair の get/set をチャンネル+カテゴリ別に委譲
+Object.defineProperty(window, '_currentVotePair', {
+  get() { return _votePairByCat[(currentChannelKey || '') + ':' + currentCat] ?? null; },
+  set(v) {
+    const k = (currentChannelKey || '') + ':' + currentCat;
+    if (v === null) { delete _votePairByCat[k]; }
+    else { _votePairByCat[k] = v; }
+    _saveVotePairByCat(_votePairByCat);
+  },
+  configurable: true,
+});
+
 // --- 傾き強度 ---
 var _tiltScale = 0.5;
 
 function renderVote() {
   // 投票後または初回のみ新ペアを抽選。画面戻りではそのまま表示。
+  // リロード復元時: ペアの動画が現在のリストに存在するか検証
+  if (_currentVotePair) {
+    const ids = new Set(filteredVideos().map(v => v.id));
+    if (!ids.has(_currentVotePair[0].id) || !ids.has(_currentVotePair[1].id)) {
+      _currentVotePair = null;
+    }
+  }
   if (!_currentVotePair) {
     _currentVotePair = pickPair();
   }
@@ -1281,7 +1307,6 @@ function buildChannelItem(ch) {
         : t('refresh-done-api').replace('{total}', data.total ?? '?');
       showToast(toastMsg);
       allVideos = await fetchChannelVideos(key);
-      _currentVotePair = null;
       if (currentView === 'vote') renderVote();
       else if (currentView === 'list') renderList();
       else if (currentView === 'ranking') renderRanking();
@@ -1413,7 +1438,6 @@ function buildFolderItem(folder) {
           // チャンネル完了ごとに即UIへ反映
           if (key === currentChannelKey) {
             allVideos = await fetchChannelVideos(key);
-            _currentVotePair = null;
             if (currentView === 'vote') renderVote();
             else if (currentView === 'list') renderList();
             else if (currentView === 'ranking') renderRanking();
@@ -2147,8 +2171,6 @@ async function selectChannel(key) {
   try {
     allVideos = await fetchChannelVideos(key);
     await loadMyPins();
-    _currentVotePair = null; // チャンネル切り替え時はペアをリセット
-    _playedPairs.clear();
     const counts = { videos: 0, shorts: 0, live: 0 };
     allVideos.forEach(v => { if (counts[v.category] !== undefined) counts[v.category]++; });
     // currentCat を維持。ただし現在のカテゴリに動画が 0 件なら有効なカテゴリに切り替え
@@ -2165,7 +2187,6 @@ async function selectChannel(key) {
     showView(keepView);
   } catch (e) {
     console.error('[selectChannel] FETCH ERROR:', e);
-    _currentVotePair = null;
     allVideos = [];
     const savedView = localStorage.getItem(LS_VIEW) || 'list';
     const keepView = CAT_VIEWS.includes(currentView) ? currentView : savedView;
@@ -2881,7 +2902,6 @@ async function addChannelFromSidebarInput() {
       try {
         const count = await importAllChannelVideos(ch.channel_id, msg => { statusEl.textContent = msg; });
         allVideos = await fetchChannelVideos(ch.channel_id);
-        _currentVotePair = null;
         if (currentView === 'vote') renderVote();
         else if (currentView === 'list') renderList();
         else if (currentView === 'ranking') renderRanking();
@@ -3542,7 +3562,8 @@ document.getElementById('channelHeader').addEventListener('click', e => {
 document.getElementById('catFilter').addEventListener('click', e => {
   const btn = e.target.closest('.cat-btn');
   if (!btn) return;
-  currentCat = btn.dataset.cat;
+  const newCat = btn.dataset.cat;
+  currentCat = newCat;
   localStorage.setItem(LS_CAT, currentCat);
   document.querySelectorAll('.cat-btn').forEach(b => b.classList.toggle('active', b === btn));
   if (currentView === 'vote') renderVote();
