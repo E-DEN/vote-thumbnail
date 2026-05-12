@@ -1261,6 +1261,16 @@ function buildChannelItem(ch) {
     _refreshingKeys.add(key);
     if (key !== currentChannelKey) await selectChannel(key);
     _startRefreshSpinner(refreshBtn);
+    // リフレッシュ中に定期ポーリングしてギャラリーをライブ更新
+    const _pollRefresh = setInterval(async () => {
+      if (key !== currentChannelKey) return;
+      const videos = await fetchChannelVideos(key);
+      if (videos.length !== allVideos.length) {
+        allVideos = videos;
+        if (currentView === 'list') renderList();
+        else if (currentView === 'ranking') renderRanking();
+      }
+    }, 2500);
     try {
       const res = await fetch('/api/channels/' + key + '/refresh', { method: 'POST', headers: getRssOnly() ? { 'X-RSS-Only': '1' } : apiKeyHeaders() });
       const data = await res.json().catch(() => ({}));
@@ -1276,7 +1286,7 @@ function buildChannelItem(ch) {
       else if (currentView === 'list') renderList();
       else if (currentView === 'ranking') renderRanking();
     } catch (err) { showToast(t('err-refresh-failed'), true); console.error('refresh:', err); }
-    finally { _refreshingKeys.delete(key); _stopRefreshSpinner(refreshBtn); }
+    finally { clearInterval(_pollRefresh); _refreshingKeys.delete(key); _stopRefreshSpinner(refreshBtn); }
   });
 
   deleteBtn.addEventListener('mouseenter', () => { if (_shiftHeld) _setChDelBtnIcon(deleteBtn, 'trash-2'); });
@@ -1400,13 +1410,14 @@ function buildFolderItem(folder) {
           } catch (err) { console.error('folder refresh:', err); }
           _refreshingKeys.delete(key);
           if (chRefBtn) _stopRefreshSpinner(chRefBtn);
-        }
-        if (folder.children.includes(currentChannelKey)) {
-          allVideos = await fetchChannelVideos(currentChannelKey);
-          _currentVotePair = null;
-          if (currentView === 'vote') renderVote();
-          else if (currentView === 'list') renderList();
-          else if (currentView === 'ranking') renderRanking();
+          // チャンネル完了ごとに即UIへ反映
+          if (key === currentChannelKey) {
+            allVideos = await fetchChannelVideos(key);
+            _currentVotePair = null;
+            if (currentView === 'vote') renderVote();
+            else if (currentView === 'list') renderList();
+            else if (currentView === 'ranking') renderRanking();
+          }
         }
         const toastMsg = getRssOnly()
           ? t('refresh-done-rss').replace('{changed}', addedVideos + updatedVideos)

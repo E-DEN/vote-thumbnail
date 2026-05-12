@@ -205,6 +205,14 @@ async function handleApi(request, env, url, ctx) {
         const validResult = await validateApiKey(effectiveEnv);
         if (validResult?.apiKeyError) return json({ ok: true, added, rssStatus, apiKeyError: true });
       }
+      // duration が短くカテゴリが videos のまま残っている動画をURL判定で再確認
+      // (UUSHプレイリストに入っていないショートの救済)
+      const shortCandidates = await env.DB.prepare(
+        "SELECT video_id FROM videos WHERE channel_id = ? AND category = 'videos' AND duration > 0 AND duration <= 180 LIMIT 40"
+      ).bind(channelId).all();
+      if (shortCandidates.results.length > 0) {
+        await detectShortsCategories(shortCandidates.results.map(r => r.video_id), effectiveEnv, { updateDuration: false });
+      }
       // DB上の総動画数を返す
       const countRow = await env.DB.prepare(
         'SELECT COUNT(*) AS cnt FROM videos WHERE channel_id = ?'
@@ -537,7 +545,7 @@ async function fetchAllVideosViaApi(channelId, env) {
 //   - 通常/ライブ → /watch?v= にリダイレクト → HTMLでライブ判定
 // ctx.waitUntil から呼ぶ (レスポンスをブロックしない)
 // ---------------------------------------------------------------------------
-async function detectShortsCategories(videoIds, env) {
+async function detectShortsCategories(videoIds, env, { updateDuration = true } = {}) {
   // 一度に処理する上限 (subrequest制限の考慮: 無料50件/回)
   const batch = videoIds.slice(0, 20);
   await Promise.allSettled(batch.map(async videoId => {
@@ -555,9 +563,15 @@ async function detectShortsCategories(videoIds, env) {
         const isLive = /"isLiveContent":true/.test(html) || /"liveBroadcastDetails"/.test(html);
         category = isLive ? 'live' : 'videos';
       }
-      await env.DB.prepare(
-        'UPDATE videos SET category = ?, duration = -1 WHERE video_id = ?'
-      ).bind(category, videoId).run();
+      if (updateDuration) {
+        await env.DB.prepare(
+          'UPDATE videos SET category = ?, duration = -1 WHERE video_id = ?'
+        ).bind(category, videoId).run();
+      } else {
+        await env.DB.prepare(
+          'UPDATE videos SET category = ? WHERE video_id = ?'
+        ).bind(category, videoId).run();
+      }
     } catch { /* サイレント失敗: 次回アクセス時に再試行 */ }
   }));
 }
@@ -595,18 +609,26 @@ async function fetchVideoDetails(videoIds, env) {
       }
       const data = await res.json();
       for (const item of (data.items ?? [])) {
-        const viewCount = parseInt(item.statistics?.viewCount ?? 0);
-        const duration  = parseISODuration(item.contentDetails?.duration);
+        const viewCount    = parseInt(item.statistics?.viewCount ?? 0);
+        const duration     = parseISODuration(item.contentDetails?.duration);
+        const title        = String(item.snippet?.title ?? '').slice(0, 500);
+        const publishedAt  = item.snippet?.publishedAt ?? null;
+        const thumbnailUrl = (
+          item.snippet?.thumbnails?.maxres?.url ||
+          item.snippet?.thumbnails?.high?.url ||
+          item.snippet?.thumbnails?.medium?.url ||
+          `https://i.ytimg.com/vi/${item.id}/maxresdefault.jpg`
+        );
         // liveBroadcastContent でライブ判定 (カテゴリはプレイリスト判定優先のため live のみ上書き)
         const lbc = item.snippet?.liveBroadcastContent ?? 'none';
         if (lbc === 'live' || lbc === 'upcoming') {
           await env.DB.prepare(
-            "UPDATE videos SET view_count = ?, duration = ?, category = 'live' WHERE video_id = ?"
-          ).bind(viewCount, duration, item.id).run();
+            "UPDATE videos SET title = ?, thumbnail_url = ?, published_at = ?, view_count = ?, duration = ?, category = 'live' WHERE video_id = ?"
+          ).bind(title, thumbnailUrl, publishedAt, viewCount, duration, item.id).run();
         } else {
           await env.DB.prepare(
-            'UPDATE videos SET view_count = ?, duration = ? WHERE video_id = ?'
-          ).bind(viewCount, duration, item.id).run();
+            'UPDATE videos SET title = ?, thumbnail_url = ?, published_at = ?, view_count = ?, duration = ? WHERE video_id = ?'
+          ).bind(title, thumbnailUrl, publishedAt, viewCount, duration, item.id).run();
         }
       }
     } catch { /* API障害時はスキップ */ }
