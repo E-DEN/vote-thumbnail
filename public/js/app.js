@@ -1,4 +1,4 @@
-// ---
+﻿// ---
 const BASE = 'https://www.googleapis.com/youtube/v3';
 
 // --- トースト通知 ---
@@ -92,11 +92,11 @@ let _reactionsPinColor  = localStorage.getItem('reactions-pin-color')  || '#ec48
 
 // ピンカラーパレット（各色につき3段階シェード）
 const PIN_PALETTES = {
-  '#ec4899': ['#ec4899', '#f472b6', '#db2777'],
-  '#00b0f4': ['#00b0f4', '#38bdf8', '#60a5fa'],
-  '#57f287': ['#57f287', '#4ade80', '#86efac'],
-  '#f59e0b': ['#f59e0b', '#fb923c', '#fbbf24'],
-  '#a855f7': ['#a855f7', '#c084fc', '#e879f9'],
+  '#ec4899': ['#ec4899', '#f472b6', '#db2777'],  // pink:   400→600
+  '#00b0f4': ['#00b0f4', '#38bdf8', '#0284c7'],  // sky:    400→600
+  '#57f287': ['#57f287', '#4ade80', '#16a34a'],  // green:  400→600
+  '#f59e0b': ['#f59e0b', '#fbbf24', '#d97706'],  // amber:  400→600
+  '#a855f7': ['#a855f7', '#c084fc', '#9333ea'],  // purple: 400→600
 };
 
 let DROP_HEIGHT  = 55;    // px: ピン落下高さ
@@ -2355,6 +2355,33 @@ function setSquashIntensity(v) {
   }
 }
 
+function _pinColorFromDensity(d) {
+  var palette = PIN_PALETTES[_reactionsPinColor] || PIN_PALETTES['#ec4899'];
+  function hexToRgb(h) {
+    h = h.replace('#','');
+    return [parseInt(h.slice(0,2),16), parseInt(h.slice(2,4),16), parseInt(h.slice(4,6),16)];
+  }
+  var cLight = hexToRgb(palette[1]);
+  var cDark  = hexToRgb(palette[2]);
+  var t = Math.max(0, (d - 0.1) / 0.9);
+  var r = Math.round(cLight[0] + (cDark[0] - cLight[0]) * t);
+  var g = Math.round(cLight[1] + (cDark[1] - cLight[1]) * t);
+  var b = Math.round(cLight[2] + (cDark[2] - cLight[2]) * t);
+  return 'rgb(' + r + ',' + g + ',' + b + ')';
+}
+
+function updatePinColors() {
+  var pinsLayer = document.getElementById('reactionsPinsLayer');
+  if (!pinsLayer) return;
+  pinsLayer.querySelectorAll('.reactions-pin').forEach(function(el) {
+    var d = parseFloat(el.dataset.density) || 0.5;
+    var shadeIdx = d >= 0.67 ? 2 : d >= 0.34 ? 1 : 0;
+    el.className = 'reactions-pin shade-' + shadeIdx;
+    var balloon = el.querySelector('.pin-balloon');
+    if (balloon) balloon.style.fill = _pinColorFromDensity(d);
+  });
+}
+
 function makeReactionsPinEl(x, y, density) {
   // density(0〜1): 高いほど大きい・濃い色。ランダム幅は±20%
   var d = density != null ? density : 0.5;
@@ -2364,23 +2391,12 @@ function makeReactionsPinEl(x, y, density) {
   const szH      = Math.round(sz * 1.25);
   // densityでシェード頭数を連続値として決定
   var shadeIdx = d >= 0.67 ? 2 : d >= 0.34 ? 1 : 0;
-  // 選択スウォッチ色をベースにdensityでシェードを補間
-  var palette = PIN_PALETTES[_reactionsPinColor] || PIN_PALETTES['#ec4899'];
-  function hexToRgb(h) {
-    h = h.replace('#','');
-    return [parseInt(h.slice(0,2),16), parseInt(h.slice(2,4),16), parseInt(h.slice(4,6),16)];
-  }
-  var cLight = hexToRgb(palette[1]); // shade-1 中間色
-  var cDark  = hexToRgb(palette[2]); // shade-2 濃色
-  var t = Math.max(0, (d - 0.1) / 0.9); // 0.1以下は明るいまま
-  var r = Math.round(cLight[0] + (cDark[0] - cLight[0]) * t);
-  var g = Math.round(cLight[1] + (cDark[1] - cLight[1]) * t);
-  var b = Math.round(cLight[2] + (cDark[2] - cLight[2]) * t);
-  var pinColor = 'rgb(' + r + ',' + g + ',' + b + ')';
+  var pinColor = _pinColorFromDensity(d);
   const el       = document.createElement('div');
   el.className   = 'reactions-pin shade-' + shadeIdx;
-  el.dataset.x   = x;
-  el.dataset.y   = y;
+  el.dataset.x       = x;
+  el.dataset.y       = y;
+  el.dataset.density = d.toFixed(4);
   // viewBox 0 0 24 30 でピン先端は y=29、translate(-50%,-100%) は底辺を座標に合わせる
   // → 先端は底辺より szH/30 px 上にある分を top に加算して補正
   var tipGap = szH / 30;
@@ -2451,38 +2467,24 @@ function startReactionsLoop() {
     return Math.pow(Math.random(), 1 / b.w) - Math.pow(Math.random(), 1 / a.w);
   });
   var placed = weighted.slice(0, REACTIONS_MAX_PINS).map(function(item) {
-    return { x: item.p.x, y: item.p.y, density: item.w * item.w }; // w=√density なので density=w²
+    return { x: item.p.x, y: item.p.y, density: 0 };
   });
 
-  // canvasピクセルでdensityを上書き
-  // offscreen canvasが未生成の場合は先に描画（ヒートマップOFF時も対応）
-  var samplingCanvas = _heatmapOffscreenCanvas;
-  if (!samplingCanvas) {
-    // offscreen専用でヒートマップを描画してサンプリングに使う
-    var layer = document.getElementById('reactionsHeatmapLayer');
-    var tempW = layer ? layer.offsetWidth : 400;
-    var tempH = layer ? layer.offsetHeight : 300;
-    if (tempW && tempH) {
-      renderReactionsHeatmap();
-      samplingCanvas = _heatmapOffscreenCanvas;
+  // KDE で各配置ピンの局所密度を評価
+  var BW2 = 0.09 * 0.09;
+  var maxKde = 0;
+  var kdeDensities = placed.map(function(pin) {
+    var kde = 0;
+    for (var i = 0; i < pins.length; i++) {
+      var dx = pins[i].x - pin.x, dy = pins[i].y - pin.y;
+      kde += Math.exp(-(dx * dx + dy * dy) / (2 * BW2));
     }
-  }
-  if (samplingCanvas) {
-    var hW = samplingCanvas.width, hH = samplingCanvas.height;
-    var rCtx = samplingCanvas.getContext('2d');
-    var maxA = 0;
-    var alphas = placed.map(function(pin) {
-      var px = Math.round(pin.x * hW), py = Math.round(pin.y * hH);
-      var d = rCtx.getImageData(Math.max(0,px-1), Math.max(0,py-1), 3, 3).data;
-      var a = 0;
-      for (var k = 3; k < d.length; k += 4) a = Math.max(a, d[k]);
-      if (a > maxA) maxA = a;
-      return a;
-    });
-    if (maxA > 0) {
-      for (var ai = 0; ai < placed.length; ai++) {
-        placed[ai].density = alphas[ai] / maxA;
-      }
+    if (kde > maxKde) maxKde = kde;
+    return kde;
+  });
+  if (maxKde > 0) {
+    for (var ai = 0; ai < placed.length; ai++) {
+      placed[ai].density = kdeDensities[ai] / maxKde;
     }
   }
 
@@ -3227,6 +3229,7 @@ function init() {
       localStorage.setItem('reactions-pin-color', color);
       applyPinPalette();
       if (_reactionsHeatmapVisible) renderReactionsHeatmap();
+      if (_reactionsPinsVisible) updatePinColors();
       // プレイリストのピンドット色を即時更新
       renderReactionsPlaylist(_reactionsCurrentVideoId);
       _refreshVideoMeta();
@@ -3235,6 +3238,7 @@ function init() {
 
   // ReactionPin: imgWrap クリックで pin 配置（好きピン OFF 時はクリックで自動 ON）
   var _rsImgWrap = document.getElementById('reactionsImgWrap');
+  _rsImgWrap.addEventListener('dragstart', function(e) { e.preventDefault(); });
   _rsImgWrap.addEventListener('click', function(e) {
     if (currentView !== 'reactions') return;
     if (!_reactionsPinsVisible) {
@@ -3636,5 +3640,290 @@ document.getElementById('catFilter').addEventListener('click', e => {
 })();
 
 // --- リアクションプレイリストリサイズ（無効）---
+
+// ===== Reactions Transport =====
+(function() {
+  var transportEl   = document.getElementById('rsTransport');
+  var toggleBtn     = document.getElementById('rsTransportToggleBtn');
+  var playBtn       = document.getElementById('rsPlayBtn');
+  var stopBtn       = document.getElementById('rsStopBtn');
+  var muteBtn       = document.getElementById('rsMuteBtn');
+  var screenshotBtn = document.getElementById('rsScreenshotBtn');
+  var theaterBtn    = document.getElementById('rsTheaterBtn');
+  var fullscreenBtn = document.getElementById('rsFullscreenBtn');
+  var imgWrap       = document.getElementById('reactionsImgWrap');
+  var volTrack      = document.getElementById('rsVolTrack');
+  var volFill       = document.getElementById('rsVolFill');
+  var volThumb      = document.getElementById('rsVolThumb');
+
+  var _transportVisible = true;
+  var _playing   = false;
+  // vol 0-100 にピン最大数をマッピング: 5 + round(vol/100*5)*5 → 5,10,15,20,25,30
+  var _vol = Math.round((REACTIONS_MAX_PINS - 5) / 25 * 100);
+  var _fsIdleTimer = null;
+
+  var _SVG_PLAY  = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>';
+  var _SVG_PAUSE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>';
+  var _SVG_VOLX  = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>';
+  var _SVG_VOL2  = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>';
+
+  // 初期状態を適用
+  transportEl.classList.add('visible');
+
+  // Transport 表示切替
+  toggleBtn.addEventListener('click', function() {
+    _transportVisible = !_transportVisible;
+    transportEl.classList.toggle('visible', _transportVisible);
+    toggleBtn.classList.toggle('active', _transportVisible);
+  });
+
+  // ---- 再生: みんなのピンアニメーション再生/一時停止 ----
+  playBtn.addEventListener('click', function(e) {
+    e.stopPropagation();
+    if (!_playing) {
+      if (_reactionsPinsVisible) {
+        startReactionsLoop();
+        _playing = true;
+        playBtn.innerHTML = _SVG_PAUSE;
+      }
+    } else {
+      _reactionsActive = false;
+      _playing = false;
+      playBtn.innerHTML = _SVG_PLAY;
+    }
+  });
+
+  // ---- 停止: アニメーション停止 + ピンクリア ----
+  stopBtn.addEventListener('click', function(e) {
+    e.stopPropagation();
+    _reactionsActive = false;
+    _playing = false;
+    playBtn.innerHTML = _SVG_PLAY;
+    var pinsLayer = document.getElementById('reactionsPinsLayer');
+    if (pinsLayer) pinsLayer.innerHTML = '';
+  });
+
+  // ---- 音量UI: 好きピン表示状態を反映 ----
+  function _updateVolUI() {
+    volFill.style.height  = _vol + '%';
+    volThumb.style.bottom = _vol + '%';
+    var myPin = document.getElementById('reactionsMyPin');
+    muteBtn.innerHTML = (myPin && myPin.hidden) ? _SVG_VOLX : _SVG_VOL2;
+  }
+  _updateVolUI();
+
+  // ---- ミュートボタン: 好きピン表示切替 ----
+  muteBtn.addEventListener('click', function(e) {
+    e.stopPropagation();
+    var myPin    = document.getElementById('reactionsMyPin');
+    var myPinShadow = document.getElementById('reactionsMyPinShadow');
+    if (!myPin) return;
+    if (!myPin.hidden) {
+      myPin.hidden = true;
+      if (myPinShadow) myPinShadow.hidden = true;
+    } else {
+      var saved = _reactionsMyPins[_reactionsCurrentVideoId];
+      if (saved && _reactionsPinsVisible) {
+        showMyReactionsPin(saved.x, saved.y, false);
+      } else {
+        myPin.hidden = false;
+        if (myPinShadow) myPinShadow.hidden = false;
+      }
+    }
+    _updateVolUI();
+  });
+
+  // ---- 音量スライダー: 最大ピン数を調整 ----
+  function _volToMaxPins(v) {
+    return Math.max(5, Math.min(30, Math.round(v / 100 * 5) * 5 + 5));
+  }
+  function _applyVolAsPinCount() {
+    var pins = _volToMaxPins(_vol);
+    REACTIONS_MAX_PINS = pins;
+    localStorage.setItem(LS_MAX_PINS, pins);
+    var slider = document.getElementById('reactionsPinCountSlider');
+    var valEl  = document.getElementById('reactionsPinCountVal');
+    if (slider) {
+      slider.value = pins;
+      var pct = (pins - parseFloat(slider.min)) / (parseFloat(slider.max) - parseFloat(slider.min)) * 100;
+      slider.style.setProperty('--fill', pct.toFixed(1) + '%');
+    }
+    if (valEl) valEl.textContent = pins;
+  }
+
+  var _volDragging = false;
+  var _pinCountDebounce = null;
+  function _volSeek(clientY) {
+    var r = volTrack.getBoundingClientRect();
+    _vol = Math.round(Math.min(100, Math.max(0, (1 - (clientY - r.top) / r.height) * 100)));
+    _updateVolUI();
+    _applyVolAsPinCount();
+    if (_reactionsPinsVisible && _playing) {
+      clearTimeout(_pinCountDebounce);
+      _pinCountDebounce = setTimeout(function() { startReactionsLoop(); }, 400);
+    }
+  }
+  volTrack.addEventListener('mousedown', function(e) {
+    _volDragging = true;
+    volTrack.classList.add('dragging');
+    _volSeek(e.clientY);
+    e.preventDefault();
+    e.stopPropagation();
+  });
+  document.addEventListener('mousemove', function(e) { if (_volDragging) _volSeek(e.clientY); });
+  document.addEventListener('mouseup', function() {
+    if (_volDragging) { _volDragging = false; volTrack.classList.remove('dragging'); }
+  });
+  volTrack.addEventListener('wheel', function(e) {
+    e.preventDefault();
+    _vol = Math.min(100, Math.max(0, _vol - Math.sign(e.deltaY) * (e.shiftKey ? 10 : 1)));
+    _updateVolUI();
+    _applyVolAsPinCount();
+    if (_reactionsPinsVisible && _playing) {
+      clearTimeout(_pinCountDebounce);
+      _pinCountDebounce = setTimeout(function() { startReactionsLoop(); }, 400);
+    }
+  }, { passive: false });
+
+  // 初期ボリュームUIを適用
+  _applyVolAsPinCount();
+
+  // ---- スクリーンショット: 画像 + ヒートマップ + ピンを合成して保存 ----
+  var _BALLOON_PATH = new Path2D('M12,29 C5.5,21.5 1.5,17 1.5,11 a10.5,10.5,0,0,1,21,0 C22.5,17 18.5,21.5 12,29 Z');
+  var _HEART_PATH   = new Path2D('M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z');
+
+  function _drawPinOnCanvas(ctx, px, py, sz, szH, color, lW, lH) {
+    var elX = px * lW - sz / 2;
+    var elY = py * lH + szH / 30 - szH;
+    ctx.save();
+    ctx.translate(elX, elY);
+    ctx.scale(sz / 24, szH / 30);
+    ctx.shadowColor = 'rgba(0,0,0,0.45)';
+    ctx.shadowBlur = 8;
+    ctx.shadowOffsetY = 3;
+    ctx.fillStyle = color;
+    ctx.fill(_BALLOON_PATH);
+    ctx.shadowColor = 'transparent';
+    ctx.fillStyle = 'rgba(255,255,255,0.9)';
+    ctx.translate(12, 11);
+    ctx.scale(0.38, 0.38);
+    ctx.translate(-12, -12);
+    ctx.fill(_HEART_PATH);
+    ctx.restore();
+  }
+
+  screenshotBtn.addEventListener('click', function(e) {
+    e.stopPropagation();
+    var rsImg = document.getElementById('reactionsImg');
+    if (!rsImg || !rsImg.src) return;
+    var pinsLayer    = document.getElementById('reactionsPinsLayer');
+    var heatmapLayer = document.getElementById('reactionsHeatmapLayer');
+    var lW = parseFloat(pinsLayer.style.width)  || pinsLayer.offsetWidth;
+    var lH = parseFloat(pinsLayer.style.height) || pinsLayer.offsetHeight;
+    if (!lW || !lH) return;
+
+    var canvas = document.createElement('canvas');
+    canvas.width  = lW;
+    canvas.height = lH;
+    var ctx = canvas.getContext('2d');
+
+    function _compositeAndExport(blobUrl) {
+      var tmp = new Image();
+      tmp.onload = function() {
+        ctx.drawImage(tmp, 0, 0, lW, lH);
+        if (blobUrl.startsWith('blob:')) URL.revokeObjectURL(blobUrl);
+
+        // ヒートマップ
+        if (_reactionsHeatmapVisible) {
+          var hmCanvas = heatmapLayer.querySelector('canvas');
+          if (hmCanvas) ctx.drawImage(hmCanvas, 0, 0, lW, lH);
+        }
+
+        // みんなのピン
+        if (_reactionsPinsVisible) {
+          pinsLayer.querySelectorAll('.reactions-pin').forEach(function(pinEl) {
+            var px = parseFloat(pinEl.dataset.x);
+            var py = parseFloat(pinEl.dataset.y);
+            var svgEl = pinEl.querySelector('svg');
+            if (!svgEl) return;
+            var sz  = parseFloat(svgEl.getAttribute('width'));
+            var szH = parseFloat(svgEl.getAttribute('height'));
+            var balloonEl = pinEl.querySelector('.pin-balloon');
+            var color = balloonEl ? (balloonEl.style.fill || '#ec4899') : '#ec4899';
+            _drawPinOnCanvas(ctx, px, py, sz, szH, color, lW, lH);
+          });
+        }
+
+        // 好きピン
+        var myPin = document.getElementById('reactionsMyPin');
+        if (myPin && !myPin.hidden) {
+          var saved = _reactionsMyPins[_reactionsCurrentVideoId];
+          if (saved) {
+            var myPinSvg = document.getElementById('reactionsMyPinSvg');
+            var mySz  = myPinSvg ? parseFloat(myPinSvg.getAttribute('width'))  : 36;
+            var mySzH = myPinSvg ? parseFloat(myPinSvg.getAttribute('height')) : 45;
+            var myBalloon = myPinSvg ? myPinSvg.querySelector('.pin-balloon') : null;
+            var myColor = myBalloon ? (myBalloon.style.fill || getComputedStyle(myBalloon).fill || '#ec4899') : '#ec4899';
+            _drawPinOnCanvas(ctx, saved.x, saved.y, mySz, mySzH, myColor, lW, lH);
+          }
+        }
+
+        canvas.toBlob(function(blob) {
+          var url = URL.createObjectURL(blob);
+          var a = document.createElement('a');
+          a.href = url;
+          a.download = (_reactionsCurrentVideoId || 'thumbnail') + '_reactions.png';
+          a.click();
+          setTimeout(function() { URL.revokeObjectURL(url); }, 10000);
+        }, 'image/png');
+      };
+      tmp.src = blobUrl;
+    }
+
+    fetch(rsImg.src)
+      .then(function(r) { return r.blob(); })
+      .then(function(blob) { _compositeAndExport(URL.createObjectURL(blob)); })
+      .catch(function() { _compositeAndExport(rsImg.src); });
+  });
+
+  // ---- シアターモード: プレイリストを非表示 ----
+  theaterBtn.addEventListener('click', function(e) {
+    e.stopPropagation();
+    var rsScreen = document.getElementById('reactionsScreen');
+    var active   = rsScreen.classList.toggle('rs-theater-active');
+    theaterBtn.classList.toggle('active', active);
+  });
+
+  // ---- フルスクリーン ----
+  fullscreenBtn.addEventListener('click', function(e) {
+    e.stopPropagation();
+    if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+      var req = imgWrap.requestFullscreen || imgWrap.webkitRequestFullscreen;
+      if (req) req.call(imgWrap);
+    } else {
+      var ex = document.exitFullscreen || document.webkitExitFullscreen;
+      if (ex) ex.call(document);
+    }
+  });
+  function onFullscreenChange() {
+    var isFs = !!(document.fullscreenElement || document.webkitFullscreenElement);
+    fullscreenBtn.classList.toggle('active', isFs);
+    if (!isFs) { imgWrap.classList.remove('fs-idle'); clearTimeout(_fsIdleTimer); }
+  }
+  document.addEventListener('fullscreenchange', onFullscreenChange);
+  document.addEventListener('webkitfullscreenchange', onFullscreenChange);
+
+  imgWrap.addEventListener('mousemove', function() {
+    if (document.fullscreenElement === imgWrap || document.webkitFullscreenElement === imgWrap) {
+      imgWrap.classList.remove('fs-idle');
+      clearTimeout(_fsIdleTimer);
+      _fsIdleTimer = setTimeout(function() {
+        if (document.fullscreenElement === imgWrap || document.webkitFullscreenElement === imgWrap) {
+          imgWrap.classList.add('fs-idle');
+        }
+      }, 3000);
+    }
+  });
+})();
 
 init();

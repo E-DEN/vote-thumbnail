@@ -1,4 +1,4 @@
-/* --- Variables --- */
+﻿/* --- Variables --- */
 :root[data-theme="dark"] {
   --bg:         #1e1f22;
   --surface:    #2b2d31;
@@ -1337,7 +1337,6 @@ header {
   flex-shrink: 0;
 }
 .gallery-meta-rank {
-  opacity: 0.55;
   font-size: 9px;
   margin-left: 1px;
 }
@@ -2889,6 +2888,8 @@ a.rs-video-title:hover { color: var(--accent); }
   flex-direction: column;
   background: var(--surface);
   border-left: 1px solid var(--border);
+  overflow: hidden;
+  transition: max-width 0.3s ease, opacity 0.3s ease, border-color 0.3s ease;
 }
 .rs-playlist-resize-handle { display: none; }
 .rs-playlist-header {
@@ -3049,3 +3050,224 @@ a.rs-video-title:hover { color: var(--accent); }
 @keyframes app-toast-in  { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes app-toast-out { from { opacity: 1; transform: translateY(0); }   to { opacity: 0; transform: translateY(8px); } }
 
+
+/* ===== Reactions Transport Overlay ===== */
+
+.rs-transport {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 10;
+  background: linear-gradient(to top, rgba(0,0,0,0.72) 0%, rgba(0,0,0,0.0) 100%);
+  padding: 32px 12px 10px;
+  opacity: 0;
+  transition: opacity 0.55s ease;
+  pointer-events: none;
+  border-radius: 0 0 4px 4px;
+  display: none;
+}
+.rs-transport.visible { display: block; }
+.rs-img-wrap:hover .rs-transport.visible { opacity: 1; transition: opacity 0.12s ease; }
+.rs-img-wrap.rs-playing .rs-transport.visible { opacity: 1; }
+
+.rs-transport-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.rs-tbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  color: #fff;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: transform 0.1s;
+  pointer-events: auto;
+}
+.rs-tbtn:hover {
+  background: radial-gradient(circle, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0) 75%);
+  transform: scale(1.1);
+}
+.rs-tbtn svg {
+  width: 16px;
+  height: 16px;
+  stroke: #fff;
+  fill: none;
+  pointer-events: none;
+}
+.rs-tbtn.active svg { stroke: var(--accent); }
+
+/* Progress bar */
+.rs-progress-track {
+  flex: 1;
+  height: 4px;
+  background: rgba(255,255,255,0.25);
+  border-radius: 3px;
+  cursor: pointer;
+  position: relative;
+  margin: 0 4px;
+  pointer-events: auto;
+  transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+  transform-origin: center;
+}
+.rs-progress-track::before {
+  content: '';
+  position: absolute;
+  inset: -10px 0;
+}
+.rs-progress-track:hover { transform: scaleY(1.5); }
+.rs-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), var(--accent2));
+  border-radius: 3px;
+  width: 0%;
+  pointer-events: none;
+}
+.rs-progress-thumb {
+  position: absolute;
+  top: 50%;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--accent);
+  transform: translate(-50%, -50%) scale(0);
+  pointer-events: none;
+  left: 0%;
+  transition: transform 0.12s;
+}
+.rs-progress-track:hover .rs-progress-thumb,
+.rs-progress-track.dragging .rs-progress-thumb {
+  transform: translate(-50%, -50%) scale(1) scaleY(calc(1 / 1.5));
+}
+
+/* Time label */
+.rs-time-label {
+  font-size: 11px;
+  color: rgba(255,255,255,0.7);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  flex-shrink: 0;
+  min-width: 76px;
+  text-align: right;
+  pointer-events: none;
+}
+
+/* Volume popup */
+.rs-transport-vol {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+.rs-transport-mute-btn { flex-shrink: 0; }
+.rs-transport-vol-popup {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%) translateY(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  padding: 6px 0;
+}
+.rs-transport-vol:hover .rs-transport-vol-popup,
+.rs-transport-vol.vol-open .rs-transport-vol-popup {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(-50%) translateY(0);
+}
+.rs-vol-track-wrap {
+  width: 20px;
+  height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.rs-vol-track {
+  width: 4px;
+  height: 80px;
+  background: rgba(255,255,255,0.25);
+  border-radius: 3px;
+  cursor: pointer;
+  position: relative;
+  pointer-events: auto;
+}
+.rs-vol-track::before {
+  content: '';
+  position: absolute;
+  inset: 0 -10px;
+}
+.rs-vol-fill {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  border-radius: 3px;
+  background: linear-gradient(to top, var(--accent), var(--accent2));
+  pointer-events: none;
+  height: 100%;
+}
+.rs-vol-thumb {
+  position: absolute;
+  left: 50%;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--accent);
+  transform: translate(-50%, 50%) scale(1);
+  pointer-events: none;
+  bottom: 0%;
+  transition: transform 0.12s;
+}
+
+/* フルスクリーン中はトランスポートを常時表示 */
+.rs-img-wrap:fullscreen .rs-transport.visible,
+.rs-img-wrap:-webkit-full-screen .rs-transport.visible {
+  opacity: 1;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  border-radius: 0;
+  transition: opacity 0.15s ease;
+}
+.rs-img-wrap:fullscreen .rs-tbtn,
+.rs-img-wrap:fullscreen .rs-progress-track,
+.rs-img-wrap:-webkit-full-screen .rs-tbtn,
+.rs-img-wrap:-webkit-full-screen .rs-progress-track { pointer-events: auto; }
+.rs-img-wrap:fullscreen.fs-idle .rs-transport,
+.rs-img-wrap:-webkit-full-screen.fs-idle .rs-transport {
+  opacity: 0;
+  transition: opacity 0.8s ease;
+}
+.rs-img-wrap:fullscreen.fs-idle { cursor: none; }
+.rs-img-wrap:fullscreen img,
+.rs-img-wrap:-webkit-full-screen img { max-width: 100%; max-height: 100vh; object-fit: contain; }
+.rs-img-wrap:fullscreen,
+.rs-img-wrap:-webkit-full-screen {
+  background: #000;
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0;
+}
+
+/* シアターモード: プレイリストをアニメーションで非表示 */
+#reactionsScreen.rs-theater-active .rs-playlist {
+  max-width: 0;
+  min-width: 0;
+  opacity: 0;
+  border-color: transparent;
+  pointer-events: none;
+}

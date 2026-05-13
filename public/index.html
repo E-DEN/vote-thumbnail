@@ -148,7 +148,7 @@
       <div id="reactionsScreen" class="screen" style="display:none">
         <div class="rs-main">
         <div class="rs-img-wrap" id="reactionsImgWrap">
-          <img id="reactionsImg" src="" alt="" referrerpolicy="no-referrer">
+          <img id="reactionsImg" src="" alt="" referrerpolicy="no-referrer" draggable="false">
           <div class="reactions-heatmap-layer" id="reactionsHeatmapLayer"></div>
           <div class="reactions-pins-layer" id="reactionsPinsLayer"></div>
           <div class="reactions-my-pin-shadow" id="reactionsMyPinShadow" hidden></div>
@@ -161,11 +161,50 @@
             </svg>
             <span class="reactions-my-pin-label" data-i18n="reactions-you">あなた</span>
           </div>
+          <!-- トランスポートオーバーレイ -->
+          <div class="rs-transport" id="rsTransport">
+            <div class="rs-transport-row">
+              <button class="rs-tbtn" id="rsPlayBtn" title="再生 / 一時停止">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+              </button>
+              <button class="rs-tbtn" id="rsStopBtn" title="停止">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
+              </button>
+              <div class="rs-transport-vol" id="rsTransportVol">
+                <div class="rs-transport-vol-popup">
+                  <div class="rs-vol-track-wrap">
+                    <div class="rs-vol-track" id="rsVolTrack">
+                      <div class="rs-vol-fill" id="rsVolFill"></div>
+                      <div class="rs-vol-thumb" id="rsVolThumb"></div>
+                    </div>
+                  </div>
+                </div>
+                <button class="rs-tbtn rs-transport-mute-btn" id="rsMuteBtn" title="ミュート">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+                </button>
+              </div>
+              <div class="rs-progress-track" id="rsProgressTrack">
+                <div class="rs-progress-fill" id="rsProgressFill"></div>
+                <div class="rs-progress-thumb" id="rsProgressThumb"></div>
+              </div>
+              <div class="rs-time-label" id="rsTimeLabel">0:00 / 0:00</div>
+              <button class="rs-tbtn" id="rsScreenshotBtn" title="画像を開く">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+              </button>
+              <button class="rs-tbtn" id="rsTheaterBtn" title="シアターモード">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="18" rx="2"/><path d="M14 3v18"/></svg>
+              </button>
+              <button class="rs-tbtn" id="rsFullscreenBtn" title="フルスクリーン">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+              </button>
+            </div>
+          </div>
         </div><!-- /.rs-img-wrap -->
         <div class="rs-toolbar">
           <div class="rs-toolbar-group">
             <button class="rs-mode-btn active" id="reactionsPinsModeBtn" data-i18n="reactions-pins">Pins</button>
             <button class="rs-mode-btn" id="reactionsHeatmapModeBtn" data-i18n="reactions-heatmap">Heatmap</button>
+            <button class="rs-mode-btn active" id="rsTransportToggleBtn" data-i18n="reactions-transport">Transport</button>
           </div>
           <div class="rs-toolbar-sep"></div>
           <div class="rs-toolbar-group">
