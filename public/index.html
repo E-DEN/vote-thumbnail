@@ -202,9 +202,9 @@
         </div><!-- /.rs-img-wrap -->
         <div class="rs-toolbar">
           <div class="rs-toolbar-group">
-            <button class="rs-mode-btn active" id="reactionsPinsModeBtn" data-i18n="reactions-pins">Pins</button>
-            <button class="rs-mode-btn" id="reactionsHeatmapModeBtn" data-i18n="reactions-heatmap">Heatmap</button>
-            <button class="rs-mode-btn active" id="rsTransportToggleBtn" data-i18n="reactions-transport">Transport</button>
+            <button class="rs-mode-btn active" id="reactionsPinsModeBtn"><i data-lucide="heart"></i><span data-i18n="reactions-pins">好き</span></button>
+            <button class="rs-mode-btn" id="reactionsHeatmapModeBtn"><i data-lucide="flame"></i><span data-i18n="reactions-heatmap">人気</span></button>
+            <button class="rs-mode-btn active" id="rsTransportToggleBtn"><i data-lucide="play"></i><span data-i18n="reactions-transport">再生</span></button>
           </div>
           <div class="rs-toolbar-sep"></div>
           <div class="rs-toolbar-group">
@@ -217,7 +217,17 @@
           <div class="rs-toolbar-sep"></div>
           <div class="rs-toolbar-group rs-toolbar-group--slider">
             <span class="rs-toolbar-label" data-i18n="reactions-max-pins">最大ピン数</span>
-            <input type="range" id="reactionsPinCountSlider" class="rs-slider" min="5" max="30" step="5" value="10">
+            <input type="range" id="reactionsPinCountSlider" class="rs-slider" min="0" max="30" step="1" value="10" list="pinCountSnaps">
+            <datalist id="pinCountSnaps">
+              <option value="0"></option>
+              <option value="1"></option>
+              <option value="5"></option>
+              <option value="10"></option>
+              <option value="15"></option>
+              <option value="20"></option>
+              <option value="25"></option>
+              <option value="30"></option>
+            </datalist>
             <span class="rs-slider-val" id="reactionsPinCountVal">10</span>
           </div>
         </div>

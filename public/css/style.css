@@ -34,7 +34,7 @@
 
 /* --- Reset --- */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-button { -webkit-tap-highlight-color: transparent; appearance: none; cursor: pointer; }
+button { -webkit-tap-highlight-color: transparent; appearance: none; cursor: pointer; user-select: none; }
 button:focus { outline: none; }
 button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 *::-webkit-scrollbar { width: 6px; height: 6px; }
@@ -2370,20 +2370,22 @@ header {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  display: none;
+  display: block;
 }
+.reactions-heatmap-layer {
+  z-index: 1;
+  overflow: hidden;
+  border-radius: 14px; /* blur の滲みを角丸に合わせてクリップ */
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.18s ease, visibility 0.18s ease;
+}
+.reactions-pins-layer { z-index: 2; }
 
 .modal-img-wrap.reactions-active .reactions-pins-layer,
 .modal-img-wrap.reactions-active .reactions-heatmap-layer {
-  display: block;
-}
-
-/* ヒートマップ表示中: サムネイル画像を暗くする */
-#reactionsImg {
-  transition: opacity 0.3s ease, filter 0.3s ease;
-}
-.rs-img-wrap.heatmap-visible #reactionsImg {
-  opacity: 0.14;
+  visibility: visible;
+  opacity: 1;
 }
 
 /* pin アニメーション */
@@ -2425,6 +2427,14 @@ header {
 @keyframes reactionsPinFloat {
   0%, 100% { transform: translate(-50%, -100%); }
   50%       { transform: translate(-50%, calc(-100% - 5px)); }
+}
+.rs-seeking .reactions-pin {
+  animation: none !important;
+  transform: translate(-50%, -100%) !important;
+}
+/* みんなのピン: 着地後（rs-floating）はフロートを一時停止 */
+.rs-paused .reactions-pin.rs-floating {
+  animation-play-state: paused !important;
 }
 @keyframes reactionsPinColorCycle {
   0%, 100% { fill: var(--pin-c0); }
@@ -2575,13 +2585,14 @@ header {
 .rs-img-wrap {
   position: relative;
   border-radius: 14px;
-  overflow: hidden;
+  /* overflow:hidden は削除 — ピンが端でクリップされるため */
   box-shadow: 0 6px 24px rgba(0,0,0,0.50), 0 0 0 1px rgba(255,255,255,0.06);
   width: min(100%, calc((100vh - 240px) * 16 / 9));
   will-change: transform;
   transform: translateZ(0);
   isolation: isolate;
   cursor: default;
+  user-select: none;
 }
 .rs-img-wrap img {
   display: block;
@@ -2589,6 +2600,7 @@ header {
   height: auto;
   pointer-events: none;
   user-select: none;
+  border-radius: 14px; /* replaced element は border-radius だけで角丸クリップされる */
 }
 
 /* 右サイドバー (gfと同テーマ) */
@@ -2720,6 +2732,10 @@ a.rs-video-title:hover { color: var(--accent); }
   gap: 4px;
 }
 .rs-mode-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
   background: transparent;
   border: 1px solid var(--border);
   border-radius: 5px;
@@ -2731,6 +2747,11 @@ a.rs-video-title:hover { color: var(--accent); }
   width: 100%;
   cursor: pointer;
   transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+.rs-mode-btn i {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
 }
 .rs-mode-btn:hover {
   color: var(--text);
@@ -3062,14 +3083,15 @@ a.rs-video-title:hover { color: var(--accent); }
   background: linear-gradient(to top, rgba(0,0,0,0.72) 0%, rgba(0,0,0,0.0) 100%);
   padding: 32px 12px 10px;
   opacity: 0;
+  user-select: none;
   transition: opacity 0.55s ease;
   pointer-events: none;
   border-radius: 0 0 4px 4px;
   display: none;
 }
 .rs-transport.visible { display: block; }
-.rs-img-wrap:hover .rs-transport.visible { opacity: 1; transition: opacity 0.12s ease; }
-.rs-img-wrap.rs-playing .rs-transport.visible { opacity: 1; }
+.rs-img-wrap:hover .rs-transport.visible:not(.rs-transport-off) { opacity: 1; pointer-events: auto; transition: opacity 0.18s ease; }
+.rs-transport.visible.rs-transport-off { opacity: 0; pointer-events: none; transition: opacity 0.18s ease; }
 
 .rs-transport-row {
   display: flex;
@@ -3145,7 +3167,7 @@ a.rs-video-title:hover { color: var(--accent); }
 }
 .rs-progress-track:hover .rs-progress-thumb,
 .rs-progress-track.dragging .rs-progress-thumb {
-  transform: translate(-50%, -50%) scale(1) scaleY(calc(1 / 1.5));
+  transform: translate(-50%, -50%) scaleY(calc(1 / 1.5));
 }
 
 /* Time label */
