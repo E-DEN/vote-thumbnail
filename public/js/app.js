@@ -3752,7 +3752,7 @@ document.getElementById('catFilter').addEventListener('click', e => {
     applyCompact(w, false);
   }
 
-  let startX, startW;
+  let startX, startW, _rafId = null;
   handle.addEventListener('mousedown', e => {
     e.preventDefault();
     startX = e.clientX;
@@ -3762,11 +3762,16 @@ document.getElementById('catFilter').addEventListener('click', e => {
     document.addEventListener('mouseup', onUp);
   });
   function onMove(e) {
-    let w = startW + e.clientX - startX;
-    if (w < COMPACT_THRESHOLD) w = COMPACT_WIDTH;
-    w = Math.min(400, Math.max(COMPACT_WIDTH, w));
-    sidebar.style.width = w + 'px';
-    applyCompact(w, true);
+    var clientX = e.clientX;
+    if (_rafId) return;
+    _rafId = requestAnimationFrame(function() {
+      _rafId = null;
+      var w = startW + clientX - startX;
+      if (w < COMPACT_THRESHOLD) w = COMPACT_WIDTH;
+      w = Math.min(400, Math.max(COMPACT_WIDTH, w));
+      sidebar.style.width = w + 'px';
+      applyCompact(w, true);
+    });
   }
   function onUp() {
     handle.classList.remove('dragging');

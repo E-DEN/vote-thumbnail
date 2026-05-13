@@ -2659,9 +2659,9 @@ header {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: flex-start;
-  padding: 16px;
-  gap: 12px;
+  justify-content: center;
+  padding: 8px;
+  gap: 6px;
   overflow-y: auto;
   scrollbar-width: none;
 }
@@ -2794,7 +2794,10 @@ header {
   text-decoration: none;
   cursor: pointer;
   transition: color 0.15s;
-  display: block;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 a.rs-video-title:hover { color: var(--accent); }
 .rs-video-meta {
