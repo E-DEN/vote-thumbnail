@@ -662,6 +662,7 @@ header {
 }
 .ch-tab:hover:not(.active) {
   color: var(--text);
+  border-bottom-color: rgba(255,255,255,0.15);
 }
 
 /* --- Category filter (in channel header) --- */
@@ -2649,6 +2650,7 @@ header {
   align-items: stretch;
   position: relative;
   scrollbar-gutter: auto;
+  overflow: hidden;
 }
 .rs-main {
   flex: 1;
@@ -2985,14 +2987,14 @@ a.rs-video-title:hover { color: var(--accent); }
   position: relative;
   flex-shrink: 0;
   width: 400px;
-  min-width: 160px;
+  min-width: 400px;
   max-width: 400px;
   display: flex;
   flex-direction: column;
   background: var(--surface);
   border-left: 1px solid var(--border);
   overflow: hidden;
-  transition: max-width 0.3s ease, opacity 0.3s ease, border-color 0.3s ease;
+  transition: transform 0.3s ease, opacity 0.3s ease, margin-right 0.3s ease;
 }
 .rs-playlist-resize-handle { display: none; }
 .rs-playlist-header {
@@ -3369,10 +3371,11 @@ a.rs-video-title:hover { color: var(--accent); }
   border-radius: 0;
 }
 
-/* シアターモード: プレイリストをアニメーションで非表示 */
+/* シアターモード: margin-right で空間を同時に縮め、transform でスライドアウト */
+/* playlist 内部の width は 400px のまま変わらないのでリフロー不要 */
 #reactionsScreen.rs-theater-active .rs-playlist {
-  max-width: 0;
-  min-width: 0;
+  margin-right: -400px;
+  transform: translateX(100%);
   opacity: 0;
   border-color: transparent;
   pointer-events: none;

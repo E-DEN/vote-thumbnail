@@ -4348,17 +4348,28 @@ document.getElementById('catFilter').addEventListener('click', e => {
         }
         function _wrapText(c, text, maxW, maxLines) {
           if (c.measureText(text).width <= maxW) return [text];
-          var words = text.split(' ');
+          // 文字単位ラップ: 行頭禁則（】」）。、など）は前行末に追加して改行
+          var forbiddenLineStart = '）】」』〉》｝)！？。、…‥';
           var lines = []; var cur = '';
-          for (var i = 0; i < words.length; i++) {
-            var test = cur ? cur + ' ' + words[i] : words[i];
+          for (var j = 0; j < text.length; j++) {
+            var ch = text[j];
+            if (!cur && ch === ' ') continue; // 行頭スペースはスキップ
+            var test = cur + ch;
             if (c.measureText(test).width > maxW && cur) {
-              lines.push(cur); cur = words[i];
-              if (lines.length >= maxLines) break;
+              if (forbiddenLineStart.indexOf(ch) !== -1) {
+                // 禁則文字は前行に含めてから改行
+                lines.push(cur + ch); cur = '';
+              } else {
+                lines.push(cur); cur = ch;
+              }
+              if (lines.length >= maxLines) { cur = text.slice(j + 1); break; }
             } else { cur = test; }
           }
-          if (cur && lines.length < maxLines) lines.push(cur);
-          else if (cur) lines[lines.length - 1] += ' ' + cur;
+          if (cur) {
+            var trimmed = cur.trim();
+            if (lines.length < maxLines) lines.push(trimmed);
+            else lines[lines.length - 1] += trimmed;
+          }
           lines[lines.length - 1] = _truncText(c, lines[lines.length - 1], maxW);
           return lines;
         }
@@ -4486,13 +4497,16 @@ document.getElementById('catFilter').addEventListener('click', e => {
           // チャンネル名 (sub)
           if (chName) {
             ctx.font = '600 ' + fsSub + 'px "Segoe UI",sans-serif';
-            ctx.fillStyle = 'rgba(255,255,255,0.68)';
+            ctx.fillStyle = 'rgba(255,255,255,0.72)';
             var subText = _truncText(ctx, chName, availW);
             var subY = tY + fsSub;
-            ctx.shadowColor = 'rgba(180,220,255,0.75)'; ctx.shadowBlur = 16; ctx.shadowOffsetY = 0;
+            // グロー
+            ctx.shadowColor = 'rgba(200,230,255,0.65)'; ctx.shadowBlur = 14; ctx.shadowOffsetY = 0;
             ctx.fillText(subText, textX, subY);
-            ctx.shadowColor = 'rgba(0,0,0,0.85)'; ctx.shadowBlur = 5; ctx.shadowOffsetY = 1;
+            // シェード
+            ctx.shadowColor = 'rgba(0,0,0,0.96)'; ctx.shadowBlur = 9; ctx.shadowOffsetY = 2;
             ctx.fillText(subText, textX, subY);
+            // クリーンフィル
             ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
             ctx.fillText(subText, textX, subY);
             tY += fsSub + subGap;
@@ -4503,10 +4517,13 @@ document.getElementById('catFilter').addEventListener('click', e => {
           ctx.fillStyle = 'rgba(255,255,255,0.97)';
           titleLines.forEach(function(line, i) {
             var yPos = tY + fsMaiActual + i * (fsMaiActual + lineGap);
-            ctx.shadowColor = 'rgba(180,220,255,0.80)'; ctx.shadowBlur = 22; ctx.shadowOffsetY = 0;
+            // グロー
+            ctx.shadowColor = 'rgba(200,230,255,0.65)'; ctx.shadowBlur = 22; ctx.shadowOffsetY = 0;
             ctx.fillText(line, textX, yPos);
-            ctx.shadowColor = 'rgba(0,0,0,0.90)'; ctx.shadowBlur = 8; ctx.shadowOffsetY = 2;
+            // シェード
+            ctx.shadowColor = 'rgba(0,0,0,0.96)'; ctx.shadowBlur = 14; ctx.shadowOffsetY = 3;
             ctx.fillText(line, textX, yPos);
+            // クリーンフィル
             ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
             ctx.fillText(line, textX, yPos);
           });
@@ -4522,22 +4539,17 @@ document.getElementById('catFilter').addEventListener('click', e => {
           _drawLowerThird(avatarImg, snap);
           canvas.toBlob(function(blob) {
             var url = URL.createObjectURL(blob);
-            // --- プレビューモーダル ---
-            var overlay = document.createElement('div');
-            overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.82);display:flex;align-items:center;justify-content:center;cursor:zoom-out;';
-            var img = document.createElement('img');
-            img.src = url;
-            img.style.cssText = 'max-width:92vw;max-height:88vh;border-radius:8px;box-shadow:0 8px 40px rgba(0,0,0,0.7);display:block;';
-            overlay.appendChild(img);
-            var hint = document.createElement('div');
-            hint.textContent = 'クリックで閉じる';
-            hint.style.cssText = 'position:absolute;bottom:18px;left:50%;transform:translateX(-50%);color:rgba(255,255,255,0.5);font-size:12px;pointer-events:none;';
-            overlay.appendChild(hint);
-            overlay.addEventListener('click', function() {
-              document.body.removeChild(overlay);
-              URL.revokeObjectURL(url);
-            });
-            document.body.appendChild(overlay);
+            var _dlSanitize = function(s) { return s.replace(/[\\/:*?"<>|]/g, '_').trim().slice(0, 60); };
+            var _dlChName  = _ltCh  ? (_ltCh.displayName  || '') : '';
+            var _dlTitle   = _ltVid ? (_ltVid.title || '') : '';
+            var _dlName = [_dlChName, _dlTitle].filter(Boolean).map(_dlSanitize).join(' - ') || (_reactionsCurrentVideoId || 'screenshot');
+            var a = document.createElement('a');
+            a.href = url;
+            a.download = _dlName + '.png';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            setTimeout(function() { URL.revokeObjectURL(url); }, 10000);
           }, 'image/png');
         }
 
@@ -4561,11 +4573,23 @@ document.getElementById('catFilter').addEventListener('click', e => {
   });
 
   // ---- シアターモード: プレイリストを非表示 ----
+  // margin-right: -400px と transform: translateX(100%) を同時アニメーション
+  // → 画像拡大とスライドが同時、かつ playlist 内部レイアウトは 400px 固定 (リフロー不要)
+  function _setTheater(enable) {
+    var rsScreen = document.getElementById('reactionsScreen');
+    rsScreen.classList.toggle('rs-theater-active', enable);
+    theaterBtn.innerHTML = enable
+      ? '<i data-lucide="panel-right-open"></i>'
+      : '<i data-lucide="panel-right-close"></i>';
+    theaterBtn.title = typeof t === 'function'
+      ? t(enable ? 'theater-close' : 'theater-open')
+      : (enable ? 'プレイリストを表示' : 'シアターモード');
+    if (window.lucide) lucide.createIcons();
+  }
   theaterBtn.addEventListener('click', function(e) {
     e.stopPropagation();
     var rsScreen = document.getElementById('reactionsScreen');
-    var active   = rsScreen.classList.toggle('rs-theater-active');
-    theaterBtn.classList.toggle('active', active);
+    _setTheater(!rsScreen.classList.contains('rs-theater-active'));
   });
 
   // ---- フルスクリーン ----
