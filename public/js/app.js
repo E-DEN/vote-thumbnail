@@ -4224,8 +4224,8 @@ document.getElementById('catFilter').addEventListener('click', e => {
         }
 
         // 透かし: チャンネルアイコン・チャンネル名・動画タイトル
-        var _wCh  = channels[currentChannelKey];
-        var _wVid = allVideos.find(function(v) { return v.id === _reactionsCurrentVideoId; });
+        var _ltCh  = channels[currentChannelKey];
+        var _ltVid = allVideos.find(function(v) { return v.id === _reactionsCurrentVideoId; });
 
         function _roundRectPath(c, x, y, w, h, r) {
           c.beginPath();
@@ -4258,10 +4258,10 @@ document.getElementById('catFilter').addEventListener('click', e => {
           lines[lines.length - 1] = _truncText(c, lines[lines.length - 1], maxW);
           return lines;
         }
-        function _drawWatermark(avatarImg) {
+        function _drawLowerThird(avatarImg, snap) {
           // ADスタイル: 左アクセントバー + 局所背景 + テキストグロー + 2行折り返し
-          var chName   = _wCh  ? (_wCh.displayName  || '') : '';
-          var titleStr = _wVid ? (_wVid.title || '') : '';
+          var chName   = _ltCh  ? (_ltCh.displayName  || '') : '';
+          var titleStr = _ltVid ? (_ltVid.title || '') : '';
           if (!chName && !titleStr) return;
 
           var padX    = Math.round(lW * 0.010);
@@ -4311,33 +4311,48 @@ document.getElementById('catFilter').addEventListener('click', e => {
               actualTextW = Math.max(actualTextW, ctx.measureText(line).width);
             });
           }
-          var blockW = textX + Math.ceil(actualTextW) + padX;
+          var blockW = textX + Math.ceil(actualTextW) + Math.round(padX * 1.8);
 
           // ブロック全体の高さ計算
+          // padV * 2 に加えてベースライン下のディセンダー分を加算
+          var descend = Math.round(fsMaiActual * 0.25);
           var subH   = chName   ? fsSub + subGap : 0;
           var mainH  = titleLines.length * fsMaiActual + Math.max(0, titleLines.length - 1) * lineGap;
-          var blockH = subH + mainH + padV * 2;
+          var blockH = subH + mainH + padV * 2 + descend;
 
           // 左下マージン付き配置
           var bx = padX;
           var by = lH - padBot - blockH;
 
           // --- 背景: 元画像ブラー + 右端フェード ---
-          ctx.save();
-          // ブラー領域を少し広めにクリップしてにじみを防ぐ
-          ctx.beginPath();
-          ctx.rect(bx, by, blockW, blockH);
-          ctx.clip();
-          ctx.filter = 'blur(' + Math.round(lW * 0.006) + 'px)';
-          ctx.drawImage(tmp, bx, by, blockW, blockH, bx, by, blockW, blockH);
-          ctx.filter = 'none';
-          var bgGrd = ctx.createLinearGradient(bx, 0, bx + blockW, 0);
-          bgGrd.addColorStop(0,    'rgba(0,0,0,0.40)');
-          bgGrd.addColorStop(0.70, 'rgba(0,0,0,0.28)');
+          // offscreen に描いて destination-out でブラーごと右端をフェードアウト
+          var blurPx  = Math.round(lW * 0.0022);
+          var fadeExt = Math.round(lW * 0.08);
+          var wbCvs   = document.createElement('canvas');
+          wbCvs.width = lW; wbCvs.height = lH;
+          var wbCtx   = wbCvs.getContext('2d');
+          wbCtx.save();
+          wbCtx.beginPath();
+          wbCtx.rect(bx, by, blockW + fadeExt, blockH);
+          wbCtx.clip();
+          wbCtx.filter = 'blur(' + blurPx + 'px)';
+          wbCtx.drawImage(snap, 0, 0, lW, lH);
+          wbCtx.filter = 'none';
+          var bgGrd = wbCtx.createLinearGradient(bx, 0, bx + blockW + fadeExt, 0);
+          bgGrd.addColorStop(0,    'rgba(0,0,0,0.28)');
+          bgGrd.addColorStop(0.86, 'rgba(0,0,0,0.20)');
           bgGrd.addColorStop(1,    'rgba(0,0,0,0)');
-          ctx.fillStyle = bgGrd;
-          ctx.fillRect(bx, by, blockW, blockH);
-          ctx.restore();
+          wbCtx.fillStyle = bgGrd;
+          wbCtx.fillRect(bx, by, blockW + fadeExt, blockH);
+          var fadeStart = bx + blockW * 0.82;
+          var fadeGrd   = wbCtx.createLinearGradient(fadeStart, 0, bx + blockW + fadeExt, 0);
+          fadeGrd.addColorStop(0, 'rgba(0,0,0,0)');
+          fadeGrd.addColorStop(1, 'rgba(0,0,0,1)');
+          wbCtx.globalCompositeOperation = 'destination-out';
+          wbCtx.fillStyle = fadeGrd;
+          wbCtx.fillRect(fadeStart, by, blockW * 0.18 + fadeExt, blockH);
+          wbCtx.restore();
+          ctx.drawImage(wbCvs, 0, 0);
 
           // --- 左アクセントバー ---
           ctx.save();
@@ -4366,48 +4381,68 @@ document.getElementById('catFilter').addEventListener('click', e => {
 
           // チャンネル名 (sub)
           if (chName) {
-            ctx.font        = '600 ' + fsSub + 'px "Segoe UI",sans-serif';
-            ctx.fillStyle   = 'rgba(255,255,255,0.68)';
-            ctx.shadowColor = 'rgba(255,255,255,0.30)';
-            ctx.shadowBlur  = 4;
-            ctx.fillText(_truncText(ctx, chName, availW), textX, tY + fsSub);
+            ctx.font = '600 ' + fsSub + 'px "Segoe UI",sans-serif';
+            ctx.fillStyle = 'rgba(255,255,255,0.68)';
+            var subText = _truncText(ctx, chName, availW);
+            var subY = tY + fsSub;
+            ctx.shadowColor = 'rgba(180,220,255,0.75)'; ctx.shadowBlur = 16; ctx.shadowOffsetY = 0;
+            ctx.fillText(subText, textX, subY);
+            ctx.shadowColor = 'rgba(0,0,0,0.85)'; ctx.shadowBlur = 5; ctx.shadowOffsetY = 1;
+            ctx.fillText(subText, textX, subY);
+            ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
+            ctx.fillText(subText, textX, subY);
             tY += fsSub + subGap;
           }
 
           // タイトル (main)
-          ctx.font        = '900 ' + fsMaiActual + 'px "Segoe UI",sans-serif';
-          ctx.fillStyle   = 'rgba(255,255,255,0.97)';
-          ctx.shadowColor = 'rgba(255,255,255,0.45)';
-          ctx.shadowBlur  = 10;
+          ctx.font = '900 ' + fsMaiActual + 'px "Segoe UI",sans-serif';
+          ctx.fillStyle = 'rgba(255,255,255,0.97)';
           titleLines.forEach(function(line, i) {
-            ctx.fillText(line, textX, tY + fsMaiActual + i * (fsMaiActual + lineGap));
+            var yPos = tY + fsMaiActual + i * (fsMaiActual + lineGap);
+            ctx.shadowColor = 'rgba(180,220,255,0.80)'; ctx.shadowBlur = 22; ctx.shadowOffsetY = 0;
+            ctx.fillText(line, textX, yPos);
+            ctx.shadowColor = 'rgba(0,0,0,0.90)'; ctx.shadowBlur = 8; ctx.shadowOffsetY = 2;
+            ctx.fillText(line, textX, yPos);
+            ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
+            ctx.fillText(line, textX, yPos);
           });
 
           ctx.restore();
         }
 
         function _finishExport(avatarImg) {
-          _drawWatermark(avatarImg);
+          // ピンを含む描画済み状態をスナップ → ブラー背景に使う
+          var snap = document.createElement('canvas');
+          snap.width = lW; snap.height = lH;
+          snap.getContext('2d').drawImage(canvas, 0, 0);
+          _drawLowerThird(avatarImg, snap);
           canvas.toBlob(function(blob) {
             var url = URL.createObjectURL(blob);
-            var a = document.createElement('a');
-            a.href = url;
-            var _dlChName  = _wCh  ? (_wCh.displayName  || '') : '';
-            var _dlTitle   = _wVid ? (_wVid.title || '') : '';
-            var _dlSanitize = function(s) { return s.replace(/[\\/:*?"<>|]/g, '_').trim().slice(0, 60); };
-            var _dlName = [_dlChName, _dlTitle].filter(Boolean).map(_dlSanitize).join(' - ') || (_reactionsCurrentVideoId || 'thumbnail');
-            a.download = _dlName + '.png';
-            a.click();
-            setTimeout(function() { URL.revokeObjectURL(url); }, 10000);
+            // --- プレビューモーダル ---
+            var overlay = document.createElement('div');
+            overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.82);display:flex;align-items:center;justify-content:center;cursor:zoom-out;';
+            var img = document.createElement('img');
+            img.src = url;
+            img.style.cssText = 'max-width:92vw;max-height:88vh;border-radius:8px;box-shadow:0 8px 40px rgba(0,0,0,0.7);display:block;';
+            overlay.appendChild(img);
+            var hint = document.createElement('div');
+            hint.textContent = 'クリックで閉じる';
+            hint.style.cssText = 'position:absolute;bottom:18px;left:50%;transform:translateX(-50%);color:rgba(255,255,255,0.5);font-size:12px;pointer-events:none;';
+            overlay.appendChild(hint);
+            overlay.addEventListener('click', function() {
+              document.body.removeChild(overlay);
+              URL.revokeObjectURL(url);
+            });
+            document.body.appendChild(overlay);
           }, 'image/png');
         }
 
-        if (_wCh && _wCh.avatar) {
+        if (_ltCh && _ltCh.avatar) {
           var avImg = new Image();
           avImg.crossOrigin = 'anonymous';
           avImg.onload  = function() { _finishExport(avImg); };
           avImg.onerror = function() { _finishExport(null); };
-          avImg.src = _wCh.avatar;
+          avImg.src = _ltCh.avatar;
         } else {
           _finishExport(null);
         }
