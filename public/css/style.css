@@ -667,31 +667,35 @@ header {
 /* --- Category filter (in channel header) --- */
 .cat-filter {
   display: flex;
-  gap: 5px;
   margin-left: auto;
-}
-.cat-btn {
-  padding: 0 9px;
-  height: 24px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 20px;
   border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.cat-seg-btn {
+  padding: 0 10px;
+  height: 26px;
+  border: none;
+  border-right: 1px solid var(--border);
   background: transparent;
   color: var(--text-muted);
   font-size: 11px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   white-space: nowrap;
-  box-sizing: border-box;
-  transition: color 0.15s, border-color 0.15s, background 0.15s;
+  transition: background 0.12s, color 0.12s;
 }
-.cat-btn:hover:not(.active) {
-  border-color: var(--accent);
-  color: var(--accent);
+.cat-seg-btn:last-child {
+  border-right: none;
 }
-.cat-btn.active {
-  border-color: var(--accent);
-  background: var(--drop-hover);
+.cat-seg-btn:hover:not(.active) {
+  background: var(--surface2);
+  color: var(--text);
+}
+.cat-seg-btn.active {
+  background: rgba(88, 101, 242, 0.15);
   color: var(--accent);
 }
 
@@ -704,6 +708,7 @@ header {
 }
 .screen::-webkit-scrollbar-thumb {
   background: rgba(120,120,120,0.25);
+  min-height: 48px;
 }
 .screen:hover::-webkit-scrollbar-thumb {
   background: rgba(120,120,120,0.45);
@@ -1351,52 +1356,111 @@ header {
 @media (max-width: 600px) {
   .gallery-row { height: 140px; }
 }
-/* 一覧ツールバー */
-.list-toolbar {
-  display: flex;
-  justify-content: flex-end;
-  gap: 4px;
-  padding: 0 0 10px;
-}
-.list-mode-btn {
-  width: 32px;
+/* ビューバー（埋め込みツールバー） */
+.view-bar {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
   height: 32px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 0 4px;
+  box-shadow: 0 1px 4px var(--shadow);
+}
+.vb-btn {
+  height: 26px;
+  padding: 0 9px;
   border: none;
   border-radius: 6px;
   background: transparent;
-  cursor: pointer;
   color: var(--text-muted);
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
   display: flex;
   align-items: center;
-  justify-content: center;
-  transition: background 0.15s, color 0.15s;
-}
-.list-mode-btn:hover { background: var(--surface2); color: var(--text); }
-.list-mode-btn.active { background: var(--surface2); color: var(--accent); }
-
-/* ショートソートボタン */
-.shorts-sort-btn {
-  padding: 0 10px;
-  height: 24px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 20px;
-  border: 1px solid var(--border);
-  background: transparent;
-  color: var(--text-muted);
-  font-size: 11px;
-  cursor: pointer;
-  transition: color 0.15s, border-color 0.15s, background 0.15s;
+  gap: 4px;
   white-space: nowrap;
-  box-sizing: border-box;
+  transition: color 0.12s, background 0.12s;
 }
-.shorts-sort-btn:hover { border-color: var(--accent); color: var(--accent); }
-.shorts-sort-btn.active {
-  border-color: var(--accent);
-  background: var(--drop-hover);
-  color: var(--accent);
+.vb-btn:hover { color: var(--text); background: rgba(255,255,255,.06); }
+.vb-sort-key { color: var(--text-muted); min-width: 80px; justify-content: space-between; }
+.vb-sort-dir { padding: 0 8px; }
+.vb-sort-dir.asc { color: var(--accent); }
+.vb-lay { padding: 0 8px; }
+.vb-lay.active { color: var(--accent); }
+.vb-sep { width: 1px; height: 16px; background: var(--border); flex-shrink: 0; margin: 0 2px; }
+.vb-sort-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
 }
+.vb-sort-key-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.sort-popup {
+  position: absolute;
+  top: calc(100% + 5px);
+  left: 0;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 3px 0;
+  width: 100%;
+  min-width: unset;
+  box-shadow: 0 4px 16px var(--shadow);
+  z-index: 100;
+  display: none;
+}
+.sort-popup.open { display: block; }
+.sort-popup-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 10px;
+  font-size: 12px;
+  color: var(--text-muted);
+  cursor: pointer;
+  gap: 8px;
+  transition: background 0.1s, color 0.1s;
+}
+.sort-popup-item:hover { background: rgba(255,255,255,.04); color: var(--text); }
+.sort-popup-item.active { color: var(--accent); }
+.sort-popup-dir-hint { font-size: 10px; opacity: .5; white-space: nowrap; }
+
+/* レイアウトトグル + ソート（一覧フロート） */
+#listViewBar {
+  position: absolute;
+  top: 12px;
+  right: 24px;
+  z-index: 4;
+}
+
+/* 一覧画面 */
+#listScreen {
+  position: relative;
+  padding: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+#listScrollBody {
+  flex: 1;
+  overflow-y: scroll;
+  scrollbar-gutter: stable;
+  padding: 16px 24px 20px;
+}
+#listScrollBody::-webkit-scrollbar { width: 8px; }
+#listScrollBody::-webkit-scrollbar-track { background: transparent; }
+#listScrollBody::-webkit-scrollbar-thumb {
+  background: rgba(120,120,120,0.25);
+  border-radius: 4px;
+  min-height: 48px;
+}
+#listScrollBody:hover::-webkit-scrollbar-thumb { background: rgba(120,120,120,0.45); }
 
 /* グリッドモード */
 #listGrid.mode-grid {
@@ -1783,6 +1847,7 @@ header {
   .sidebar { width: 180px; }
 
   .screen { padding: 12px; }
+  #listScrollBody { padding: 12px 12px 16px; }
 
   /* 投票: 縦積み */
   .vote-pair-wrap { padding: 16px 12px; border-radius: 8px; }
@@ -2933,33 +2998,35 @@ a.rs-video-title:hover { color: var(--accent); }
 .rs-playlist-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 8px 12px;
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--accent);
-  border-bottom: 1px solid var(--border);
+  gap: 6px;
+  padding: 6px 10px;
   flex-shrink: 0;
+  border-bottom: 1px solid var(--border);
 }
-.rs-playlist-count {
+.rs-panel-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+}
+.rs-panel-count {
   font-size: 11px;
   color: var(--text-muted);
-  font-weight: 400;
+  flex: 1;
 }
-.rs-playlist-sort {
-  display: flex;
-  gap: 4px;
-  padding: 6px 8px;
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
-  flex-wrap: wrap;
+.rs-playlist-header .view-bar {
+  background: none;
+  border: none;
+  box-shadow: none;
+  border-radius: 0;
+  padding: 0;
 }
 .rs-playlist-body {
   flex: 1;
   overflow-y: scroll;
   scrollbar-gutter: stable;
 }
-.rs-playlist-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+.rs-playlist-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; min-height: 48px; }
 .rs-playlist-card {
   display: flex;
   align-items: flex-start;

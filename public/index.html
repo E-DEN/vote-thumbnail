@@ -71,10 +71,20 @@
           <button class="ch-tab" data-view="reactions" data-i18n="tab-reactions">リアクション</button>
         </div>
         <div class="cat-filter" id="catFilter" style="display:none">
-          <button class="cat-btn active" data-cat="videos" data-i18n="cat-videos">動画</button>
-          <button class="cat-btn" data-cat="shorts" data-i18n="cat-shorts">ショート</button>
-          <button class="cat-btn" data-cat="live" data-i18n="cat-live">ライブ</button>
+          <button class="cat-seg-btn active" data-cat="videos">
+            <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2"/><path d="M2 8h20M8 2v20"/></svg>
+            <span data-i18n="cat-videos">動画</span>
+          </button>
+          <button class="cat-seg-btn" data-cat="shorts">
+            <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+            <span data-i18n="cat-shorts">ショート</span>
+          </button>
+          <button class="cat-seg-btn" data-cat="live">
+            <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2" fill="currentColor" stroke="none"/></svg>
+            <span data-i18n="cat-live">ライブ</span>
+          </button>
         </div>
+
       </div>
 
       <!-- ウェルカム画面（チャンネル未選択時） -->
@@ -113,23 +123,36 @@
 
       <!-- 一覧画面 -->
       <div id="listScreen" class="screen" style="display:none">
-        <div class="list-toolbar">
-          <button class="list-mode-btn active" id="listModeGalleryBtn" title="ギャラリー">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
-          </button>
-          <button class="list-mode-btn" id="listModeGridBtn" title="グリッド">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
-          </button>
-          <!-- ソートボタン群 -->
-          <div id="shortsSortBar" style="gap:4px; align-items:center; margin-left:auto; display:flex;">
-            <button class="shorts-sort-btn active" data-sort="views"  data-i18n="sort-views"></button>
-            <button class="shorts-sort-btn" data-sort="date"   data-i18n="sort-date"></button>
-            <button class="shorts-sort-btn" data-sort="rating" data-i18n="sort-rating"></button>
-            <button class="shorts-sort-btn" data-sort="random" data-i18n="sort-random"></button>
+        <div id="listViewBar">
+          <div class="view-bar" id="sortSplit">
+            <button class="vb-btn vb-lay active" id="listModeGalleryBtn" title="ギャラリー">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+            </button>
+            <button class="vb-btn vb-lay" id="listModeGridBtn" title="グリッド">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+            </button>
+            <div class="vb-sep"></div>
+            <div class="vb-sort-wrap">
+              <div class="vb-sort-key-wrap">
+                <button class="vb-btn vb-sort-key" id="sortSplitKey">
+                  <span id="sortSplitLabel">再生数順</span>
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                </button>
+                <div class="sort-popup" id="sortPopup">
+                  <div class="sort-popup-item" data-sort="views">再生数順</div>
+                  <div class="sort-popup-item" data-sort="date">投稿日順</div>
+                  <div class="sort-popup-item" data-sort="rating">得票率順</div>
+                  <div class="sort-popup-item" data-sort="random">ランダム</div>
+                </div>
+              </div>
+              <button class="vb-btn vb-sort-dir" id="sortSplitDir"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 16 4 4 4-4"/><path d="M7 20V4"/><path d="M11 4h10"/><path d="M11 8h7"/><path d="M11 12h4"/></svg></button>
+            </div>
           </div>
         </div>
-        <div id="listGrid"></div>
-        <div id="shortsSentinel" style="height:1px;"></div>
+        <div id="listScrollBody">
+          <div id="listGrid"></div>
+          <div id="shortsSentinel" style="height:1px;"></div>
+        </div>
       </div>
 
       <!-- ランキング画面 -->
@@ -239,15 +262,25 @@
         <div class="rs-playlist">
           <div class="rs-playlist-resize-handle"></div>
           <div class="rs-playlist-header">
-            <span data-i18n="tab-list">一覧</span>
-            <span class="rs-playlist-count" id="reactionsPlaylistCount"></span>
+            <span class="rs-panel-label" id="rsPanelLabel">動画</span>
+            <span class="rs-panel-count"><span id="reactionsPlaylistCount">0</span> 件</span>
+            <div class="view-bar" id="rsSortSplit">
+              <div class="vb-sort-key-wrap">
+                <button class="vb-btn vb-sort-key" id="rsSortKey">
+                  <span id="rsSortLabel">再生数順</span>
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                </button>
+                <div class="sort-popup" id="rsSortPopup">
+                  <div class="sort-popup-item" data-sort="views">再生数順</div>
+                  <div class="sort-popup-item" data-sort="date">投稿日順</div>
+                  <div class="sort-popup-item" data-sort="rating">得票率順</div>
+                  <div class="sort-popup-item" data-sort="random">ランダム</div>
+                </div>
+              </div>
+              <button class="vb-btn vb-sort-dir" id="rsSortDir"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 16 4 4 4-4"/><path d="M7 20V4"/><path d="M11 4h10"/><path d="M11 8h7"/><path d="M11 12h4"/></svg></button>
+            </div>
           </div>
-          <div class="rs-playlist-sort" id="reactionsPlaylistSort">
-            <button class="shorts-sort-btn" data-sort="views" data-i18n="sort-views"></button>
-            <button class="shorts-sort-btn" data-sort="date" data-i18n="sort-date"></button>
-            <button class="shorts-sort-btn" data-sort="rating" data-i18n="sort-rating"></button>
-            <button class="shorts-sort-btn" data-sort="random" data-i18n="sort-random"></button>
-          </div>
+
           <div class="rs-playlist-body" id="reactionsPlaylistBody"></div>
         </div>
       </div>

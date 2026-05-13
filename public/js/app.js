@@ -533,7 +533,7 @@ function loadChannelVideos(key) {
   allVideos.forEach(v => { if (counts[v.category] !== undefined) counts[v.category]++; });
   currentCat = counts.live >= counts.videos && counts.live >= counts.shorts ? 'live'
              : counts.shorts > counts.videos ? 'shorts' : 'videos';
-  document.querySelectorAll('.cat-btn').forEach(b => {
+  document.querySelectorAll('.cat-seg-btn').forEach(b => {
     b.classList.toggle('active', b.dataset.cat === currentCat);
   });
   return true;
@@ -811,6 +811,7 @@ function fmtDuration(sec) {
 var _listMode = localStorage.getItem('thumb-list-mode') || 'gallery';
 var _shortsObserver = null;
 var _listSortOrder = localStorage.getItem(LS_SORT) || 'views';  // 'date' | 'views' | 'rating' | 'random'
+var _sortDir = localStorage.getItem('thumb-sort-dir') || 'desc'; // 'asc' | 'desc'
 var _listPage = 0;                // 読み込み済みページ数
 var _LIST_PAGE_SIZE = 50;
 var _listSortedPool = [];         // ソート済み全件キャッシュ
@@ -862,14 +863,22 @@ function renderList() {
 // 全カテゴリ共通: ソート済み全件プールを構築する
 function _buildSortedPool() {
   var pool = filteredVideos().slice();
+  var asc = (_sortDir === 'asc');
   if (_listSortOrder === 'date') {
     pool.sort(function(a, b) {
-      return (b.publishedAt || '') < (a.publishedAt || '') ? -1 : 1;
+      var cmp = (b.publishedAt || '') < (a.publishedAt || '') ? -1 : 1;
+      return asc ? -cmp : cmp;
     });
   } else if (_listSortOrder === 'views') {
-    pool.sort(function(a, b) { return (b.viewCount || 0) - (a.viewCount || 0); });
+    pool.sort(function(a, b) {
+      var cmp = (b.viewCount || 0) - (a.viewCount || 0);
+      return asc ? -cmp : cmp;
+    });
   } else if (_listSortOrder === 'rating') {
-    pool.sort(function(a, b) { return getRating(b.id) - getRating(a.id); });
+    pool.sort(function(a, b) {
+      var cmp = getRating(b.id) - getRating(a.id);
+      return asc ? -cmp : cmp;
+    });
   } else {
     // ランダム: Fisher–Yates
     for (var i = pool.length - 1; i > 0; i--) {
@@ -945,9 +954,8 @@ function _appendGalleryPage() {
   }
 }
 
-// ソートボタン・カテゴリボタン: 全登録言語で計測し最大幅を min-width に設定する
+// ソートボタン・タブボタン: 全登録言語で計測し最大幅を min-width に設定する
 var _sortBtnMaxWidths = {};
-var _catBtnMaxWidths  = {};
 var _tabBtnMaxWidths  = {};
 function _normalizeSortBtnWidths() {
   var codes = Object.keys(_I18N_DICTS);
@@ -974,14 +982,6 @@ function _normalizeSortBtnWidths() {
     });
   }
 
-  _measureGroup(
-    Array.from(document.querySelectorAll('.shorts-sort-btn[data-i18n]')),
-    _sortBtnMaxWidths, 'sort', 'i18n'
-  );
-  _measureGroup(
-    Array.from(document.querySelectorAll('.cat-btn[data-i18n]')),
-    _catBtnMaxWidths, 'cat', 'i18n'
-  );
   _measureGroup(
     Array.from(document.querySelectorAll('.ch-tab[data-i18n]')),
     _tabBtnMaxWidths, 'view', 'i18n'
@@ -2186,7 +2186,7 @@ async function selectChannel(key) {
                  : counts.shorts > counts.videos ? 'shorts' : 'videos';
       localStorage.setItem(LS_CAT, currentCat);
     }
-    document.querySelectorAll('.cat-btn').forEach(b => {
+    document.querySelectorAll('.cat-seg-btn').forEach(b => {
       b.classList.toggle('active', b.dataset.cat === currentCat);
     });
     const savedView = localStorage.getItem(LS_VIEW) || 'list';
@@ -2766,10 +2766,15 @@ function renderReactionsPlaylist(selectedId) {
   _rebuildRatingRankMap();
   var pool = _buildSortedPool();
   var countEl = document.getElementById('reactionsPlaylistCount');
+  var labelEl = document.getElementById('rsPanelLabel');
   var body = document.getElementById('reactionsPlaylistBody');
   if (!body) return;
   body.innerHTML = '';
   if (countEl) countEl.textContent = pool.length;
+  if (labelEl) {
+    var CAT_LABELS = { videos: '動画', shorts: 'ショート', live: 'ライブ' };
+    labelEl.textContent = CAT_LABELS[currentCat] || '動画';
+  }
   pool.forEach(function(v, i) {
     var card = document.createElement('div');
     card.className = 'rs-playlist-card' + (v.id === selectedId ? ' selected' : '');
@@ -2954,12 +2959,129 @@ function applyTheme(theme) {
 // --- 初期化 ---
 function init() {
   // 保存済み状態を即座に DOM へ反映（チャンネル選択前の切り替わりを防ぐ）
-  document.querySelectorAll('.cat-btn').forEach(b => {
+  document.querySelectorAll('.cat-seg-btn').forEach(b => {
     b.classList.toggle('active', b.dataset.cat === currentCat);
   });
-  document.querySelectorAll('.shorts-sort-btn').forEach(b => {
-    b.classList.toggle('active', b.dataset.sort === _listSortOrder);
+  // ソートスプリットボタン初期化
+  var _sortLabel  = document.getElementById('sortSplitLabel');
+  var _sortDirBtn = document.getElementById('sortSplitDir');
+  var _SVG_SORT_DESC = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 16 4 4 4-4"/><path d="M7 20V4"/><path d="M11 4h10"/><path d="M11 8h7"/><path d="M11 12h4"/></svg>';
+  var _SVG_SORT_ASC  = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/><path d="M11 12h4"/><path d="M11 16h7"/><path d="M11 20h10"/></svg>';
+  var _sortPopup  = document.getElementById('sortPopup');
+  var SORT_INFO = {
+    views:  { label: '再生数順', hasDir: true },
+    date:   { label: '投稿日順', hasDir: true },
+    rating: { label: '得票率順', hasDir: true },
+    random: { label: 'ランダム', hasDir: false },
+  };
+  function _updateSortUI() {
+    var info = SORT_INFO[_listSortOrder] || SORT_INFO.views;
+    if (_sortLabel)  _sortLabel.textContent = info.label;
+    if (_sortDirBtn) {
+      _sortDirBtn.style.visibility = info.hasDir ? '' : 'hidden';
+      _sortDirBtn.innerHTML = (_sortDir === 'asc') ? _SVG_SORT_ASC : _SVG_SORT_DESC;
+      _sortDirBtn.classList.toggle('asc', _sortDir === 'asc');
+    }
+    if (_sortPopup) {
+      _sortPopup.querySelectorAll('[data-sort]').forEach(function(el) {
+        el.classList.toggle('active', el.dataset.sort === _listSortOrder);
+      });
+    }
+    var _rsLabel  = document.getElementById('rsSortLabel');
+    var _rsDirBtn = document.getElementById('rsSortDir');
+    var _rsPopup  = document.getElementById('rsSortPopup');
+    if (_rsLabel) _rsLabel.textContent = info.label;
+    if (_rsDirBtn) {
+      _rsDirBtn.style.visibility = info.hasDir ? '' : 'hidden';
+      _rsDirBtn.innerHTML = (_sortDir === 'asc') ? _SVG_SORT_ASC : _SVG_SORT_DESC;
+      _rsDirBtn.classList.toggle('asc', _sortDir === 'asc');
+    }
+    if (_rsPopup) {
+      _rsPopup.querySelectorAll('[data-sort]').forEach(function(el) {
+        el.classList.toggle('active', el.dataset.sort === _listSortOrder);
+      });
+    }
+  }
+  function _triggerSortRender() {
+    if (currentView === 'reactions') renderReactionsPlaylist(_reactionsCurrentVideoId);
+    else if (currentView === 'ranking') renderRanking();
+    else if (_listMode === 'grid') _renderGrid();
+    else renderList();
+  }
+  _updateSortUI();
+  if (document.getElementById('sortSplitKey')) {
+    document.getElementById('sortSplitKey').addEventListener('click', function(e) {
+      e.stopPropagation();
+      _sortPopup.classList.toggle('open');
+    });
+  }
+  if (_sortPopup) {
+    _sortPopup.addEventListener('click', function(e) {
+      var item = e.target.closest('[data-sort]');
+      if (!item) return;
+      _listSortOrder = item.dataset.sort;
+      _sortDir = 'desc';
+      localStorage.setItem(LS_SORT, _listSortOrder);
+      localStorage.setItem('thumb-sort-dir', _sortDir);
+      _sortPopup.classList.remove('open');
+      _updateSortUI();
+      _triggerSortRender();
+    });
+  }
+  if (_sortDirBtn) {
+    _sortDirBtn.addEventListener('click', function() {
+      if (!(SORT_INFO[_listSortOrder] || {}).hasDir) return;
+      _sortDir = (_sortDir === 'asc') ? 'desc' : 'asc';
+      localStorage.setItem('thumb-sort-dir', _sortDir);
+      _updateSortUI();
+      _triggerSortRender();
+    });
+  }
+  document.addEventListener('click', function() {
+    if (_sortPopup) _sortPopup.classList.remove('open');
+    var _rsPopupClose = document.getElementById('rsSortPopup');
+    if (_rsPopupClose) _rsPopupClose.classList.remove('open');
   });
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+      if (_sortPopup) _sortPopup.classList.remove('open');
+      var _rsPopupEsc = document.getElementById('rsSortPopup');
+      if (_rsPopupEsc) _rsPopupEsc.classList.remove('open');
+    }
+  });
+
+  // reactions プレイリスト ソート
+  var _rsSortKey = document.getElementById('rsSortKey');
+  var _rsSortDir = document.getElementById('rsSortDir');
+  var _rsSortPopup = document.getElementById('rsSortPopup');
+  if (_rsSortKey) {
+    _rsSortKey.addEventListener('click', function(e) {
+      e.stopPropagation();
+      if (_rsSortPopup) _rsSortPopup.classList.toggle('open');
+    });
+  }
+  if (_rsSortPopup) {
+    _rsSortPopup.addEventListener('click', function(e) {
+      var item = e.target.closest('[data-sort]');
+      if (!item) return;
+      _listSortOrder = item.dataset.sort;
+      _sortDir = 'desc';
+      localStorage.setItem(LS_SORT, _listSortOrder);
+      localStorage.setItem('thumb-sort-dir', _sortDir);
+      _rsSortPopup.classList.remove('open');
+      _updateSortUI();
+      _triggerSortRender();
+    });
+  }
+  if (_rsSortDir) {
+    _rsSortDir.addEventListener('click', function() {
+      if (!(SORT_INFO[_listSortOrder] || {}).hasDir) return;
+      _sortDir = (_sortDir === 'asc') ? 'desc' : 'asc';
+      localStorage.setItem('thumb-sort-dir', _sortDir);
+      _updateSortUI();
+      _triggerSortRender();
+    });
+  }
 
   // 一覧モード切り替えボタンの初期状態を反映
   var _galBtn  = document.getElementById('listModeGalleryBtn');
@@ -2981,24 +3103,6 @@ function init() {
     _gridBtn.classList.add('active');
     _galBtn.classList.remove('active');
     renderList();
-  });
-
-  // ソートボタン（全モード共通: 一覧+プレイリスト）
-  document.querySelectorAll('.shorts-sort-btn').forEach(function(btn) {
-    btn.addEventListener('click', function() {
-      _listSortOrder = btn.dataset.sort;
-      localStorage.setItem(LS_SORT, _listSortOrder);
-      document.querySelectorAll('.shorts-sort-btn').forEach(function(b) {
-        b.classList.toggle('active', b.dataset.sort === _listSortOrder);
-      });
-      if (currentView === 'reactions') {
-        renderReactionsPlaylist(_reactionsCurrentVideoId);
-      } else if (_listMode === 'grid') {
-        _renderGrid();
-      } else {
-        renderList();
-      }
-    });
   });
 
   // チャンネル名ツールチップ要素を一度だけ生成
@@ -3599,12 +3703,12 @@ document.getElementById('channelHeader').addEventListener('click', e => {
 
 // --- カテゴリフィルタ ---
 document.getElementById('catFilter').addEventListener('click', e => {
-  const btn = e.target.closest('.cat-btn');
+  const btn = e.target.closest('.cat-seg-btn');
   if (!btn) return;
   const newCat = btn.dataset.cat;
   currentCat = newCat;
   localStorage.setItem(LS_CAT, currentCat);
-  document.querySelectorAll('.cat-btn').forEach(b => b.classList.toggle('active', b === btn));
+  document.querySelectorAll('.cat-seg-btn').forEach(b => b.classList.toggle('active', b === btn));
   if (currentView === 'vote') renderVote();
   else if (currentView === 'list') renderList();
   else if (currentView === 'ranking') renderRanking();
