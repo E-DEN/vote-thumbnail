@@ -4242,81 +4242,147 @@ document.getElementById('catFilter').addEventListener('click', e => {
           while (t.length > 1 && c.measureText(t + '\u2026').width > maxW) t = t.slice(0, -1);
           return t + '\u2026';
         }
+        function _wrapText(c, text, maxW, maxLines) {
+          if (c.measureText(text).width <= maxW) return [text];
+          var words = text.split(' ');
+          var lines = []; var cur = '';
+          for (var i = 0; i < words.length; i++) {
+            var test = cur ? cur + ' ' + words[i] : words[i];
+            if (c.measureText(test).width > maxW && cur) {
+              lines.push(cur); cur = words[i];
+              if (lines.length >= maxLines) break;
+            } else { cur = test; }
+          }
+          if (cur && lines.length < maxLines) lines.push(cur);
+          else if (cur) lines[lines.length - 1] += ' ' + cur;
+          lines[lines.length - 1] = _truncText(c, lines[lines.length - 1], maxW);
+          return lines;
+        }
         function _drawWatermark(avatarImg) {
+          // ADスタイル: 左アクセントバー + 局所背景 + テキストグロー + 2行折り返し
           var chName   = _wCh  ? (_wCh.displayName  || '') : '';
           var titleStr = _wVid ? (_wVid.title || '') : '';
           if (!chName && !titleStr) return;
-          var pad    = Math.round(lW * 0.010);
-          var iconSz = Math.round(lW * 0.024);
-          var fs1    = Math.round(lW * 0.013);
-          var fs2    = Math.round(lW * 0.011);
-          var gap    = Math.round(fs1 * 0.4);
-          ctx.save();
-          ctx.font = 'bold ' + fs1 + 'px "Segoe UI",sans-serif';
-          var chW  = ctx.measureText(chName).width;
-          ctx.font = fs2 + 'px "Segoe UI",sans-serif';
-          var titW = ctx.measureText(titleStr).width;
-          var iconBlock = avatarImg ? (iconSz + pad) : 0;
-          var chWc  = Math.min(chW, lW * 0.60);
-          var textMaxW = Math.max(chWc, titW);
-          var boxW = pad * 2 + iconBlock + textMaxW;
-          var boxH = Math.max(pad * 2 + fs1 + (titleStr ? gap + fs2 : 0), pad * 2 + iconSz);
-          var bx = pad;
-          var by = lH - pad - boxH;
-          var radius = Math.min(8, boxH / 2);
 
-          // --- フロストグラス: 元画像のボックス領域をブラーして描画 ---
+          var padX    = Math.round(lW * 0.010);
+          var padBot  = padX;                          // 左と下を同ピクセルに揃える
+          var padV    = Math.round(lH * 0.011);
+          var barW    = Math.round(lW * 0.0025);
+          var barGap  = Math.round(padX * 0.75);
+          var iconSz  = Math.round(lW * 0.028);
+          var iconGap = avatarImg ? Math.round(iconSz + barGap) : 0;
+          var fsSub   = Math.round(lW * 0.009);
+          var fsMai   = Math.round(lW * 0.016);
+          var subGap  = Math.round(fsSub * 0.45);
+          var lineGap = Math.round(fsMai * 0.22);
+
+          // テキスト開始X
+          var textX  = padX + barW + barGap + iconGap;
+          var availW = Math.round(lW * 0.62);
+
+          // タイトル: フォントサイズを縮小しながら全文字が収まるまで試行（最大2行）
+          var fsMaiMin = Math.round(lW * 0.009);
+          var fsMaiActual = fsMai;
+          var titleLines = [];
+          if (titleStr) {
+            while (fsMaiActual >= fsMaiMin) {
+              ctx.font = '900 ' + fsMaiActual + 'px "Segoe UI",sans-serif';
+              var _tl = _wrapText(ctx, titleStr, availW, 2);
+              if (_tl.join(' ') === titleStr) { titleLines = _tl; break; }
+              fsMaiActual--;
+            }
+            // 最小サイズでも入らない場合は最小サイズで2行表示（truncate許容）
+            if (!titleLines.length) {
+              ctx.font = '900 ' + fsMaiMin + 'px "Segoe UI",sans-serif';
+              titleLines = _wrapText(ctx, titleStr, availW, 2);
+              fsMaiActual = fsMaiMin;
+            }
+          }
+
+          // 実際のテキスト幅を計測して blockW を決定
+          var actualTextW = 0;
+          if (chName) {
+            ctx.font = '600 ' + fsSub + 'px "Segoe UI",sans-serif';
+            actualTextW = Math.max(actualTextW, ctx.measureText(chName).width);
+          }
+          if (titleLines.length) {
+            ctx.font = '900 ' + fsMaiActual + 'px "Segoe UI",sans-serif';
+            titleLines.forEach(function(line) {
+              actualTextW = Math.max(actualTextW, ctx.measureText(line).width);
+            });
+          }
+          var blockW = textX + Math.ceil(actualTextW) + padX;
+
+          // ブロック全体の高さ計算
+          var subH   = chName   ? fsSub + subGap : 0;
+          var mainH  = titleLines.length * fsMaiActual + Math.max(0, titleLines.length - 1) * lineGap;
+          var blockH = subH + mainH + padV * 2;
+
+          // 左下マージン付き配置
+          var bx = padX;
+          var by = lH - padBot - blockH;
+
+          // --- 背景: 元画像ブラー + 右端フェード ---
           ctx.save();
-          _roundRectPath(ctx, bx, by, boxW, boxH, radius);
+          // ブラー領域を少し広めにクリップしてにじみを防ぐ
+          ctx.beginPath();
+          ctx.rect(bx, by, blockW, blockH);
           ctx.clip();
-          ctx.filter = 'blur(12px)';
-          // 元画像 tmp をボックスの座標に合わせてピクセル等倍で描画
-          ctx.drawImage(tmp, bx, by, boxW, boxH, bx, by, boxW, boxH);
+          ctx.filter = 'blur(' + Math.round(lW * 0.006) + 'px)';
+          ctx.drawImage(tmp, bx, by, blockW, blockH, bx, by, blockW, blockH);
           ctx.filter = 'none';
-          // 明るい半透明オーバーレイ（白み＋軽い暗み）
-          ctx.fillStyle = 'rgba(255,255,255,0.18)';
-          ctx.fill();
-          ctx.fillStyle = 'rgba(0,0,0,0.38)';
-          ctx.fill();
+          var bgGrd = ctx.createLinearGradient(bx, 0, bx + blockW, 0);
+          bgGrd.addColorStop(0,    'rgba(0,0,0,0.40)');
+          bgGrd.addColorStop(0.70, 'rgba(0,0,0,0.28)');
+          bgGrd.addColorStop(1,    'rgba(0,0,0,0)');
+          ctx.fillStyle = bgGrd;
+          ctx.fillRect(bx, by, blockW, blockH);
           ctx.restore();
 
-          // ボーダーハイライト
+          // --- 左アクセントバー ---
           ctx.save();
-          _roundRectPath(ctx, bx, by, boxW, boxH, radius);
-          ctx.strokeStyle = 'rgba(255,255,255,0.28)';
-          ctx.lineWidth   = 1;
-          ctx.stroke();
+          ctx.fillStyle = _reactionsPinColor || '#ec4899';
+          ctx.fillRect(bx, by, barW, blockH);
           ctx.restore();
 
-          ctx.globalAlpha = 1;
-          var textX = bx + pad;
+          // --- アバター ---
           if (avatarImg) {
-            var ax = bx + pad + iconSz / 2;
-            var ay = by + boxH / 2;
+            var ax = bx + barW + barGap + iconSz / 2;
+            var ay = by + blockH / 2;
             ctx.save();
             ctx.beginPath();
             ctx.arc(ax, ay, iconSz / 2, 0, Math.PI * 2);
+            ctx.strokeStyle = 'rgba(255,255,255,0.80)';
+            ctx.lineWidth   = Math.round(lW * 0.002);
+            ctx.stroke();
             ctx.clip();
-            ctx.drawImage(avatarImg, bx + pad, by + (boxH - iconSz) / 2, iconSz, iconSz);
+            ctx.drawImage(avatarImg, ax - iconSz / 2, ay - iconSz / 2, iconSz, iconSz);
             ctx.restore();
-            textX += iconSz + pad;
           }
-          var avail = boxW - (textX - bx) - pad;
-          var baseY = titleStr
-            ? (by + pad + fs1)
-            : (by + Math.round((boxH + fs1) / 2) - 1);
+
+          // --- テキスト ---
           ctx.save();
-          ctx.shadowColor = 'rgba(0,0,0,0.7)';
-          ctx.shadowBlur  = 4;
-          ctx.fillStyle = 'rgba(255,255,255,0.95)';
-          ctx.font = 'bold ' + fs1 + 'px "Segoe UI",sans-serif';
-          ctx.fillText(_truncText(ctx, chName, avail), textX, baseY);
-          if (titleStr) {
-            ctx.font = fs2 + 'px "Segoe UI",sans-serif';
-            ctx.fillStyle = 'rgba(255,255,255,0.75)';
-            ctx.fillText(titleStr, textX, baseY + gap + fs2);
+          var tY = by + padV;
+
+          // チャンネル名 (sub)
+          if (chName) {
+            ctx.font        = '600 ' + fsSub + 'px "Segoe UI",sans-serif';
+            ctx.fillStyle   = 'rgba(255,255,255,0.68)';
+            ctx.shadowColor = 'rgba(255,255,255,0.30)';
+            ctx.shadowBlur  = 4;
+            ctx.fillText(_truncText(ctx, chName, availW), textX, tY + fsSub);
+            tY += fsSub + subGap;
           }
-          ctx.restore();
+
+          // タイトル (main)
+          ctx.font        = '900 ' + fsMaiActual + 'px "Segoe UI",sans-serif';
+          ctx.fillStyle   = 'rgba(255,255,255,0.97)';
+          ctx.shadowColor = 'rgba(255,255,255,0.45)';
+          ctx.shadowBlur  = 10;
+          titleLines.forEach(function(line, i) {
+            ctx.fillText(line, textX, tY + fsMaiActual + i * (fsMaiActual + lineGap));
+          });
+
           ctx.restore();
         }
 
