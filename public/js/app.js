@@ -2297,7 +2297,6 @@ function renderReactionsHeatmap() {
   // DOMを使い回してフリックを防ぐ（innerHTMLクリアしない）
   var canvas = layer.querySelector('canvas');
   if (!canvas) {
-    if (!_reactionsPins || _reactionsPins.length === 0) return;
     layer.innerHTML = '';
     var underlay = document.createElement('div');
     underlay.style.cssText = 'position:absolute;inset:0;background:rgba(0,0,0,0.70);pointer-events:none;';
@@ -2305,8 +2304,13 @@ function renderReactionsHeatmap() {
     canvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;filter:blur(18px);';
     layer.appendChild(underlay);
     layer.appendChild(canvas);
-  } else if (!_reactionsPins || _reactionsPins.length === 0) {
-    layer.innerHTML = '';
+  }
+
+  // ピンがなければ canvas をクリアするだけ（underlay は残す）
+  if (!_reactionsPins || _reactionsPins.length === 0) {
+    canvas.width  = w;
+    canvas.height = h;
+    canvas.getContext('2d').clearRect(0, 0, w, h);
     return;
   }
 
