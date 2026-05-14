@@ -1,5 +1,5 @@
 -- Mock seed data for local development
--- Usage: sqlite3 db/vote ".read db/seed.sql"
+-- Usage: sqlite3 .wrangler/state/v3/d1/<hash>/<db>.sqlite ".read db/seed.sql"
 
 -- ---------------------------------------------------------------------------
 -- channels
