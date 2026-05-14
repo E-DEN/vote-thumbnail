@@ -1899,8 +1899,10 @@ header {
 .sidebar-folder-badge { font-size: 11px; color: var(--text-muted); }
 .sidebar-folder-drop-zone { display: none; }
 .sidebar-folder--drop-bottom > .sidebar-folder-children { padding-bottom: 28px !important; }
-.sidebar--dragging .sidebar-channel-item:hover::before { display: none; }
+.sidebar--dragging .sidebar-channel-item:hover::before   { display: none; }
 .sidebar--dragging .sidebar-channel-item:hover { background: transparent; color: var(--text-muted); }
+.sidebar--dragging .sidebar-folder-header:hover::before { opacity: 0 !important; transform: translateY(-50%) scaleY(0) !important; }
+.sidebar--dragging .sidebar-folder-header:hover { background: transparent !important; }
 .sidebar--compact .sidebar-folder-header {
   width: 50px; height: 52px; padding: 4px 3px; margin: 0; gap: 0;
   justify-content: center; border-radius: 50%; position: relative;

@@ -1511,7 +1511,8 @@ function buildChannelItem(ch) {
   item.addEventListener('mouseenter', () => {
     _calcSidebarSlide(item);
     if (!_chTooltip || !document.getElementById('sidebar').classList.contains('sidebar--compact')) return;
-    if (document.getElementById('sidebarNav').classList.contains('sidebar--dragging')) return;
+    if (document.getElementById('sidebarNav').classList.contains('sidebar--folder-dragging')) return;
+    if (item.classList.contains('sidebar--drag-source')) return;
     const rect = item.getBoundingClientRect();
     _showCompactTooltip(rect, name, [
       { icon: 'refresh-cw', label: t('ch-refresh-title'), title: t('ch-refresh-title'), onClick: (btn) => {
@@ -1715,7 +1716,8 @@ function buildFolderItem(folder) {
   header.addEventListener('mouseenter', () => {
     _calcSidebarSlide(header);
     if (!_chTooltip || !document.getElementById('sidebar').classList.contains('sidebar--compact')) return;
-    if (document.getElementById('sidebarNav').classList.contains('sidebar--dragging')) return;
+    if (document.getElementById('sidebarNav').classList.contains('sidebar--folder-dragging')) return;
+    if (header.classList.contains('sidebar--drag-source') || wrap.classList.contains('sidebar--drag-source')) return;
     const rect = header.getBoundingClientRect();
     _showCompactTooltip(rect, folder.name || '', [
       { icon: 'pencil', label: t('folder-rename-title'), title: t('folder-rename-title'), onClick: () => {
@@ -1894,6 +1896,15 @@ function initSidebarDrag() {
 
       if (mouseY < topBound || mouseY > botBound) continue;
 
+      // フォルダドラッグ中はフォルダ内チャンネルへのヒット判定を抑制（フォルダinフォルダ不可）
+      // ただしフォルダラッパー下端より下はフォルダ後ろへの脱出ゾーンとして folder-after を返す
+      if (_dragType === 'folder' && !isHeader && pc) {
+        const folderWrap = el.closest('.sidebar-folder');
+        const naturalBot = folderWrap ? folderWrap.getBoundingClientRect().bottom : r.bottom;
+        if (mouseY <= naturalBot) return null;
+        return { action: 'folder-after', folderId: pc.dataset.folderId, el: folderWrap || el };
+      }
+
       // ── テリトリー上端の隙間: このアイテムの before ──
       if (mouseY < r.top) {
         // ソース要素がこのギャップに DOM 上存在する → 挿入しても移動なし → null
@@ -1993,7 +2004,9 @@ function initSidebarDrag() {
             if (next.isHeader) return { action: 'folder-before', folderId: next.fid, el: next.el };
             return { action: 'before', targetKey: next.el.dataset.key, folderId: null, el: next.el };
           }
-          // 開いたフォルダ（次が子チャンネル）か最後のアイテム → folder-after
+          // 開いたフォルダ（次が子チャンネル）か最後のアイテム
+          // フォルダドラッグ時はヘッダー下半分にインジケーターを出さない（ラッパー下端に出ると誤認されるため）
+          if (_dragType === 'folder') return null;
           return { action: 'folder-after', folderId: fid, el: wrap || el };
         }
       }
@@ -2256,10 +2269,12 @@ function initSidebarDrag() {
     document.removeEventListener('touchmove', _onTouchMove);
     document.removeEventListener('touchend', _onUp);
     if (_ghost) { _ghost.remove(); _ghost = null; }
-    if (_draggedEl) { _draggedEl.style.opacity = ''; _draggedEl = null; }
+    if (_draggedEl) { _draggedEl.style.opacity = ''; _draggedEl.classList.remove('sidebar--drag-source'); _draggedEl = null; }
     _clearState();
     nav.querySelectorAll('.sidebar-folder--drop-bottom').forEach(el => el.classList.remove('sidebar-folder--drop-bottom'));
     nav.classList.remove('sidebar--dragging');
+    nav.classList.remove('sidebar--folder-dragging');
+    document.body.style.cursor = '';
     _dragType = _srcKey = _srcFolderId = _dropInfo = _pending = null;
   }
 
@@ -2295,8 +2310,11 @@ function initSidebarDrag() {
     _pointerOffsetY = downY - ghostRect.top;
     document.body.appendChild(_ghost);
     unit.style.opacity = '0.2';
+    unit.classList.add('sidebar--drag-source');
     if (_chTooltip) _chTooltip.classList.remove('visible');
     nav.classList.add('sidebar--dragging');
+    if (type === 'folder') nav.classList.add('sidebar--folder-dragging');
+    document.body.style.cursor = 'grabbing';
     document.addEventListener('mousemove', _onMove);
     document.addEventListener('mouseup', _onUp);
     document.addEventListener('touchmove', _onTouchMove, { passive: false });
