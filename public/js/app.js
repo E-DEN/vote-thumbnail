@@ -2275,6 +2275,14 @@ function initSidebarDrag() {
       unit.classList.remove('sidebar-folder--open');
       const chevron = unit.querySelector('.sidebar-folder-chevron');
       if (chevron) chevron.textContent = '\u25be';
+      // 子要素を即座に閉じる（transition無効化）
+      const childrenEl = unit.querySelector('.sidebar-folder-children');
+      if (childrenEl) {
+        childrenEl.style.transition = 'none';
+        childrenEl.style.maxHeight = '0';
+        void childrenEl.offsetHeight;
+        setTimeout(() => { childrenEl.style.transition = ''; }, 0);
+      }
     }
     // ゴースト生成（コンパクト時はヘッダのみ）
     let ghostSrc = unit;
