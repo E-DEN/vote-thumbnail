@@ -474,46 +474,89 @@ header {
   position: fixed;
   background: var(--surface2);
   color: var(--text);
-  padding: 8px 10px;
-  border-radius: 8px;
-  font-size: 13px;
+  padding: 6px;
+  border-radius: 10px;
   pointer-events: none;
   opacity: 0;
-  transform: translateX(4px) translateY(-50%);
+  transform: translateX(4px);
   transition: opacity 0.12s, transform 0.12s;
   z-index: 9999;
   border: 1px solid var(--border);
   box-shadow: 2px 4px 12px var(--shadow);
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  min-width: 120px;
+  gap: 2px;
+  max-width: 280px;
 }
-.ch-tooltip.visible { opacity: 1; transform: translateX(0) translateY(-50%); pointer-events: auto; }
+.ch-tooltip.visible { opacity: 1; transform: translateX(0); pointer-events: auto; }
 .ch-tooltip-name {
   font-size: 13px;
   font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 200px;
+  color: var(--text-muted);
+  padding: 4px 8px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
-.ch-tooltip-actions { display: flex; gap: 4px; }
-.ch-tooltip-btn {
+.ch-tooltip-name-text {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: break-word;
+}
+.ch-tooltip-gear {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: 20px;
+  height: 20px;
+  background: none;
   border: none;
-  border-radius: 5px;
-  background: var(--surface3, var(--surface2));
+  border-radius: 4px;
   color: var(--text-muted);
   cursor: pointer;
   padding: 0;
-  transition: background 0.12s, color 0.12s;
+  transition: background 0.1s, color 0.1s;
 }
-.ch-tooltip-btn:hover { background: var(--drop-hover); color: var(--text); }
+.ch-tooltip-gear:hover { background: var(--drop-hover); color: var(--text); }
+.ch-tooltip-gear svg { width: 13px; height: 13px; }
+.ch-tooltip-actions { display: flex; flex-direction: column; gap: 2px; border-top: 1px solid var(--border); margin-top: 4px; padding-top: 4px; }
+.ch-tooltip-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  color: var(--text);
+  background: none;
+  border: none;
+  width: 100%;
+  text-align: left;
+  transition: background 0.1s;
+}
+.ch-tooltip-btn:hover { background: var(--drop-hover); }
+.ch-tooltip-btn.danger { color: var(--err, #f87171); }
+.ch-tooltip-btn.danger:hover { background: rgba(248, 113, 113, 0.12); }
+/* ツールチップ内インラインリネーム入力 */
+.ch-tooltip-rename-input {
+  flex: 1;
+  min-width: 0;
+  height: 20px;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--accent);
+  border-radius: 0;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  padding: 0;
+  outline: none;
+  box-sizing: border-box;
+}
+.ch-tooltip-rename-input:focus { border-bottom-color: var(--accent); }
 .ch-compact-rename-pop {
   position: fixed;
   background: var(--surface2);

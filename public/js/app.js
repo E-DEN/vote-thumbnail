@@ -67,6 +67,10 @@ let _chTooltip = null;
 let _chTooltipNameEl = null;
 let _chTooltipActionsEl = null;
 let _chTooltipHideTimer = null;
+let _chTooltipOutsideHandler = null;
+let _chTooltipLocked = false;
+let _chTooltipGearEscHandler = null;
+let _chTooltipF2Action = null;
 let _shiftHeld = false;
 const _refreshingKeys = new Set();
 
@@ -1262,29 +1266,74 @@ function _calcSidebarSlide(el) {
 
 // コンパクトモード: チャンネル名ホバーパネルのヘルパー関数
 function _showCompactTooltip(anchorRect, name, buttons) {
+  if (_chTooltipLocked) return;
   if (_chTooltipHideTimer) { clearTimeout(_chTooltipHideTimer); _chTooltipHideTimer = null; }
-  _chTooltipNameEl.textContent = name;
+  if (_chTooltipOutsideHandler) { document.removeEventListener('click', _chTooltipOutsideHandler); _chTooltipOutsideHandler = null; }
+  _chTooltip.style.width = '';
+  _chTooltipF2Action = null;
+  // 名前ヘッダー: テキスト + 歯車ボタン
+  _chTooltipNameEl.innerHTML = '';
+  var nameSpan = document.createElement('span');
+  nameSpan.className = 'ch-tooltip-name-text';
+  nameSpan.textContent = name;
+  var gearBtn = document.createElement('button');
+  gearBtn.className = 'ch-tooltip-gear';
+  gearBtn.innerHTML = '<i data-lucide="settings"></i>';
+  _chTooltipNameEl.appendChild(nameSpan);
+  _chTooltipNameEl.appendChild(gearBtn);
+  if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [gearBtn] });
+  // アクションボタン: 非表示で構築、歯車クリックで表示
+  _chTooltipActionsEl.style.display = 'none';
+  _chTooltipActionsEl.style.visibility = '';
   _chTooltipActionsEl.innerHTML = '';
   buttons.forEach(function(b) {
     var btn = document.createElement('button');
-    btn.className = 'ch-tooltip-btn';
-    btn.title = b.title;
-    btn.innerHTML = '<i data-lucide="' + b.icon + '"></i>';
-    btn.addEventListener('click', function(e) { e.stopPropagation(); b.onClick(btn, e); });
+    btn.className = 'ch-tooltip-btn' + (b.danger ? ' danger' : '');
+    btn.title = b.title || '';
+    var iconEl = document.createElement('i');
+    iconEl.setAttribute('data-lucide', b.icon);
+    var labelEl = document.createElement('span');
+    labelEl.textContent = b.label || '';
+    btn.appendChild(iconEl);
+    btn.appendChild(labelEl);
+    if (b.shiftIcon) {
+      btn.addEventListener('mouseenter', function() {
+        if (_shiftHeld) { iconEl.setAttribute('data-lucide', b.shiftIcon); if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [iconEl] }); }
+      });
+      btn.addEventListener('mouseleave', function() {
+        iconEl.setAttribute('data-lucide', b.icon); if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [iconEl] });
+      });
+    }
+    btn.addEventListener('click', function(e) { e.stopPropagation(); if (!_chTooltipLocked) b.onClick(btn, e); });
     _chTooltipActionsEl.appendChild(btn);
   });
   if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: Array.from(_chTooltipActionsEl.querySelectorAll('[data-lucide]')) });
-  _chTooltip.style.top = (anchorRect.top + anchorRect.height / 2) + 'px';
+  gearBtn.addEventListener('click', function(e) {
+    e.stopPropagation();
+    _chTooltipActionsEl.style.display = '';
+    _chTooltipActionsEl.style.visibility = '';
+    if (_chTooltipGearEscHandler) { document.removeEventListener('keydown', _chTooltipGearEscHandler); }
+    _chTooltipGearEscHandler = function(ke) { if (ke.key === 'Escape') { _hideCompactTooltip(0); } };
+    document.addEventListener('keydown', _chTooltipGearEscHandler);
+  });
+  _chTooltip.style.top = anchorRect.top + 'px';
   _chTooltip.style.left = (anchorRect.right + 10) + 'px';
   _chTooltip.classList.add('visible');
 }
 
 function _hideCompactTooltip(delay) {
+  if (_chTooltipLocked) return;
   if (_chTooltipHideTimer) { clearTimeout(_chTooltipHideTimer); _chTooltipHideTimer = null; }
-  if (delay) {
-    _chTooltipHideTimer = setTimeout(function() { _chTooltip.classList.remove('visible'); _chTooltipHideTimer = null; }, delay);
-  } else {
+  function _doHide() {
     _chTooltip.classList.remove('visible');
+    if (_chTooltipOutsideHandler) { document.removeEventListener('click', _chTooltipOutsideHandler); _chTooltipOutsideHandler = null; }
+    if (_chTooltipGearEscHandler) { document.removeEventListener('keydown', _chTooltipGearEscHandler); _chTooltipGearEscHandler = null; }
+    _chTooltipF2Action = null;
+  }
+  if (delay) {
+    _chTooltipHideTimer = setTimeout(function() { _doHide(); _chTooltipHideTimer = null; }, delay);
+  } else {
+    _doHide();
   }
 }
 
@@ -1321,6 +1370,53 @@ function _showCompactRename(anchorBtn, currentName, onCommit) {
     if (e.key === 'Escape') { pop.remove(); document.removeEventListener('click', outside, true); }
   });
   setTimeout(function() { document.addEventListener('click', outside, true); }, 0);
+}
+
+function _startTooltipInlineRename(currentName, onCommit) {
+  var _done = false;
+  _chTooltipLocked = true;
+  _chTooltip.style.width = _chTooltip.offsetWidth + 'px';
+  if (_chTooltipGearEscHandler) { document.removeEventListener('keydown', _chTooltipGearEscHandler); _chTooltipGearEscHandler = null; }
+  _chTooltipNameEl.innerHTML = '';
+  var inp = document.createElement('input');
+  inp.type = 'text';
+  inp.className = 'ch-tooltip-rename-input';
+  inp.value = currentName;
+  inp.maxLength = 40;
+  var confirmBtn = document.createElement('button');
+  confirmBtn.className = 'ch-tooltip-gear';
+  confirmBtn.innerHTML = '<i data-lucide="check"></i>';
+  _chTooltipNameEl.appendChild(inp);
+  _chTooltipNameEl.appendChild(confirmBtn);
+  if (typeof lucide !== 'undefined') {
+    lucide.createIcons({ nodes: [confirmBtn] });
+    var checkSvg = confirmBtn.querySelector('svg');
+    if (checkSvg) { checkSvg.setAttribute('width', '13'); checkSvg.setAttribute('height', '13'); }
+  }
+  function finish(save) {
+    if (_done) return;
+    _done = true;
+    _chTooltipLocked = false;
+    document.removeEventListener('click', outsideHandler, true);
+    var v = save ? inp.value.trim().slice(0, 40) : '';
+    if (v && v !== currentName) onCommit(v);
+    _hideCompactTooltip(0);
+  }
+  function outsideHandler(e) {
+    if (!_chTooltip.contains(e.target)) { finish(true); }
+  }
+  confirmBtn.addEventListener('mousedown', function(e) { e.preventDefault(); });
+  confirmBtn.addEventListener('click', function(e) { e.stopPropagation(); finish(true); });
+  inp.addEventListener('keydown', function(e) {
+    e.stopPropagation();
+    if (e.key === 'Enter') { e.preventDefault(); finish(true); }
+    if (e.key === 'Escape') { finish(false); }
+  });
+  setTimeout(function() {
+    inp.focus();
+    inp.select();
+    document.addEventListener('click', outsideHandler, true);
+  }, 0);
 }
 
 function buildChannelItem(ch) {
@@ -1406,13 +1502,14 @@ function buildChannelItem(ch) {
     if (document.getElementById('sidebarNav').classList.contains('sidebar--dragging')) return;
     const rect = item.getBoundingClientRect();
     _showCompactTooltip(rect, name, [
-      { icon: 'refresh-cw', title: t('ch-refresh-title'), onClick: (btn) => {
+      { icon: 'refresh-cw', label: t('ch-refresh-title'), title: t('ch-refresh-title'), onClick: (btn) => {
         _hideCompactTooltip(0);
         refreshBtn.dispatchEvent(new MouseEvent('click'));
       }},
-      { icon: 'trash-2', title: t('ch-delete-title'), onClick: (btn) => {
+      { icon: 'x', shiftIcon: 'trash-2', label: t('ch-delete-title'), title: t('ch-delete-title'), danger: true, onClick: (btn, e) => {
         _hideCompactTooltip(0);
-        _showChDelPopup(btn, t('ch-delete-confirm').replace('{name}', name), () => deleteChannel(key));
+        if (e.shiftKey) { deleteChannel(key); }
+        else { _showChDelPopup(btn, t('ch-delete-confirm').replace('{name}', name), () => deleteChannel(key)); }
       }}
     ]);
   });
@@ -1595,29 +1692,37 @@ function buildFolderItem(folder) {
     if (e.key === 'F2') { e.preventDefault(); startRename(); }
   });
 
+  // コンパクト時のフォルダ名ツールチップ + アクションパネル
   header.addEventListener('mouseenter', () => {
     _calcSidebarSlide(header);
     if (!_chTooltip || !document.getElementById('sidebar').classList.contains('sidebar--compact')) return;
     if (document.getElementById('sidebarNav').classList.contains('sidebar--dragging')) return;
     const rect = header.getBoundingClientRect();
     _showCompactTooltip(rect, folder.name || '', [
-      { icon: 'pencil', title: t('folder-rename-title'), onClick: (btn) => {
-        _hideCompactTooltip(0);
-        _showCompactRename(btn, folder.name || '', function(newName) {
+      { icon: 'pencil', label: t('folder-rename-title'), title: t('folder-rename-title'), onClick: () => {
+        _startTooltipInlineRename(folder.name || '', function(newName) {
           folder.name = newName;
           saveSidebarOrder();
           renderSidebar();
         });
       }},
-      { icon: 'refresh-cw', title: t('folder-refresh-title'), onClick: (btn) => {
+      { icon: 'refresh-cw', label: t('ch-refresh-title'), title: t('folder-refresh-title'), onClick: (btn) => {
         _hideCompactTooltip(0);
         folderRefreshBtn.dispatchEvent(new MouseEvent('click', { shiftKey: true }));
       }},
-      { icon: 'trash-2', title: t('folder-delete-title'), onClick: (btn) => {
+      { icon: 'x', shiftIcon: 'trash-2', label: t('folder-delete-title'), title: t('folder-delete-title'), danger: true, onClick: (btn, e) => {
         _hideCompactTooltip(0);
-        _showChDelPopup(btn, t('folder-delete-confirm').replace('{name}', folder.name || ''), () => deleteFolder(folder.id));
+        if (e.shiftKey) { deleteFolder(folder.id); }
+        else { _showChDelPopup(btn, t('folder-delete-confirm').replace('{name}', folder.name || ''), () => deleteFolder(folder.id)); }
       }}
     ]);
+    _chTooltipF2Action = function() {
+      _startTooltipInlineRename(folder.name || '', function(newName) {
+        folder.name = newName;
+        saveSidebarOrder();
+        renderSidebar();
+      });
+    };
   });
   header.addEventListener('mouseleave', () => { if (_chTooltip) _hideCompactTooltip(200); });
 
@@ -3206,6 +3311,13 @@ function init() {
     if (_chTooltipHideTimer) { clearTimeout(_chTooltipHideTimer); _chTooltipHideTimer = null; }
   });
   _chTooltip.addEventListener('mouseleave', function() { _hideCompactTooltip(150); });
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'F2' && _chTooltip.classList.contains('visible') && _chTooltipF2Action && !_chTooltipLocked) {
+      e.preventDefault();
+      e.stopPropagation();
+      _chTooltipF2Action();
+    }
+  }, true);
   document.body.appendChild(_chTooltip);
 
 
