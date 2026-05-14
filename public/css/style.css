@@ -474,20 +474,83 @@ header {
   position: fixed;
   background: var(--surface2);
   color: var(--text);
-  padding: 6px 12px;
-  border-radius: 6px;
+  padding: 8px 10px;
+  border-radius: 8px;
   font-size: 13px;
-  font-weight: 600;
-  white-space: nowrap;
   pointer-events: none;
   opacity: 0;
   transform: translateX(4px) translateY(-50%);
-  transition: opacity 0.1s, transform 0.1s;
+  transition: opacity 0.12s, transform 0.12s;
   z-index: 9999;
   border: 1px solid var(--border);
   box-shadow: 2px 4px 12px var(--shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 120px;
 }
-.ch-tooltip.visible { opacity: 1; transform: translateX(0) translateY(-50%); }
+.ch-tooltip.visible { opacity: 1; transform: translateX(0) translateY(-50%); pointer-events: auto; }
+.ch-tooltip-name {
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+}
+.ch-tooltip-actions { display: flex; gap: 4px; }
+.ch-tooltip-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 5px;
+  background: var(--surface3, var(--surface2));
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.12s, color 0.12s;
+}
+.ch-tooltip-btn:hover { background: var(--drop-hover); color: var(--text); }
+.ch-compact-rename-pop {
+  position: fixed;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px;
+  display: flex;
+  gap: 4px;
+  z-index: 10000;
+  box-shadow: 2px 4px 12px var(--shadow);
+}
+.ch-compact-rename-input {
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 13px;
+  padding: 4px 8px;
+  width: 160px;
+  outline: none;
+}
+.ch-compact-rename-input:focus { border-color: var(--accent); }
+.ch-compact-rename-submit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 5px;
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+}
+.ch-compact-rename-submit:hover { opacity: 0.85; }
 /* チャンネル右クリックメニュー */
 /* チャンネルアクションボタン */
 .ch-actions {

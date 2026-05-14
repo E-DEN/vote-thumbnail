@@ -64,6 +64,9 @@ let channels = {};
 let currentChannelKey = null;
 let sidebarOrder = [];
 let _chTooltip = null;
+let _chTooltipNameEl = null;
+let _chTooltipActionsEl = null;
+let _chTooltipHideTimer = null;
 let _shiftHeld = false;
 const _refreshingKeys = new Set();
 
@@ -1257,6 +1260,69 @@ function _calcSidebarSlide(el) {
   });
 }
 
+// コンパクトモード: チャンネル名ホバーパネルのヘルパー関数
+function _showCompactTooltip(anchorRect, name, buttons) {
+  if (_chTooltipHideTimer) { clearTimeout(_chTooltipHideTimer); _chTooltipHideTimer = null; }
+  _chTooltipNameEl.textContent = name;
+  _chTooltipActionsEl.innerHTML = '';
+  buttons.forEach(function(b) {
+    var btn = document.createElement('button');
+    btn.className = 'ch-tooltip-btn';
+    btn.title = b.title;
+    btn.innerHTML = '<i data-lucide="' + b.icon + '"></i>';
+    btn.addEventListener('click', function(e) { e.stopPropagation(); b.onClick(btn, e); });
+    _chTooltipActionsEl.appendChild(btn);
+  });
+  if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: Array.from(_chTooltipActionsEl.querySelectorAll('[data-lucide]')) });
+  _chTooltip.style.top = (anchorRect.top + anchorRect.height / 2) + 'px';
+  _chTooltip.style.left = (anchorRect.right + 10) + 'px';
+  _chTooltip.classList.add('visible');
+}
+
+function _hideCompactTooltip(delay) {
+  if (_chTooltipHideTimer) { clearTimeout(_chTooltipHideTimer); _chTooltipHideTimer = null; }
+  if (delay) {
+    _chTooltipHideTimer = setTimeout(function() { _chTooltip.classList.remove('visible'); _chTooltipHideTimer = null; }, delay);
+  } else {
+    _chTooltip.classList.remove('visible');
+  }
+}
+
+function _showCompactRename(anchorBtn, currentName, onCommit) {
+  document.querySelectorAll('.ch-compact-rename-pop').forEach(function(p) { p.remove(); });
+  var pop = document.createElement('div');
+  pop.className = 'ch-compact-rename-pop';
+  var inp = document.createElement('input');
+  inp.type = 'text';
+  inp.className = 'ch-compact-rename-input';
+  inp.value = currentName;
+  inp.maxLength = 40;
+  var submit = document.createElement('button');
+  submit.className = 'ch-compact-rename-submit';
+  submit.innerHTML = '<i data-lucide="check"></i>';
+  pop.append(inp, submit);
+  document.body.appendChild(pop);
+  if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [submit] });
+  var rect = anchorBtn.getBoundingClientRect();
+  pop.style.top  = (rect.top + rect.height / 2 - pop.offsetHeight / 2) + 'px';
+  pop.style.left = (rect.right + 8) + 'px';
+  inp.focus();
+  inp.select();
+  function commit() {
+    var v = inp.value.trim().slice(0, 40);
+    pop.remove();
+    document.removeEventListener('click', outside, true);
+    if (v) onCommit(v);
+  }
+  function outside(e) { if (!pop.contains(e.target)) { pop.remove(); document.removeEventListener('click', outside, true); } }
+  submit.addEventListener('click', function(e) { e.stopPropagation(); commit(); });
+  inp.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') { e.preventDefault(); commit(); }
+    if (e.key === 'Escape') { pop.remove(); document.removeEventListener('click', outside, true); }
+  });
+  setTimeout(function() { document.addEventListener('click', outside, true); }, 0);
+}
+
 function buildChannelItem(ch) {
   const item = document.createElement('div');
   item.className = 'sidebar-channel-item' + (currentChannelKey === ch.key ? ' active' : '');
@@ -1333,20 +1399,24 @@ function buildChannelItem(ch) {
       _showChDelPopup(deleteBtn, t('ch-delete-confirm').replace('{name}', name), doDelete);
     }
   });
-  // コンパクト時のチャンネル名ツールチップ
+  // コンパクト時のチャンネル名ツールチップ + アクションパネル
   item.addEventListener('mouseenter', () => {
     _calcSidebarSlide(item);
     if (!_chTooltip || !document.getElementById('sidebar').classList.contains('sidebar--compact')) return;
     if (document.getElementById('sidebarNav').classList.contains('sidebar--dragging')) return;
     const rect = item.getBoundingClientRect();
-    _chTooltip.textContent = name;
-    _chTooltip.style.top = (rect.top + rect.height / 2) + 'px';
-    _chTooltip.style.left = (rect.right + 10) + 'px';
-    _chTooltip.classList.add('visible');
+    _showCompactTooltip(rect, name, [
+      { icon: 'refresh-cw', title: t('ch-refresh-title'), onClick: (btn) => {
+        _hideCompactTooltip(0);
+        refreshBtn.dispatchEvent(new MouseEvent('click'));
+      }},
+      { icon: 'trash-2', title: t('ch-delete-title'), onClick: (btn) => {
+        _hideCompactTooltip(0);
+        _showChDelPopup(btn, t('ch-delete-confirm').replace('{name}', name), () => deleteChannel(key));
+      }}
+    ]);
   });
-  item.addEventListener('mouseleave', () => {
-    if (_chTooltip) _chTooltip.classList.remove('visible');
-  });
+  item.addEventListener('mouseleave', () => { if (_chTooltip) _hideCompactTooltip(200); });
   return item;
 }
 
@@ -1530,12 +1600,26 @@ function buildFolderItem(folder) {
     if (!_chTooltip || !document.getElementById('sidebar').classList.contains('sidebar--compact')) return;
     if (document.getElementById('sidebarNav').classList.contains('sidebar--dragging')) return;
     const rect = header.getBoundingClientRect();
-    _chTooltip.textContent = folder.name || '';
-    _chTooltip.style.top = (rect.top + rect.height / 2) + 'px';
-    _chTooltip.style.left = (rect.right + 10) + 'px';
-    _chTooltip.classList.add('visible');
+    _showCompactTooltip(rect, folder.name || '', [
+      { icon: 'pencil', title: t('folder-rename-title'), onClick: (btn) => {
+        _hideCompactTooltip(0);
+        _showCompactRename(btn, folder.name || '', function(newName) {
+          folder.name = newName;
+          saveSidebarOrder();
+          renderSidebar();
+        });
+      }},
+      { icon: 'refresh-cw', title: t('folder-refresh-title'), onClick: (btn) => {
+        _hideCompactTooltip(0);
+        folderRefreshBtn.dispatchEvent(new MouseEvent('click', { shiftKey: true }));
+      }},
+      { icon: 'trash-2', title: t('folder-delete-title'), onClick: (btn) => {
+        _hideCompactTooltip(0);
+        _showChDelPopup(btn, t('folder-delete-confirm').replace('{name}', folder.name || ''), () => deleteFolder(folder.id));
+      }}
+    ]);
   });
-  header.addEventListener('mouseleave', () => { if (_chTooltip) _chTooltip.classList.remove('visible'); });
+  header.addEventListener('mouseleave', () => { if (_chTooltip) _hideCompactTooltip(200); });
 
   const childrenEl = document.createElement('div');
   childrenEl.className = 'sidebar-folder-children';
@@ -3112,6 +3196,16 @@ function init() {
   // チャンネル名ツールチップ要素を一度だけ生成
   _chTooltip = document.createElement('div');
   _chTooltip.className = 'ch-tooltip';
+  _chTooltipNameEl = document.createElement('div');
+  _chTooltipNameEl.className = 'ch-tooltip-name';
+  _chTooltipActionsEl = document.createElement('div');
+  _chTooltipActionsEl.className = 'ch-tooltip-actions';
+  _chTooltip.appendChild(_chTooltipNameEl);
+  _chTooltip.appendChild(_chTooltipActionsEl);
+  _chTooltip.addEventListener('mouseenter', function() {
+    if (_chTooltipHideTimer) { clearTimeout(_chTooltipHideTimer); _chTooltipHideTimer = null; }
+  });
+  _chTooltip.addEventListener('mouseleave', function() { _hideCompactTooltip(150); });
   document.body.appendChild(_chTooltip);
 
 
