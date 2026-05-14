@@ -859,7 +859,7 @@ function renderList() {
       entries.forEach(function(entry) {
         entry.target.classList.toggle('inbound', entry.intersectionRatio >= 1);
       });
-    }, { threshold: [0, 1] });
+    }, { root: document.getElementById('listScrollBody'), threshold: [0, 1], rootMargin: '100px 0px' });
   } else {
     grid.classList.remove('mode-shorts');
   }
