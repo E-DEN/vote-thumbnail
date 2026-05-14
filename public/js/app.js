@@ -1163,14 +1163,11 @@ function _setChDelBtnIcon(btn, icon) {
 }
 
 function _startRefreshSpinner(btn) {
-  btn.innerHTML = '<span class="ch-spinner"></span>';
   btn.disabled = true;
 }
 
 function _stopRefreshSpinner(btn) {
-  btn.innerHTML = '<i data-lucide="refresh-cw"></i>';
   btn.disabled = false;
-  if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [btn] });
 }
 
 function _showChDelPopup(anchorBtn, msg, onConfirm, okClass) {
@@ -1375,7 +1372,15 @@ function _showCompactRename(anchorBtn, currentName, onCommit) {
 function _startTooltipInlineRename(currentName, onCommit) {
   var _done = false;
   _chTooltipLocked = true;
-  _chTooltip.style.width = _chTooltip.offsetWidth + 'px';
+  // 自然幅を測定するためアクションパネルが非表示なら一時展開する(F2経由時)
+  if (_chTooltipActionsEl.style.display === 'none') {
+    _chTooltipActionsEl.style.visibility = 'hidden';
+    _chTooltipActionsEl.style.display = '';
+  }
+  var _naturalWidth = _chTooltip.getBoundingClientRect().width;
+  _chTooltipActionsEl.style.display = 'none';
+  _chTooltipActionsEl.style.visibility = '';
+  _chTooltip.style.width = Math.max(_naturalWidth, 160) + 'px';
   if (_chTooltipGearEscHandler) { document.removeEventListener('keydown', _chTooltipGearEscHandler); _chTooltipGearEscHandler = null; }
   _chTooltipNameEl.innerHTML = '';
   var inp = document.createElement('input');
@@ -1423,11 +1428,12 @@ function buildChannelItem(ch) {
   const item = document.createElement('div');
   item.className = 'sidebar-channel-item' + (currentChannelKey === ch.key ? ' active' : '');
   item.dataset.key = ch.key;
+  if (_refreshingKeys.has(ch.key)) item.classList.add('compact-refreshing');
   const name = ch.displayName || ch.handle || ch.key;
   const avatarEl = ch.avatar
     ? `<img class="sidebar-ch-avatar" src="${ch.avatar}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none'">`
     : `<div class="sidebar-ch-avatar"></div>`;
-  item.innerHTML = `${avatarEl}<span class="sidebar-ch-name"><span class="name-inner">${name}</span></span>`;
+  item.innerHTML = `<div class="sidebar-ch-avatar-wrap">${avatarEl}</div><span class="sidebar-ch-name"><span class="name-inner">${name}</span></span>`;
 
   // アクションボタン
   const actions = document.createElement('div');
@@ -1454,6 +1460,7 @@ function buildChannelItem(ch) {
     const key = ch.key;
     if (_refreshingKeys.has(key)) return;
     _refreshingKeys.add(key);
+    item.classList.add('compact-refreshing');
     if (key !== currentChannelKey) await selectChannel(key);
     _startRefreshSpinner(refreshBtn);
     // リフレッシュ中に定期ポーリングしてギャラリーをライブ更新
@@ -1480,7 +1487,12 @@ function buildChannelItem(ch) {
       else if (currentView === 'list') renderList();
       else if (currentView === 'ranking') renderRanking();
     } catch (err) { showToast(t('err-refresh-failed'), true); console.error('refresh:', err); }
-    finally { clearInterval(_pollRefresh); _refreshingKeys.delete(key); _stopRefreshSpinner(refreshBtn); }
+    finally {
+      clearInterval(_pollRefresh);
+      _refreshingKeys.delete(key);
+      _stopRefreshSpinner(refreshBtn);
+      document.querySelectorAll(`.sidebar-channel-item[data-key="${key}"]`).forEach(el => el.classList.remove('compact-refreshing'));
+    }
   });
 
   deleteBtn.addEventListener('mouseenter', () => { if (_shiftHeld) _setChDelBtnIcon(deleteBtn, 'trash-2'); });
@@ -1530,6 +1542,7 @@ function buildFolderItem(folder) {
   header.className = 'sidebar-folder-header';
   header.dataset.folderId = folder.id;
   header.tabIndex = 0;
+  if (folder.children.some(k => _refreshingKeys.has(k))) header.classList.add('compact-refreshing');
 
   const preview = document.createElement('div');
   preview.className = 'sidebar-folder-preview';
@@ -1590,6 +1603,7 @@ function buildFolderItem(folder) {
       if (!keys.length) return;
       keys.forEach(k => _refreshingKeys.add(k));
       _startRefreshSpinner(folderRefreshBtn);
+      header.classList.add('compact-refreshing');
       try {
         let totalVideos = 0;
         let addedVideos = 0;
@@ -1599,16 +1613,18 @@ function buildFolderItem(folder) {
           const chItem = document.querySelector(`.sidebar-channel-item[data-key="${key}"]`);
           const chRefBtn = chItem?.querySelector('.ch-action-refresh');
           if (chRefBtn) _startRefreshSpinner(chRefBtn);
+          if (chItem) chItem.classList.add('compact-refreshing');
           try {
             const res = await fetch('/api/channels/' + key + '/refresh', { method: 'POST', headers: getRssOnly() ? { 'X-RSS-Only': '1' } : apiKeyHeaders() });
             const data = await res.json().catch(() => ({}));
-            if (data.apiKeyError) { markApiKeyError(); showToast(t('err-apikey-invalid-details'), true); if (chRefBtn) _stopRefreshSpinner(chRefBtn); _refreshingKeys.delete(key); break; }
+            if (data.apiKeyError) { markApiKeyError(); showToast(t('err-apikey-invalid-details'), true); if (chRefBtn) _stopRefreshSpinner(chRefBtn); _refreshingKeys.delete(key); document.querySelectorAll(`.sidebar-channel-item[data-key="${key}"]`).forEach(el => el.classList.remove('compact-refreshing')); break; }
             if (data.total != null) totalVideos += data.total;
             if (data.added != null) addedVideos += data.added;
             if (data.updated != null) updatedVideos += data.updated;
           } catch (err) { console.error('folder refresh:', err); }
           _refreshingKeys.delete(key);
           if (chRefBtn) _stopRefreshSpinner(chRefBtn);
+          document.querySelectorAll(`.sidebar-channel-item[data-key="${key}"]`).forEach(el => el.classList.remove('compact-refreshing'));
           // チャンネル完了ごとに即UIへ反映
           if (key === currentChannelKey) {
             allVideos = await fetchChannelVideos(key);
@@ -1621,7 +1637,10 @@ function buildFolderItem(folder) {
           ? t('refresh-done-rss').replace('{changed}', addedVideos + updatedVideos)
           : t('refresh-done-api').replace('{total}', totalVideos);
         showToast(toastMsg);
-      } finally { _stopRefreshSpinner(folderRefreshBtn); }
+      } finally {
+        _stopRefreshSpinner(folderRefreshBtn);
+        document.querySelector(`.sidebar-folder-header[data-folder-id="${folder.id}"]`)?.classList.remove('compact-refreshing');
+      }
     };
     if (e.shiftKey) {
       await doRefresh();

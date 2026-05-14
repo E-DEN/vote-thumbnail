@@ -259,12 +259,17 @@ header {
   color: var(--accent);
 }
 
+.sidebar-ch-avatar-wrap {
+  position: relative;
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+}
 .sidebar-ch-avatar {
   width: 44px;
   height: 44px;
   border-radius: 50%;
   object-fit: cover;
-  flex-shrink: 0;
   background: var(--surface2);
   transition: width 0.1s, height 0.1s;
 }
@@ -472,6 +477,7 @@ header {
 /* チャンネルツールチップ */
 .ch-tooltip {
   position: fixed;
+  box-sizing: border-box;
   background: var(--surface2);
   color: var(--text);
   padding: 6px;
@@ -653,6 +659,20 @@ header {
   border-radius: 50%;
   animation: ch-spin 0.7s linear infinite;
   vertical-align: middle;
+}
+/* コンパクトモード: リフレッシュ中スピナーオーバーレイ */
+.compact-refreshing .sidebar-ch-avatar-wrap::after,
+.compact-refreshing .sidebar-folder-preview::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.45);
+  border: 2.5px solid rgba(255,255,255,0.15);
+  border-top-color: rgba(255,255,255,0.85);
+  animation: ch-spin 0.75s linear infinite;
+  pointer-events: none;
+  z-index: 2;
 }
 /* 削除確認ポップアップ */
 .ch-del-popup {
