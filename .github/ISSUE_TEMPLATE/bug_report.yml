@@ -1,0 +1,76 @@
+﻿name: バグ報告
+description: 動作しない・おかしい挙動を報告する
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: 概要
+      description: どんな問題が起きているか、一言で
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: 再現手順
+      description: 問題を再現するための手順
+      placeholder: |
+        1. 
+        2. 
+        3. 
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期待される動作
+      description: こうなるはずだと思った挙動
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: 実際の動作
+      description: 実際に起きた挙動
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: OS
+      options:
+        - Windows 11
+        - Windows 10
+        - macOS
+        - iOS / iPadOS
+        - Android
+        - Linux
+        - その他
+    validations:
+      required: true
+
+  - type: dropdown
+    id: browser
+    attributes:
+      label: ブラウザ
+      options:
+        - Chrome
+        - Firefox
+        - Safari
+        - Edge
+        - その他
+    validations:
+      required: true
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: 補足
+      description: スクリーンショット・コンソールエラー・その他
+    validations:
+      required: false
