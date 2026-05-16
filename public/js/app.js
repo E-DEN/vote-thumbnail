@@ -670,7 +670,42 @@ function renderVote() {
     return;
   }
   const [pairA, pairB] = pair;
+
+  // カードが既に存在する場合は再利用、なければ初期構築
+  var existingCards = container.querySelectorAll('.vote-card');
+  if (existingCards.length === 2) {
+    // 既存カードを再利用: 状態リセット → データ更新
+    existingCards.forEach(function(card, idx) {
+      var v = idx === 0 ? pairA : pairB;
+      card.className = 'vote-card';
+      card.dataset.id = v.id;
+      // winner/loser オーバーレイを除去
+      var ov = card.querySelector('.vote-good-overlay');
+      if (ov) ov.remove();
+      // 画像・タイトル更新
+      var img = card.querySelector('.card-banner');
+      img.src = v.thumb;
+      img.onerror = function() { this.src = 'https://i.ytimg.com/vi/' + v.id + '/hqdefault.jpg'; };
+      card.querySelector('.tilter__caption').textContent = v.title;
+      // tilt 状態をリセット（前の投票時のアニメが残っている場合があるため）
+      var fig = card.querySelector('.tilter__figure');
+      var cap = card.querySelector('.tilter__caption');
+      var shi = card.querySelector('.tilter__deco--shine > div');
+      anime.remove([fig, cap, shi]);
+      fig.style.transform = '';
+      cap.style.transform = '';
+      shi.style.transform = '';
+      fig.classList.remove('tilt-smooth');
+      cap.classList.remove('tilt-smooth');
+      shi.classList.remove('tilt-smooth');
+    });
+    // クリックハンドラを委譲に切り替え済みなのでここでは何もしない
+    return;
+  }
+
+  // 初回: カードを構築
   container.innerHTML = '';
+  const frag = document.createDocumentFragment();
   [pairA, pairB].forEach((v, idx) => {
     const card = document.createElement('div');
     card.className = 'vote-card';
@@ -734,32 +769,40 @@ function renderVote() {
         duration: 1200, easing: 'easeOutElastic', elasticity: 600 });
     });
 
-    card.addEventListener('click', () => {
-      const winner = idx === 0 ? pairA : pairB;
-      const loser  = idx === 0 ? pairB : pairA;
-      applyVote(winner.id, loser.id);
-      _playedPairs.add(_pairKey(winner.id, loser.id));
-      container.querySelectorAll('.vote-card').forEach(c => {
-        c.classList.add(c.dataset.id === winner.id ? 'winner' : 'loser');
-        if (c.dataset.id === winner.id) {
-          var ov = document.createElement('div');
-          ov.className = 'vote-good-overlay';
-          ov.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M1 21h4V9H1v12zm22-11c0-1.1-.9-2-2-2h-6.31l.95-4.57.03-.32c0-.41-.17-.79-.44-1.06L14.17 1 7.59 7.59C7.22 7.95 7 8.45 7 9v10c0 1.1.9 2 2 2h9c.83 0 1.54-.5 1.84-1.22l3.02-7.05c.09-.23.14-.47.14-.73v-1.91l-.01-.01L23 10z"/></svg>';
-          c.appendChild(ov);
-        }
-      });
-      _currentVotePair = null; // 投票完了後は次のペアを抽選
-      setTimeout(renderVote, 500);
-    });
-    container.appendChild(card);
+    frag.appendChild(card);
     if (idx === 0) {
       const vs = document.createElement('div');
       vs.className = 'vote-vs-sep';
       vs.textContent = 'VS';
-      container.appendChild(vs);
+      frag.appendChild(vs);
     }
   });
+  container.appendChild(frag);
 }
+
+// カード再利用版のクリックハンドラ（委譲）
+document.addEventListener('click', function(e) {
+  var card = e.target.closest('#votePair .vote-card');
+  if (!card || !_currentVotePair) return;
+  var [pairA, pairB] = _currentVotePair;
+  var isA = card.dataset.id === pairA.id;
+  var winner = isA ? pairA : pairB;
+  var loser  = isA ? pairB : pairA;
+  applyVote(winner.id, loser.id);
+  _playedPairs.add(_pairKey(winner.id, loser.id));
+  var container = document.getElementById('votePair');
+  container.querySelectorAll('.vote-card').forEach(c => {
+    c.classList.add(c.dataset.id === winner.id ? 'winner' : 'loser');
+    if (c.dataset.id === winner.id) {
+      var ov = document.createElement('div');
+      ov.className = 'vote-good-overlay';
+      ov.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M1 21h4V9H1v12zm22-11c0-1.1-.9-2-2-2h-6.31l.95-4.57.03-.32c0-.41-.17-.79-.44-1.06L14.17 1 7.59 7.59C7.22 7.95 7 8.45 7 9v10c0 1.1.9 2 2 2h9c.83 0 1.54-.5 1.84-1.22l3.02-7.05c.09-.23.14-.47.14-.73v-1.91l-.01-.01L23 10z"/></svg>';
+      c.appendChild(ov);
+    }
+  });
+  _currentVotePair = null;
+  setTimeout(renderVote, 500);
+});
 
 // --- フォーマットユーティリティ ---
 function fmtViews(n) {
@@ -981,21 +1024,29 @@ function _normalizeSortBtnWidths() {
   var codes = Object.keys(_I18N_DICTS);
 
   function _measureGroup(btns, maxMap, keyAttr, i18nAttr) {
+    // 元の状態を一括保存
+    var origTxts = btns.map(function(b) { return b.textContent; });
+    var origMins = btns.map(function(b) { return b.style.minWidth; });
     codes.forEach(function(code) {
       var dict = _I18N_DICTS[code] || {};
-      btns.forEach(function(b) {
-        var key     = b.dataset[keyAttr];
-        var i18nKey = b.dataset[i18nAttr];
-        var origMin = b.style.minWidth;
-        var origTxt = b.textContent;
+      // 一括書き込み
+      btns.forEach(function(b, i) {
         b.style.minWidth = '';
-        b.textContent    = dict[i18nKey] || b.textContent;
+        b.textContent    = dict[b.dataset[i18nAttr]] || origTxts[i];
+      });
+      // 一括読み取り（強制リフローをここ1回にまとめる）
+      btns.forEach(function(b) {
+        var key = b.dataset[keyAttr];
         var w = b.offsetWidth;
-        b.textContent    = origTxt;
-        b.style.minWidth = origMin;
         if (!maxMap[key] || w > maxMap[key]) { maxMap[key] = w; }
       });
+      // 一括復元
+      btns.forEach(function(b, i) {
+        b.textContent    = origTxts[i];
+        b.style.minWidth = origMins[i];
+      });
     });
+    // maxWidth を一括適用
     btns.forEach(function(b) {
       var key = b.dataset[keyAttr];
       if (maxMap[key]) { b.style.minWidth = maxMap[key] + 'px'; }
