@@ -68,6 +68,14 @@ function applyLang(lang) {
     const isDark = document.documentElement.dataset.theme === 'dark';
     themeBtn.title = t(isDark ? 'mode-dark' : 'mode-light');
   }
+  // ソートラベルをアクティブな項目と同期
+  [['sortPopup', 'sortSplitLabel'], ['rsSortPopup', 'rsSortLabel']].forEach(([popupId, labelId]) => {
+    const popup = document.getElementById(popupId);
+    if (!popup) return;
+    const active = popup.querySelector('[data-sort].active');
+    const label = document.getElementById(labelId);
+    if (active && label) label.textContent = active.textContent;
+  });
 }
 
 // ── 組み込み: 日本語 ──────────────────────────────────────────
@@ -81,7 +89,7 @@ registerLang('ja', '日本語', {
   'lang-switch': '言語切り替え',
   // サイドバー
   'sidebar-logo':   'ラブ♥ねいる',
-  'search-ph':      'URL / @handle を追加',
+  'search-ph':      'YouTube の @handle またはチャンネル／動画URL',
   'search-add':     '追加',
   'group-manage':   'グループ管理',
   'ungrouped':      'チャンネル',
@@ -94,14 +102,25 @@ registerLang('ja', '日本語', {
   'cat-videos':  '動画',
   'cat-shorts':  'ショート',
   'cat-live':    'ライブ',
+  // ツールチップ
+  'settings-btn-title':    '設定',
+  'view-gallery':          'ギャラリー',
+  'view-grid':             'グリッド',
+  'apikey-toggle-title':   '表示切り替え',
   // ウェルカム
   'no-channel-selected': 'チャンネルを選択してください',
-  'welcome-add-label': 'チャンネルを追加',
+  'welcome-add-label': 'チャンネルを追加してはじめる',
   'welcome-add-btn':   '追加',
   'welcome-opt':       '省略可',
   'welcome-save':      '保存',
   'welcome-api-note':  '過去動画すべてを取得するには YouTube API キーの設定が必要です。',
-  'welcome-help-link': '使い方ガイドを見る',
+  'welcome-help-link': '使い方ガイドを見る →',
+  'wf-label-vote':     'サムネイル投票',
+  'wf-desc-vote':      'サムネイルを見比べて\n好きな方に投票できます。\n結果はリアルタイムで集計。',
+  'wf-label-rank':     'ランキング',
+  'wf-desc-rank':      '投票結果をもとに\nサムネイルの順位を閲覧できます。\nレーティングはGlicko-2で算出。',
+  'wf-label-pin':      'ここ好き',
+  'wf-desc-pin':       '「ここ好き」な地点に\nピンを立てて投稿できます。\nみんなの人気エリアに注目。',
   // 投票
   'vote-counter-pre':  'これまでの投票: ',
   'vote-counter-post': ' 回',
@@ -156,9 +175,9 @@ registerLang('ja', '日本語', {
   'theater-close':  'プレイリストを表示',
   'fullscreen-title': 'フルスクリーン',
   // ソート
-  'sort-views':  '再生数',
-  'sort-date':   '投稿日',
-  'sort-rating': 'レーティング',
+  'sort-views':  '再生数順',
+  'sort-date':   '投稿日順',
+  'sort-rating': '得票率順',
   'sort-random': 'ランダム',
   // 表示フォーマット
   'views-100m': '{n}億回視聴',
@@ -242,7 +261,7 @@ registerLang('en', 'English', {
   'lang-switch': 'Switch language',
   // Sidebar
   'sidebar-logo':   'Love♥Nail',
-  'search-ph':      'URL / @handle to add',
+  'search-ph':      'YouTube @handle or channel/video URL',
   'search-add':     'Add',
   'group-manage':   'Manage groups',
   'ungrouped':      'Channels',
@@ -255,14 +274,25 @@ registerLang('en', 'English', {
   'cat-videos':  'Videos',
   'cat-shorts':  'Shorts',
   'cat-live':    'Live',
+  // Tooltips
+  'settings-btn-title':    'Settings',
+  'view-gallery':          'Gallery',
+  'view-grid':             'List',
+  'apikey-toggle-title':   'Show / Hide',
   // Welcome
   'no-channel-selected': 'Select a channel',
-  'welcome-add-label': 'Add channel',
+  'welcome-add-label': 'Add a channel to get started',
   'welcome-add-btn':   'Add',
   'welcome-opt':       'optional',
   'welcome-save':      'Save',
   'welcome-api-note':  'A YouTube API key is required to fetch all past videos.',
-  'welcome-help-link': 'View usage guide',
+  'welcome-help-link': 'View usage guide →',
+  'wf-label-vote':     'Thumbnail Vote',
+  'wf-desc-vote':      'Compare thumbnails\nand vote for your favorite.\nResults tallied in real time.',
+  'wf-label-rank':     'Rankings',
+  'wf-desc-rank':      'Browse thumbnail rankings\nbased on vote results.\nRatings calculated with Glicko-2.',
+  'wf-label-pin':      'Favorites',
+  'wf-desc-pin':       'Drop a pin on your\nfavorite moment and share it.\nSee popular spots at a glance.',
   // Vote
   'vote-counter-pre':  'Votes so far: ',
   'vote-counter-post': '',
@@ -316,9 +346,9 @@ registerLang('en', 'English', {
   'theater-close':  'Show Playlist',
   'fullscreen-title': 'Fullscreen',
   // Sort
-  'sort-views':  'Views',
-  'sort-date':   'Date',
-  'sort-rating': 'Rating',
+  'sort-views':  'Most Viewed',
+  'sort-date':   'Newest',
+  'sort-rating': 'Top Rated',
   'sort-random': 'Random',
   // Format
   'views-100m': '{n}00M views',

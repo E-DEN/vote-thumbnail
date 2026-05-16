@@ -3698,7 +3698,18 @@ document.getElementById('sidebarSearchBtn').addEventListener('click', () => {
 (function() {
   const handleInput    = document.getElementById('welcomeHandleInput');
   const addBtn         = document.getElementById('welcomeAddBtn');
+  const clearBtn       = document.getElementById('welcomeClearBtn');
   const statusEl       = document.getElementById('welcomeAddStatus');
+
+  handleInput.addEventListener('input', () => {
+    clearBtn.hidden = handleInput.value.length === 0;
+  });
+  clearBtn.addEventListener('click', () => {
+    handleInput.value = '';
+    clearBtn.hidden = true;
+    statusEl.textContent = '';
+    handleInput.focus();
+  });
 
   async function submitWelcomeAdd() {
     const raw = handleInput.value.trim();
@@ -3709,6 +3720,7 @@ document.getElementById('sidebarSearchBtn').addEventListener('click', () => {
     await addChannelFromSidebarInput();
     addBtn.disabled = false;
     handleInput.value = '';
+    clearBtn.hidden = true;
     // サイドバーステータスをウェルカムにも反映
     const sidebarStatus = document.getElementById('sidebarSearchStatus');
     statusEl.textContent = sidebarStatus.textContent;
