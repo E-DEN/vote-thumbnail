@@ -72,6 +72,7 @@ let _chTooltipLocked = false;
 let _chTooltipGearEscHandler = null;
 let _chTooltipF2Action = null;
 let _shiftHeld = false;
+let _hoveredTooltipDangerBtn = null; // { iconEl, icon, shiftIcon }
 const _refreshingKeys = new Set();
 
 // --- ReactionPin グローバル状態 ---
@@ -1212,17 +1213,37 @@ document.addEventListener('keydown', e => {
   _shiftHeld = true;
   const hov = document.querySelector('.ch-action-delete:hover');
   if (hov) _setChDelBtnIcon(hov, 'trash-2');
+  if (_hoveredTooltipDangerBtn) {
+    const { btn, shiftIcon } = _hoveredTooltipDangerBtn;
+    _setTooltipBtnIcon(btn, shiftIcon);
+  }
 });
 document.addEventListener('keyup', e => {
   if (e.key !== 'Shift') return;
   _shiftHeld = false;
   const hov = document.querySelector('.ch-action-delete:hover');
   if (hov) _setChDelBtnIcon(hov, 'x');
+  if (_hoveredTooltipDangerBtn) {
+    const { btn, icon } = _hoveredTooltipDangerBtn;
+    _setTooltipBtnIcon(btn, icon);
+  }
 });
 
 function _setChDelBtnIcon(btn, icon) {
   if (!btn) return;
   btn.innerHTML = `<i data-lucide="${icon}"></i>`;
+  if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [btn] });
+}
+
+// コンパクトツールチップボタンのアイコンだけ差し替える
+// lucide は <i> を <svg> に置換するため iconEl 参照は使えない
+function _setTooltipBtnIcon(btn, icon) {
+  if (!btn) return;
+  const first = btn.firstElementChild;
+  if (first) first.remove();
+  const i = document.createElement('i');
+  i.setAttribute('data-lucide', icon);
+  btn.insertBefore(i, btn.firstChild);
   if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [btn] });
 }
 
@@ -1234,10 +1255,13 @@ function _stopRefreshSpinner(btn) {
   btn.disabled = false;
 }
 
-function _showChDelPopup(anchorBtn, msg, onConfirm, okClass) {
+function _showChDelPopup(anchorBtn, msg, onConfirm, okClass, anchorRect) {
+  // anchorRect を事前渡しできる（コンパクトモードで tooltip hide 前に取得した rect を使う）
+  const rect = anchorRect || anchorBtn.getBoundingClientRect();
   document.querySelectorAll('.ch-del-popup').forEach(p => p.remove());
   const popup = document.createElement('div');
   popup.className = 'ch-del-popup';
+  popup.style.visibility = 'hidden';
   const msgEl = document.createElement('span');
   msgEl.className = 'ch-del-popup-msg';
   msgEl.textContent = msg;
@@ -1252,15 +1276,23 @@ function _showChDelPopup(anchorBtn, msg, onConfirm, okClass) {
   btnRow.append(okBtn, cancelBtn);
   popup.append(msgEl, btnRow);
   document.body.appendChild(popup);
-  const rect = anchorBtn.getBoundingClientRect();
   const pw = popup.offsetWidth, ph = popup.offsetHeight;
-  let left = rect.right - pw;
-  let top = rect.bottom + 4;
+  // ボタンの真下に表示（左端をボタン左端に揃える）
+  let left = rect.left;
+  let top  = rect.bottom + 6;
+  if (left + pw > window.innerWidth  - 4) left = window.innerWidth  - pw - 4;
   if (left < 4) left = 4;
-  if (top + ph > window.innerHeight - 4) top = rect.top - ph - 4;
+  if (top  + ph > window.innerHeight - 4) top  = rect.top - ph - 6;
+  if (top  < 4) top = 4;
   popup.style.left = left + 'px';
-  popup.style.top = top + 'px';
-  const close = () => popup.remove();
+  popup.style.top  = top  + 'px';
+  popup.style.visibility = '';
+  const close = () => {
+    popup.remove();
+    document.removeEventListener('keydown', escHandler);
+  };
+  const escHandler = e => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
+  document.addEventListener('keydown', escHandler);
   okBtn.addEventListener('click', e => { e.stopPropagation(); close(); onConfirm(); });
   cancelBtn.addEventListener('click', e => { e.stopPropagation(); close(); });
   setTimeout(() => {
@@ -1270,6 +1302,8 @@ function _showChDelPopup(anchorBtn, msg, onConfirm, okClass) {
 }
 
 function deleteChannel(key) {
+  // サーバーから論理削除（F5 後の再同期で復活しないように）
+  fetch('/api/channels/' + key, { method: 'DELETE' }).catch(() => {});
   delete channels[key];
   saveChannels();
   // sidebarOrder から対象チャンネルを除去
@@ -1289,7 +1323,6 @@ function deleteChannel(key) {
   saveSidebarOrder();
   if (currentChannelKey === key) {
     currentChannelKey = null;
-    document.getElementById('chNoSelect').style.display = '';
     document.getElementById('chAvatar').style.display = 'none';
     document.getElementById('chName').style.display = 'none';
     document.getElementById('chTabs').style.display = 'none';
@@ -1358,11 +1391,15 @@ function _showCompactTooltip(anchorRect, name, buttons) {
     btn.appendChild(iconEl);
     btn.appendChild(labelEl);
     if (b.shiftIcon) {
+      btn.dataset.icon = b.icon;
+      btn.dataset.shiftIcon = b.shiftIcon;
       btn.addEventListener('mouseenter', function() {
-        if (_shiftHeld) { iconEl.setAttribute('data-lucide', b.shiftIcon); if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [iconEl] }); }
+        _hoveredTooltipDangerBtn = { btn, icon: b.icon, shiftIcon: b.shiftIcon };
+        if (_shiftHeld) _setTooltipBtnIcon(btn, b.shiftIcon);
       });
       btn.addEventListener('mouseleave', function() {
-        iconEl.setAttribute('data-lucide', b.icon); if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [iconEl] });
+        _hoveredTooltipDangerBtn = null;
+        _setTooltipBtnIcon(btn, b.icon);
       });
     }
     btn.addEventListener('click', function(e) { e.stopPropagation(); if (!_chTooltipLocked) b.onClick(btn, e); });
@@ -1376,10 +1413,23 @@ function _showCompactTooltip(anchorRect, name, buttons) {
     if (_chTooltipGearEscHandler) { document.removeEventListener('keydown', _chTooltipGearEscHandler); }
     _chTooltipGearEscHandler = function(ke) { if (ke.key === 'Escape') { _hideCompactTooltip(0); } };
     document.addEventListener('keydown', _chTooltipGearEscHandler);
+    // アクション展開後に高さが増すので再クランプ
+    requestAnimationFrame(() => {
+      const th = _chTooltip.offsetHeight;
+      const maxTop = window.innerHeight - th - 4;
+      if (parseFloat(_chTooltip.style.top) > maxTop) _chTooltip.style.top = Math.max(4, maxTop) + 'px';
+    });
   });
   _chTooltip.style.top = anchorRect.top + 'px';
   _chTooltip.style.left = (anchorRect.right + 10) + 'px';
   _chTooltip.classList.add('visible');
+  // 画面下端からはみ出す場合は上にずらす
+  const _clampTooltipTop = () => {
+    const th = _chTooltip.offsetHeight;
+    const maxTop = window.innerHeight - th - 4;
+    if (parseFloat(_chTooltip.style.top) > maxTop) _chTooltip.style.top = Math.max(4, maxTop) + 'px';
+  };
+  _clampTooltipTop();
 }
 
 function _hideCompactTooltip(delay) {
@@ -1390,6 +1440,7 @@ function _hideCompactTooltip(delay) {
     if (_chTooltipOutsideHandler) { document.removeEventListener('click', _chTooltipOutsideHandler); _chTooltipOutsideHandler = null; }
     if (_chTooltipGearEscHandler) { document.removeEventListener('keydown', _chTooltipGearEscHandler); _chTooltipGearEscHandler = null; }
     _chTooltipF2Action = null;
+    _hoveredTooltipDangerBtn = null;
   }
   if (delay) {
     _chTooltipHideTimer = setTimeout(function() { _doHide(); _chTooltipHideTimer = null; }, delay);
@@ -1575,7 +1626,9 @@ function buildChannelItem(ch) {
   item.addEventListener('mouseenter', () => {
     _calcSidebarSlide(item);
     if (!_chTooltip || !document.getElementById('sidebar').classList.contains('sidebar--compact')) return;
-    if (document.getElementById('sidebarNav').classList.contains('sidebar--folder-dragging')) return;
+    const _nav = document.getElementById('sidebarNav');
+    if (_nav.classList.contains('sidebar--folder-dragging')) return;
+    if (item.closest('.sidebar-folder-children') && _nav.classList.contains('sidebar--dragging')) return;
     if (item.classList.contains('sidebar--drag-source')) return;
     const rect = item.getBoundingClientRect();
     _showCompactTooltip(rect, name, [
@@ -1584,9 +1637,10 @@ function buildChannelItem(ch) {
         refreshBtn.dispatchEvent(new MouseEvent('click'));
       }},
       { icon: 'x', shiftIcon: 'trash-2', label: t('ch-delete-title'), title: t('ch-delete-title'), danger: true, onClick: (btn, e) => {
+        const savedRect = btn.getBoundingClientRect();
         _hideCompactTooltip(0);
-        if (e.shiftKey) { deleteChannel(key); }
-        else { _showChDelPopup(btn, t('ch-delete-confirm').replace('{name}', name), () => deleteChannel(key)); }
+        if (e.shiftKey) { deleteChannel(ch.key); }
+        else { _showChDelPopup(btn, t('ch-delete-confirm').replace('{name}', name), () => deleteChannel(ch.key), undefined, savedRect); }
       }}
     ]);
   });
@@ -1796,9 +1850,10 @@ function buildFolderItem(folder) {
         folderRefreshBtn.dispatchEvent(new MouseEvent('click', { shiftKey: true }));
       }},
       { icon: 'x', shiftIcon: 'trash-2', label: t('folder-delete-title'), title: t('folder-delete-title'), danger: true, onClick: (btn, e) => {
+        const savedRect = btn.getBoundingClientRect();
         _hideCompactTooltip(0);
         if (e.shiftKey) { deleteFolder(folder.id); }
-        else { _showChDelPopup(btn, t('folder-delete-confirm').replace('{name}', folder.name || ''), () => deleteFolder(folder.id)); }
+        else { _showChDelPopup(btn, t('folder-delete-confirm').replace('{name}', folder.name || ''), () => deleteFolder(folder.id), undefined, savedRect); }
       }}
     ]);
     _chTooltipF2Action = function() {
@@ -2464,7 +2519,6 @@ async function selectChannel(key) {
   });
 
   // チャンネルヘッダーを表示
-  document.getElementById('chNoSelect').style.display = 'none';
   const avatarEl = document.getElementById('chAvatar');
   avatarEl.src = ch.avatar || '';
   avatarEl.style.display = ch.avatar ? '' : 'none';
@@ -3568,7 +3622,6 @@ function init() {
         currentChannelKey = null;
         allVideos = [];
         document.querySelectorAll('.sidebar-channel-item').forEach(el => el.classList.remove('active'));
-        document.getElementById('chNoSelect').style.display = '';
         document.getElementById('chAvatar').style.display = 'none';
         document.getElementById('chName').style.display = 'none';
         document.getElementById('chTabs').style.display = 'none';
@@ -3596,7 +3649,6 @@ function init() {
         currentChannelKey = null;
         allVideos = [];
         document.querySelectorAll('.sidebar-channel-item').forEach(el => el.classList.remove('active'));
-        document.getElementById('chNoSelect').style.display = '';
         document.getElementById('chAvatar').style.display = 'none';
         document.getElementById('chName').style.display = 'none';
         document.getElementById('chTabs').style.display = 'none';
@@ -3663,7 +3715,6 @@ function init() {
     currentChannelKey = null;
     allVideos = [];
     document.querySelectorAll('.sidebar-channel-item').forEach(el => el.classList.remove('active'));
-    document.getElementById('chNoSelect').style.display = '';
     document.getElementById('chAvatar').style.display = 'none';
     document.getElementById('chName').style.display = 'none';
     document.getElementById('chTabs').style.display = 'none';

@@ -46,7 +46,7 @@ async function handleApi(request, env, url, ctx) {
   const allowedOrigin = env.ALLOWED_ORIGIN ?? '*';
   const cors = {
     'Access-Control-Allow-Origin':  allowedOrigin,
-    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, X-YouTube-Api-Key, X-RSS-Only',
   };
   if (method === 'OPTIONS') return new Response(null, { headers: cors });
@@ -151,6 +151,16 @@ async function handleApi(request, env, url, ctx) {
         'SELECT channel_id, handle, title, icon_url FROM channels WHERE inactive = 0 ORDER BY title'
       ).all();
       return json(rows.results);
+    }
+
+    // --- DELETE /api/channels/:channelId ---
+    const mDelete = path.match(/^\/channels\/(UC[\w-]{22})$/);
+    if (method === 'DELETE' && mDelete) {
+      const channelId = mDelete[1];
+      await env.DB.prepare(
+        "UPDATE channels SET inactive = 1 WHERE channel_id = ?"
+      ).bind(channelId).run();
+      return json({ ok: true });
     }
 
     // --- POST /api/channels/:channelId/refresh ---

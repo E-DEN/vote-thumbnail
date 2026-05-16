@@ -103,7 +103,6 @@ registerLang('ja', '日本語', {
   'view-grid':             'グリッド',
   'apikey-toggle-title':   '表示切り替え',
   // ウェルカム
-  'no-channel-selected': 'チャンネルを選択してください',
   'welcome-add-label': 'チャンネルを追加してはじめる',
   'welcome-help-link': '使い方ガイドを見る →',
   'wf-label-vote':     '投票',
@@ -254,7 +253,6 @@ registerLang('en', 'English', {
   'view-grid':             'List',
   'apikey-toggle-title':   'Show / Hide',
   // Welcome
-  'no-channel-selected': 'Select a channel',
   'welcome-add-label': 'Add a channel to get started',
   'welcome-help-link': 'View usage guide →',
   'wf-label-vote':     'Vote',

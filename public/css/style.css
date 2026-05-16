@@ -701,7 +701,7 @@ header {
   transition: opacity 0.12s;
 }
 .ch-del-popup-ok:hover, .ch-del-popup-cancel:hover { opacity: 0.8; }
-.ch-del-popup-ok { background: #e5534b; border: 1px solid #c0392b; color: #fff; }
+.ch-del-popup-ok { background: var(--err); border: 1px solid color-mix(in srgb, var(--err) 75%, #000); color: #fff; }
 .ch-del-popup-ok--refresh { background: var(--accent) !important; border-color: var(--accent2, #357abd) !important; }
 .ch-del-popup-cancel { background: var(--surface2); border: 1px solid var(--border); color: var(--text); }
 
@@ -728,11 +728,6 @@ header {
   box-shadow: 0 1px 6px var(--shadow);
   z-index: 5;
   position: relative;
-}
-.ch-no-select {
-  font-size: 13px;
-  color: var(--text-muted);
-  flex: 1;
 }
 .ch-avatar {
   width: 28px; height: 28px;
@@ -2222,6 +2217,8 @@ header {
 .sidebar--dragging .sidebar-channel-item:hover { background: transparent; color: var(--text-muted); }
 .sidebar--dragging .sidebar-folder-header:hover::before { opacity: 0 !important; transform: translateY(-50%) scaleY(0) !important; }
 .sidebar--dragging .sidebar-folder-header:hover { background: transparent !important; }
+/* ドラッグ中はフォルダ内チャンネルのホバー形状も元に戻す */
+.sidebar--dragging .sidebar-folder-children .sidebar-channel-item:hover { border-radius: 50%; }
 .sidebar--compact .sidebar-folder-header {
   width: 50px; height: 52px; padding: 4px 3px; margin: 0; gap: 0;
   justify-content: center; border-radius: 50%; position: relative;
@@ -2258,7 +2255,7 @@ header {
 .sidebar--compact .sidebar-folder-chevron { display: none; }
 .sidebar--compact .sidebar-folder-rename-btn { display: none; }
 .sidebar--compact .sidebar-folder-header:hover .sidebar-folder-rename-btn { display: none; }
-.sidebar--compact .sidebar-folder-children { padding-left: 0; margin-left: 0; margin-bottom: 0; }
+.sidebar--compact .sidebar-folder-children { padding-left: 8px; margin-left: -8px; margin-right: 0; margin-bottom: 0; }
 .sidebar--compact .sidebar-folder--open > .sidebar-folder-children { background: transparent; border-radius: 0; padding-bottom: 0; }
 .sidebar--compact .sidebar-folder--open > .sidebar-folder-children::before { display: none; }
 .sidebar-merge-hover { box-shadow: 0 0 0 2px var(--accent, #4f9cf9) !important; border-radius: 12px !important; }
