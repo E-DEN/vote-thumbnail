@@ -740,11 +740,23 @@ function renderVote() {
       _playedPairs.add(_pairKey(winner.id, loser.id));
       container.querySelectorAll('.vote-card').forEach(c => {
         c.classList.add(c.dataset.id === winner.id ? 'winner' : 'loser');
+        if (c.dataset.id === winner.id) {
+          var ov = document.createElement('div');
+          ov.className = 'vote-good-overlay';
+          ov.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M1 21h4V9H1v12zm22-11c0-1.1-.9-2-2-2h-6.31l.95-4.57.03-.32c0-.41-.17-.79-.44-1.06L14.17 1 7.59 7.59C7.22 7.95 7 8.45 7 9v10c0 1.1.9 2 2 2h9c.83 0 1.54-.5 1.84-1.22l3.02-7.05c.09-.23.14-.47.14-.73v-1.91l-.01-.01L23 10z"/></svg>';
+          c.appendChild(ov);
+        }
       });
       _currentVotePair = null; // 投票完了後は次のペアを抽選
       setTimeout(renderVote, 500);
     });
     container.appendChild(card);
+    if (idx === 0) {
+      const vs = document.createElement('div');
+      vs.className = 'vote-vs-sep';
+      vs.textContent = 'VS';
+      container.appendChild(vs);
+    }
   });
 }
 

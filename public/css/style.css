@@ -1315,9 +1315,40 @@ header {
 }
 .vote-pair {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr auto 1fr;
   gap: 24px;
-  align-items: start;
+  align-items: center;
+}
+
+.vote-vs-sep {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  user-select: none;
+  flex-shrink: 0;
+  opacity: 0.5;
+}
+
+@keyframes vote-good-pop {
+  0%   { transform: translate(-50%, -50%) scale(0.15); opacity: 0; }
+  22%  { transform: translate(-50%, -50%) scale(1.22); opacity: 1; }
+  40%  { transform: translate(-50%, -50%) scale(0.94); opacity: 1; }
+  56%  { transform: translate(-50%, -50%) scale(1.04); opacity: 1; }
+  78%  { transform: translate(-50%, -50%) scale(1.04); opacity: 0.8; }
+  100% { transform: translate(-50%, -50%) scale(1.12); opacity: 0; }
+}
+.vote-good-overlay {
+  position: absolute;
+  top: 45%;
+  left: 50%;
+  width: 88px;
+  height: 88px;
+  color: #4f9cf9;
+  pointer-events: none;
+  z-index: 20;
+  animation: vote-good-pop 0.55s ease forwards;
+  filter: drop-shadow(0 4px 16px rgba(79,156,249,0.55));
 }
 
 .vote-card {
