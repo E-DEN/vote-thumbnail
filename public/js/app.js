@@ -1,4 +1,4 @@
-﻿// ---
+// ---
 const BASE = 'https://www.googleapis.com/youtube/v3';
 
 // --- トースト通知 ---
@@ -2450,7 +2450,7 @@ async function selectChannel(key) {
 }
 
 // --- 画面切り替え ---
-const SCREENS = ['welcome', 'vote', 'list', 'ranking', 'reactions'];
+const SCREENS = ['welcome', 'vote', 'list', 'ranking', 'reaction'];
 
 // --- サムネモーダル ---
 // --- ReactionPin ---
@@ -2952,7 +2952,7 @@ function closeReactionsMode() {
   if (shadow) shadow.hidden = true;
   var imgWrap = document.getElementById('reactionsImgWrap');
   if (imgWrap) imgWrap.classList.remove('heatmap-visible');
-  if (currentView === 'reactions') {
+  if (currentView === 'reaction') {
     showView(_prevView || 'list');
   }
 }
@@ -2985,7 +2985,7 @@ function closeThumbModal() {
 
 // ギャラリーからリアクション全画面で開く
 function openModalReactions(v) {
-  if (currentView !== 'reactions') _prevView = currentView;
+  if (currentView !== 'reaction') _prevView = currentView;
   var img = document.getElementById('reactionsImg');
   img.onload = function() {
     requestAnimationFrame(function() {
@@ -3004,7 +3004,7 @@ function openModalReactions(v) {
   titleEl.href = ytUrl;
   document.getElementById('reactionsVideoMeta').innerHTML = _buildVideoMeta(v) + _buildPinDot(v);
   if (v.id !== _reactionsCurrentVideoId) openReactionsMode(v.id);
-  showView('reactions');
+  showView('reaction');
   renderReactionsPlaylist(v.id);
 }
 
@@ -3112,7 +3112,7 @@ function showView(view) {
     btn.classList.toggle('active', btn.dataset.view === view);
   });
   if (!_suppressHistory) {
-    const vid = view === 'reactions' ? _reactionsCurrentVideoId : null;
+    const vid = view === 'reaction' ? _reactionsCurrentVideoId : null;
     const hash = buildHash(currentChannelKey, view, vid);
     const curSt = history.state;
     const isDuplicate = curSt &&
@@ -3294,7 +3294,7 @@ function init() {
     }
   }
   function _triggerSortRender() {
-    if (currentView === 'reactions') renderReactionsPlaylist(_reactionsCurrentVideoId);
+    if (currentView === 'reaction') renderReactionsPlaylist(_reactionsCurrentVideoId);
     else if (currentView === 'ranking') renderRanking();
     else if (_listMode === 'grid') _renderGrid();
     else renderList();
@@ -3556,13 +3556,13 @@ function init() {
           await selectChannel(st.channelKey);
         }
         const view = st.view || 'list';
-        if (view === 'reactions') {
+        if (view === 'reaction') {
           if (st.vid) {
             const v = (allVideos || []).find(x => x.id === st.vid);
             if (v) { _isPlaylistSwitch = true; openModalReactions(v); }
-            else { showView('reactions'); renderReactionsPlaylist(_reactionsCurrentVideoId); }
+            else { showView('reaction'); renderReactionsPlaylist(_reactionsCurrentVideoId); }
           } else {
-            showView('reactions');
+            showView('reaction');
             renderReactionsPlaylist(_reactionsCurrentVideoId);
           }
         } else if (view !== currentView) {
@@ -3586,10 +3586,10 @@ function init() {
       _suppressHistory = true;
       try {
         await selectChannel(st.channelKey);
-        if (st.view === 'reactions' && st.vid) {
+        if (st.view === 'reaction' && st.vid) {
           const v = (allVideos || []).find(x => x.id === st.vid);
           if (v) { _isPlaylistSwitch = true; openModalReactions(v); }
-          else { showView('reactions'); renderReactionsPlaylist(_reactionsCurrentVideoId); }
+          else { showView('reaction'); renderReactionsPlaylist(_reactionsCurrentVideoId); }
         } else if (st.view && st.view !== currentView) {
           showView(st.view);
         }
@@ -3597,7 +3597,7 @@ function init() {
         _suppressHistory = false;
       }
       history.replaceState(
-        { channelKey: currentChannelKey, view: currentView, vid: currentView === 'reactions' ? (_reactionsCurrentVideoId || null) : null },
+        { channelKey: currentChannelKey, view: currentView, vid: currentView === 'reaction' ? (_reactionsCurrentVideoId || null) : null },
         '',
         location.hash || '#'
       );
@@ -3775,7 +3775,7 @@ function init() {
   });
   // ---- 画像エリア: クリック = ピン配置（トランスポート要素上は除外） ----
   _rsImgWrap.addEventListener('click', function(e) {
-    if (currentView !== 'reactions') return;
+    if (currentView !== 'reaction') return;
     if (e.target.closest('#rsTransport, #rsTransportToggleBtn')) return;
     if (_rsDragFromTransport) { _rsDragFromTransport = false; return; }
     // トランスポート強制非表示中のみピン配置
@@ -4106,13 +4106,13 @@ document.getElementById('channelHeader').addEventListener('click', e => {
   const tab = e.target.closest('.ch-tab');
   if (!tab) return;
   const view = tab.dataset.view;
-  if (view === 'reactions') {
+  if (view === 'reaction') {
     if (!_reactionsCurrentVideoId) {
       const pool = filteredVideos();
       if (pool.length > 0) openModalReactions(pool[0]);
       return;
     }
-    showView('reactions');
+    showView('reaction');
     renderReactionsPlaylist(_reactionsCurrentVideoId);
     return;
   }
@@ -4130,7 +4130,7 @@ document.getElementById('catFilter').addEventListener('click', e => {
   if (currentView === 'vote') renderVote();
   else if (currentView === 'list') renderList();
   else if (currentView === 'ranking') renderRanking();
-  else if (currentView === 'reactions') renderReactionsPlaylist(_reactionsCurrentVideoId);
+  else if (currentView === 'reaction') renderReactionsPlaylist(_reactionsCurrentVideoId);
 });
 
 // --- チュートリアル ---
@@ -5014,7 +5014,7 @@ document.getElementById('catFilter').addEventListener('click', e => {
   // margin-right: -400px と transform: translateX(100%) を同時アニメーション
   // → 画像拡大とスライドが同時、かつ playlist 内部レイアウトは 400px 固定 (リフロー不要)
   function _setTheater(enable) {
-    var rsScreen = document.getElementById('reactionsScreen');
+    var rsScreen = document.getElementById('reactionScreen');
     rsScreen.classList.toggle('rs-theater-active', enable);
     theaterBtn.innerHTML = enable
       ? '<i data-lucide="panel-right-open"></i>'
@@ -5026,7 +5026,7 @@ document.getElementById('catFilter').addEventListener('click', e => {
   }
   theaterBtn.addEventListener('click', function(e) {
     e.stopPropagation();
-    var rsScreen = document.getElementById('reactionsScreen');
+    var rsScreen = document.getElementById('reactionScreen');
     _setTheater(!rsScreen.classList.contains('rs-theater-active'));
   });
 
