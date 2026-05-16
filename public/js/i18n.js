@@ -134,6 +134,7 @@ registerLang('ja', '日本語', {
   'pace-blazing': '猛速',
   // ランキング
   'ranking-desc':   'レーティング（勝率ベース）の高い順に並んでいます。',
+  'ranking-rd-note': 'サムネが薄い場合、対戦数が少なくレーティングの信頼度が低いことを示します。',
   'ranking-h2':     'ランキング',
   'rank-subtitle':  '{count} 件 / {cat}',
   'more-btn':       'もっと見る（あと {n} 件）',
@@ -306,6 +307,7 @@ registerLang('en', 'English', {
   'pace-blazing': 'Blazing',
   // Ranking
   'ranking-desc':  'Sorted by rating (win-rate based), highest first.',
+  'ranking-rd-note': 'Faded thumbnails have fewer battles and lower rating confidence.',
   'ranking-h2':    'Ranking',
   'rank-subtitle': '{count} items / {cat}',
   'more-btn':      'Show more ({n} remaining)',
