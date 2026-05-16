@@ -355,7 +355,7 @@ function saveSidebarOrder() {
 }
 function syncSidebarOrder() {
   const known = new Set(Object.keys(channels));
-  // Remove entries for deleted channels
+  // 削除済みチャンネルのエントリを除去
   sidebarOrder = sidebarOrder.filter(item => {
     if (item.type === 'channel') return known.has(item.key);
     if (item.type === 'folder') {
@@ -364,12 +364,12 @@ function syncSidebarOrder() {
     }
     return false;
   });
-  // Dissolve single-child folders
+  // 子が1件のフォルダを解除してチャンネル直置きに変換
   sidebarOrder = sidebarOrder.map(item =>
     (item.type === 'folder' && item.children.length === 1)
       ? { type: 'channel', key: item.children[0] } : item
   );
-  // Add any channels not yet in order
+  // まだ order に入っていないチャンネルを末尾に追加
   const inOrder = new Set();
   sidebarOrder.forEach(item => {
     if (item.type === 'channel') inOrder.add(item.key);
@@ -1221,7 +1221,7 @@ function _showChDelPopup(anchorBtn, msg, onConfirm, okClass) {
 function deleteChannel(key) {
   delete channels[key];
   saveChannels();
-  // Remove from sidebarOrder
+  // sidebarOrder から対象チャンネルを除去
   sidebarOrder = sidebarOrder.filter(item => {
     if (item.type === 'channel') return item.key !== key;
     if (item.type === 'folder') {
@@ -1230,7 +1230,7 @@ function deleteChannel(key) {
     }
     return true;
   });
-  // Dissolve single-child folders
+  // 子が1件のフォルダを解除してチャンネル直置きに変換
   sidebarOrder = sidebarOrder.map(item =>
     (item.type === 'folder' && item.children.length === 1)
       ? { type: 'channel', key: item.children[0] } : item

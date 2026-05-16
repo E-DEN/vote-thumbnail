@@ -85,15 +85,10 @@ registerLang('ja', '日本語', {
   // モード
   'mode-dark':  'ダークモード',
   'mode-light': 'ライトモード',
-  // ヘッダー
-  'lang-switch': '言語切り替え',
   // サイドバー
   'sidebar-logo':   'ラブ♥ねいる',
   'search-ph':      'YouTube の @handle またはチャンネル／動画URL',
   'search-add':     '追加',
-  'group-manage':   'グループ管理',
-  'ungrouped':      'チャンネル',
-  'ch-count-unit':  'チャンネル',
   // チャンネルヘッダー
   'tab-vote':    'サムネイル投票',
   'tab-list':    '一覧',
@@ -110,10 +105,6 @@ registerLang('ja', '日本語', {
   // ウェルカム
   'no-channel-selected': 'チャンネルを選択してください',
   'welcome-add-label': 'チャンネルを追加してはじめる',
-  'welcome-add-btn':   '追加',
-  'welcome-opt':       '省略可',
-  'welcome-save':      '保存',
-  'welcome-api-note':  '過去動画すべてを取得するには YouTube API キーの設定が必要です。',
   'welcome-help-link': '使い方ガイドを見る →',
   'wf-label-vote':     'サムネイル投票',
   'wf-desc-vote':      'サムネイルを見比べて\n好きな方に投票できます。\n結果はリアルタイムで集計。',
@@ -138,7 +129,6 @@ registerLang('ja', '日本語', {
   'ranking-h2':     'ランキング',
   'rank-subtitle':  '{count} 件 / {cat}',
   'more-btn':       'もっと見る（あと {n} 件）',
-  'pts':            'pts',
   'wins-fmt':       '{w}勝 / {b}戦',
   'winrate-fmt':    ' · {r}%',
   'rating-label':   'レーティング',
@@ -148,12 +138,8 @@ registerLang('ja', '日本語', {
   'rank-label':     '順位',
 
   // ステータス
-  'added-no-api':               '追加しました (APIキーなし)',
   'invalid-url':                'URLの形式が不正です',
   'fetching-channel':           'チャンネル情報を取得中...',
-  'fetching-videos':            '動画ID取得中: {cur}/{total}',
-  'fetching-details':           '動画詳細を取得中...',
-  'fetching-details-progress':  '詳細取得中: {cur}/{total}',
   'error-msg':                  'エラー: {msg}',
   // モーダル
   'modal-close': '閉じる',
@@ -162,9 +148,6 @@ registerLang('ja', '日本語', {
   'reactions-open':    'リアクション',
   'reactions-pins':    '好き',
   'reactions-heatmap': '人気',
-  'reactions-back':    '戻る',
-  'reactions-mode-label': '表示',
-  'reactions-color':   'カラー',
   'reactions-you':     'あなた',
   'reactions-max-pins': '最大ピン数',
   'reactions-transport': '再生',
@@ -201,9 +184,6 @@ registerLang('ja', '日本語', {
   'lang-import-or':    'または JSON テキストを貼り付け',
   'lang-import-ph':    '{"code":"ko","label":"한국어","dict":{...}}',
   'lang-import-apply': '適用',
-  'lang-import-err':   '言語ファイルの読み込みに失敗しました',
-  'lang-add':          '＋ 追加',
-  'lang-cancel':       'キャンセル',
   'lang-template-dl':  'テンプレートをDL',
   // 設定モーダル
   'settings-title':          '設定',
@@ -219,7 +199,6 @@ registerLang('ja', '日本語', {
   'settings-apikey-save':    '保存',
   'settings-apikey-delete':  '削除',
   'settings-apikey-guide':     'API キーの発行方法',
-  'settings-apikey-guide-url': 'https://www.youtube.com/watch?v=9VJ_7tVEDUQ',
   'settings-apikey-err-empty':  'APIキーを入力してください',
   'settings-apikey-err-format': '形式が正しくありません（AIzaSy... で始まる39文字）',
   'settings-apikey-saved':   '保存しました',
@@ -233,7 +212,6 @@ registerLang('ja', '日本語', {
   'folder-delete-confirm':   '「{name}」を削除しますか？（チャンネルは残ります）',
   'folder-refresh-confirm':  '「{name}」内の{count}件のチャンネルを再取得しますか？',
   'folder-refresh-confirm-btn': '再取得',
-  'folder-refresh-done':     '再取得しました',
   'ch-refresh-title':        '動画を再取得',
   'ch-delete-title':         '削除',
   'ch-delete-confirm':       '「{name}」を削除しますか？',
@@ -258,15 +236,10 @@ registerLang('en', 'English', {
   // Mode
   'mode-dark':  'Dark mode',
   'mode-light': 'Light mode',
-  // Header
-  'lang-switch': 'Switch language',
   // Sidebar
   'sidebar-logo':   'Love♥Nail',
   'search-ph':      'YouTube @handle or channel/video URL',
   'search-add':     'Add',
-  'group-manage':   'Manage groups',
-  'ungrouped':      'Channels',
-  'ch-count-unit':  'channels',
   // Channel header
   'tab-vote':    'Thumbnail Vote',
   'tab-list':    'Videos',
@@ -283,10 +256,6 @@ registerLang('en', 'English', {
   // Welcome
   'no-channel-selected': 'Select a channel',
   'welcome-add-label': 'Add a channel to get started',
-  'welcome-add-btn':   'Add',
-  'welcome-opt':       'optional',
-  'welcome-save':      'Save',
-  'welcome-api-note':  'A YouTube API key is required to fetch all past videos.',
   'welcome-help-link': 'View usage guide →',
   'wf-label-vote':     'Thumbnail Vote',
   'wf-desc-vote':      'Compare thumbnails\nand vote for your favorite.\nResults tallied in real time.',
@@ -311,7 +280,6 @@ registerLang('en', 'English', {
   'ranking-h2':    'Ranking',
   'rank-subtitle': '{count} items / {cat}',
   'more-btn':      'Show more ({n} remaining)',
-  'pts':           'pts',
   'wins-fmt':      '{w}W / {b}',
   'winrate-fmt':   ' · {r}%',
   'rating-label':  'Rating',
@@ -320,12 +288,8 @@ registerLang('en', 'English', {
   'winrate-label': 'Win rate',
   'rank-label':    'Rank',
   // Status
-  'added-no-api':               'Added (no API key)',
   'invalid-url':                'Invalid URL format',
   'fetching-channel':           'Fetching channel info...',
-  'fetching-videos':            'Fetching video IDs: {cur}/{total}',
-  'fetching-details':           'Fetching video details...',
-  'fetching-details-progress':  'Fetching details: {cur}/{total}',
   'error-msg':                  'Error: {msg}',
   // Modal
   'modal-close': 'Close',
@@ -334,9 +298,6 @@ registerLang('en', 'English', {
   'reactions-open':    'Reaction',
   'reactions-pins':    'Like',
   'reactions-heatmap': 'Popular',
-  'reactions-back':    'Back',
-  'reactions-mode-label': 'View',
-  'reactions-color':   'Color',
   'reactions-you':     'You',
   'reactions-max-pins': 'Max Pins',
   'reactions-transport': 'Play',
@@ -373,9 +334,6 @@ registerLang('en', 'English', {
   'lang-import-or':    'or paste JSON text below',
   'lang-import-ph':    '{"code":"ko","label":"한국어","dict":{...}}',
   'lang-import-apply': 'Apply',
-  'lang-import-err':   'Failed to load language file',
-  'lang-add':          '+ Add',
-  'lang-cancel':       'Cancel',
   'lang-template-dl':  'Download template',
   // Settings modal
   'settings-title':          'Settings',
@@ -391,7 +349,6 @@ registerLang('en', 'English', {
   'settings-apikey-save':    'Save',
   'settings-apikey-delete':  'Delete',
   'settings-apikey-guide':     'How to issue an API key',
-  'settings-apikey-guide-url': 'https://www.youtube.com/watch?v=uz7dY8qTFJw',
   'settings-apikey-err-empty':  'Please enter an API key',
   'settings-apikey-err-format': 'Invalid format (39 characters starting with AIzaSy...)',
   'settings-apikey-saved':   'Saved',
@@ -405,7 +362,6 @@ registerLang('en', 'English', {
   'folder-delete-confirm':   'Delete folder "{name}"? (channels will remain)',
   'folder-refresh-confirm':  'Refresh {count} channel(s) in "{name}"?',
   'folder-refresh-confirm-btn': 'Refresh',
-  'folder-refresh-done':     'Refreshed',
   'ch-refresh-title':        'Refresh videos',
   'ch-delete-title':         'Delete',
   'ch-delete-confirm':       'Delete "{name}"?',
