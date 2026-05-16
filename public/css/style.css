@@ -1,4 +1,4 @@
-﻿/* --- Variables --- */
+/* --- Variables --- */
 :root[data-theme="dark"] {
   --bg:         #1e1f22;
   --surface:    #2b2d31;
@@ -3089,7 +3089,7 @@ header {
 /* =====================
    Reactions Full-Screen View
 ===================== */
-#reactionsScreen {
+#reactionScreen {
   background: var(--bg);
   padding: 0;
   display: flex;
@@ -3829,7 +3829,7 @@ a.rs-video-title:hover { color: var(--accent); }
 
 /* シアターモード: margin-right で空間を同時に縮め、transform でスライドアウト */
 /* playlist 内部の width は 400px のまま変わらないのでリフロー不要 */
-#reactionsScreen.rs-theater-active .rs-playlist {
+#reactionScreen.rs-theater-active .rs-playlist {
   margin-right: -400px;
   transform: translateX(100%);
   opacity: 0;
