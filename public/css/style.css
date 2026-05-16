@@ -3597,6 +3597,12 @@ a.rs-video-title:hover { color: var(--accent); }
 .rs-transport.visible { display: block; }
 .rs-img-wrap:hover .rs-transport.visible:not(.rs-transport-off) { opacity: 1; pointer-events: auto; transition: opacity 0.18s ease; }
 .rs-transport.visible.rs-transport-off { opacity: 0; pointer-events: none; transition: opacity 0.18s ease; }
+.rs-transport.visible.rs-transport-peek { animation: rs-transport-peek 1.0s ease forwards; pointer-events: none; }
+@keyframes rs-transport-peek {
+  0%   { opacity: 1; }
+  40%  { opacity: 1; }
+  100% { opacity: 0; }
+}
 
 .rs-transport-row {
   display: flex;

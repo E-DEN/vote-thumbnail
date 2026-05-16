@@ -2392,6 +2392,7 @@ async function selectChannel(key) {
   const ch = channels[key];
   if (!ch) return;
   currentChannelKey = key;
+  _reactionsCurrentVideoId = null;
 
   // サイドバーのアクティブ状態を更新
   document.querySelectorAll('.sidebar-channel-item').forEach(el => {
@@ -4078,6 +4079,7 @@ document.getElementById('catFilter').addEventListener('click', e => {
     ? Math.round(_pinInitIdx / (PIN_SNAPS.length - 1) * 100)
     : Math.round(REACTIONS_MAX_PINS / 30 * 100);
   var _fsIdleTimer = null;
+  var _peekTimer    = null;
   var _duration     = 4;
   var _currentTime  = 0;
   var _rafId        = null;
@@ -4100,6 +4102,20 @@ document.getElementById('catFilter').addEventListener('click', e => {
     _transportVisible = !_transportVisible;
     toggleBtn.classList.toggle('active', _transportVisible);
     transportEl.classList.toggle('rs-transport-off', !_transportVisible);
+    if (_transportVisible) {
+      clearTimeout(_peekTimer);
+      transportEl.classList.remove('rs-transport-peek');
+      void transportEl.offsetWidth;
+      transportEl.classList.add('rs-transport-peek');
+      _peekTimer = setTimeout(function() { transportEl.classList.remove('rs-transport-peek'); }, 1000);
+    }
+  });
+
+  imgWrap.addEventListener('mouseenter', function() {
+    if (transportEl.classList.contains('rs-transport-peek')) {
+      clearTimeout(_peekTimer);
+      transportEl.classList.remove('rs-transport-peek');
+    }
   });
 
   // ---- タイムライン: 再生進行・シーク ----
