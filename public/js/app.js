@@ -102,6 +102,7 @@ let _reactionsAdjustPins    = null; // Transport IIFE から注入: ピン表示
 let _reactionsRestoreMyPin  = null; // Transport IIFE から注入: 現在時刻に応じてあなたピンを復元
 let _reactionsSetVolFromPins = null; // Transport IIFE から注入: ピン数→vol変換してUIを更新
 let _isPlaylistSwitch = false; // 再生リストからの切り替えかどうか
+let _suppressHistory = false;  // history.pushState を抑制するフラグ
 const PIN_SNAPS = [0, 1, 5, 10, 15, 20, 25, 30]; // スナップ値: 1=あなたピンのみ表示
 let _reactionsPinColor  = localStorage.getItem('reactions-pin-color')  || '#ec4899';
 
@@ -3068,7 +3069,34 @@ document.getElementById('modalReactionsBtn').addEventListener('click', function(
 const TAB_IDS  = {};
 const CAT_VIEWS = ['vote', 'list', 'ranking'];
 
+function buildHash(channelKey, view, vid) {
+  if (!channelKey || view === 'welcome') return location.pathname;
+  const p = new URLSearchParams();
+  p.set('ch', channelKey);
+  p.set('view', view || 'list');
+  if (currentCat && currentCat !== 'videos') p.set('cat', currentCat);
+  if (vid) p.set('vid', vid);
+  return '#' + p.toString();
+}
+
+function parseHash() {
+  const hash = location.hash.slice(1);
+  if (!hash) return { channelKey: null, view: 'welcome', vid: null, cat: null };
+  try {
+    const p = new URLSearchParams(hash);
+    return {
+      channelKey: p.get('ch') || null,
+      view: p.get('view') || 'list',
+      vid: p.get('vid') || null,
+      cat: p.get('cat') || null,
+    };
+  } catch {
+    return { channelKey: null, view: 'welcome', vid: null, cat: null };
+  }
+}
+
 function showView(view) {
+  const _viewBeforeSwitch = currentView;
   currentView = view;
   if (CAT_VIEWS.includes(view)) localStorage.setItem(LS_VIEW, view);
   SCREENS.forEach(s => {
@@ -3083,6 +3111,18 @@ function showView(view) {
   document.querySelectorAll('.ch-tab').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.view === view);
   });
+  if (!_suppressHistory) {
+    const vid = view === 'reactions' ? _reactionsCurrentVideoId : null;
+    const hash = buildHash(currentChannelKey, view, vid);
+    const curSt = history.state;
+    const isDuplicate = curSt &&
+      curSt.channelKey === currentChannelKey &&
+      curSt.view === view &&
+      curSt.vid === (vid || null);
+    if (!isDuplicate) {
+      history.pushState({ channelKey: currentChannelKey, view, vid: vid || null }, '', hash);
+    }
+  }
   if (view === 'vote') renderVote();
   else if (view === 'list') renderList();
   else if (view === 'ranking') renderRanking();
@@ -3467,7 +3507,105 @@ function init() {
   loadSidebarOrder();
   renderSidebar();
   initSidebarDrag();
-  showView('welcome');
+
+  // --- アドレスバーでのハッシュ直接編集 ---
+  window.addEventListener('hashchange', async function() {
+    const st = parseHash();
+    _suppressHistory = true;
+    try {
+      if (!st.channelKey || !channels[st.channelKey]) {
+        currentChannelKey = null;
+        allVideos = [];
+        document.querySelectorAll('.sidebar-channel-item').forEach(el => el.classList.remove('active'));
+        document.getElementById('chNoSelect').style.display = '';
+        document.getElementById('chAvatar').style.display = 'none';
+        document.getElementById('chName').style.display = 'none';
+        document.getElementById('chTabs').style.display = 'none';
+        document.getElementById('catFilter').style.display = 'none';
+        showView('welcome');
+      } else {
+        if (st.channelKey !== currentChannelKey) {
+          await selectChannel(st.channelKey);
+        }
+        if (st.view && st.view !== currentView) {
+          showView(st.view);
+        }
+      }
+    } finally {
+      _suppressHistory = false;
+    }
+  });
+
+  // --- ブラウザ戻る/進む ---
+  window.addEventListener('popstate', async function(e) {
+    const st = e.state || parseHash();
+    _suppressHistory = true;
+    try {
+      if (!st.channelKey || st.view === 'welcome') {
+        currentChannelKey = null;
+        allVideos = [];
+        document.querySelectorAll('.sidebar-channel-item').forEach(el => el.classList.remove('active'));
+        document.getElementById('chNoSelect').style.display = '';
+        document.getElementById('chAvatar').style.display = 'none';
+        document.getElementById('chName').style.display = 'none';
+        document.getElementById('chTabs').style.display = 'none';
+        document.getElementById('catFilter').style.display = 'none';
+        showView('welcome');
+      } else {
+        if (st.channelKey !== currentChannelKey) {
+          await selectChannel(st.channelKey);
+        }
+        const view = st.view || 'list';
+        if (view === 'reactions') {
+          if (st.vid) {
+            const v = (allVideos || []).find(x => x.id === st.vid);
+            if (v) { _isPlaylistSwitch = true; openModalReactions(v); }
+            else { showView('reactions'); renderReactionsPlaylist(_reactionsCurrentVideoId); }
+          } else {
+            showView('reactions');
+            renderReactionsPlaylist(_reactionsCurrentVideoId);
+          }
+        } else if (view !== currentView) {
+          showView(view);
+        }
+      }
+    } finally {
+      _suppressHistory = false;
+    }
+  });
+
+  // --- URL ハッシュから初期状態を復元 ---
+  (async function _restoreFromUrl() {
+    const st = parseHash();
+    if (st.channelKey && channels[st.channelKey]) {
+      if (st.cat) {
+        currentCat = st.cat;
+        localStorage.setItem(LS_CAT, currentCat);
+        document.querySelectorAll('.cat-seg-btn').forEach(b => b.classList.toggle('active', b.dataset.cat === currentCat));
+      }
+      _suppressHistory = true;
+      try {
+        await selectChannel(st.channelKey);
+        if (st.view === 'reactions' && st.vid) {
+          const v = (allVideos || []).find(x => x.id === st.vid);
+          if (v) { _isPlaylistSwitch = true; openModalReactions(v); }
+          else { showView('reactions'); renderReactionsPlaylist(_reactionsCurrentVideoId); }
+        } else if (st.view && st.view !== currentView) {
+          showView(st.view);
+        }
+      } finally {
+        _suppressHistory = false;
+      }
+      history.replaceState(
+        { channelKey: currentChannelKey, view: currentView, vid: currentView === 'reactions' ? (_reactionsCurrentVideoId || null) : null },
+        '',
+        location.hash || '#'
+      );
+    } else {
+      showView('welcome');
+      history.replaceState({ channelKey: null, view: 'welcome', vid: null }, '', location.pathname + location.search);
+    }
+  })();
 
   // タイトルクリック → welcome 画面へ戻る
   document.querySelector('.app-logo').addEventListener('click', function() {
