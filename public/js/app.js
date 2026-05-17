@@ -2932,7 +2932,6 @@ function startReactionsLoop() {
   // コミュニティピンなし: 自分ピンのみ即時表示して終了
   if (!placed.length) {
     var saved = _reactionsMyPins[_reactionsCurrentVideoId];
-    console.log('[reactions] startReactionsLoop no community pins. saved=', saved, 'visible=', _reactionsPinsVisible, 'maxPins=', REACTIONS_MAX_PINS);
     if (saved && _reactionsPinsVisible && REACTIONS_MAX_PINS > 0) {
       showMyReactionsPin(saved.x, saved.y, true);
     }
@@ -4594,7 +4593,6 @@ document.getElementById('catFilter').addEventListener('click', e => {
     if (myPinShadow) myPinShadow.hidden = true;
     // コミュニティピンなし: 自分ピンのみ即時表示して終了
     if (!_placedPins.length) {
-      console.log('[reactions] no community pins. saved=', saved, 'visible=', _reactionsPinsVisible, 'maxPins=', REACTIONS_MAX_PINS);
       if (saved && _reactionsPinsVisible && REACTIONS_MAX_PINS > 0) {
         _myPinEmitAt = 0;
         showMyReactionsPin(saved.x, saved.y, true);
