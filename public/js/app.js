@@ -313,8 +313,7 @@ async function _pollRefresh() {
   if (currentView !== 'list' && currentView !== 'ranking') return;
   try {
     allVideos = await fetchChannelVideos(currentChannelKey);
-    if (currentView === 'list') renderList();
-    else if (currentView === 'ranking') renderRanking();
+    renderCurrentView();
   } catch { /* サイレント失敗 */ }
 }
 
@@ -1629,8 +1628,7 @@ function buildChannelItem(ch) {
       const videos = await fetchChannelVideos(key);
       if (videos.length !== allVideos.length) {
         allVideos = videos;
-        if (currentView === 'list') renderList();
-        else if (currentView === 'ranking') renderRanking();
+        renderCurrentView();
       }
     }, 2500);
     try {
@@ -1643,9 +1641,7 @@ function buildChannelItem(ch) {
         : t('refresh-done-api').replace('{total}', data.total ?? '?');
       showToast(toastMsg);
       allVideos = await fetchChannelVideos(key);
-      if (currentView === 'vote') renderVote();
-      else if (currentView === 'list') renderList();
-      else if (currentView === 'ranking') renderRanking();
+      renderCurrentView();
     } catch (err) { showToast(t('err-refresh-failed'), true); console.error('refresh:', err); }
     finally {
       clearInterval(_pollRefresh);
@@ -1792,9 +1788,7 @@ function buildFolderItem(folder) {
           // チャンネル完了ごとに即UIへ反映
           if (key === currentChannelKey) {
             allVideos = await fetchChannelVideos(key);
-            if (currentView === 'vote') renderVote();
-            else if (currentView === 'list') renderList();
-            else if (currentView === 'ranking') renderRanking();
+            renderCurrentView();
           }
         }
         const toastMsg = getRssOnly()
@@ -3249,6 +3243,13 @@ function parseHash() {
   }
 }
 
+function renderCurrentView() {
+  if (currentView === 'vote') renderVote();
+  else if (currentView === 'list') renderList();
+  else if (currentView === 'ranking') renderRanking();
+  else if (currentView === 'reaction') renderReactionsPlaylist(_reactionsCurrentVideoId);
+}
+
 function showView(view) {
   const _viewBeforeSwitch = currentView;
   currentView = view;
@@ -3277,9 +3278,7 @@ function showView(view) {
       history.pushState({ channelKey: currentChannelKey, view, vid: vid || null }, '', hash);
     }
   }
-  if (view === 'vote') renderVote();
-  else if (view === 'list') renderList();
-  else if (view === 'ranking') renderRanking();
+  renderCurrentView();
 }
 
 // --- サイドバー検索・チャンネル追加 ---
@@ -3365,9 +3364,7 @@ async function addChannelFromSidebarInput() {
       try {
         const count = await importAllChannelVideos(ch.channel_id, msg => { statusEl.textContent = msg; });
         allVideos = await fetchChannelVideos(ch.channel_id);
-        if (currentView === 'vote') renderVote();
-        else if (currentView === 'list') renderList();
-        else if (currentView === 'ranking') renderRanking();
+        renderCurrentView();
         statusEl.textContent = count + ' 件取得完了';
         setTimeout(() => { statusEl.textContent = ''; }, 3000);
       } catch (importErr) {
@@ -3448,10 +3445,7 @@ function init() {
     }
   }
   function _triggerSortRender() {
-    if (currentView === 'reaction') renderReactionsPlaylist(_reactionsCurrentVideoId);
-    else if (currentView === 'ranking') renderRanking();
-    else if (_listMode === 'grid') _renderGrid();
-    else renderList();
+    renderCurrentView();
   }
   _updateSortUI();
   if (document.getElementById('sortSplitKey')) {
@@ -3712,10 +3706,9 @@ function init() {
           if (st.vid) {
             const v = (allVideos || []).find(x => x.id === st.vid);
             if (v) { _isPlaylistSwitch = true; openModalReactions(v); }
-            else { showView('reaction'); renderReactionsPlaylist(_reactionsCurrentVideoId); }
+            else { showView('reaction'); }
           } else {
             showView('reaction');
-            renderReactionsPlaylist(_reactionsCurrentVideoId);
           }
         } else if (view !== currentView) {
           showView(view);
@@ -3741,7 +3734,7 @@ function init() {
         if (st.view === 'reaction' && st.vid) {
           const v = (allVideos || []).find(x => x.id === st.vid);
           if (v) { _isPlaylistSwitch = true; openModalReactions(v); }
-          else { showView('reaction'); renderReactionsPlaylist(_reactionsCurrentVideoId); }
+          else { showView('reaction'); }
         } else if (st.view && st.view !== currentView) {
           showView(st.view);
         }
@@ -4265,12 +4258,10 @@ document.getElementById('channelHeader').addEventListener('click', e => {
       } else {
         // カテゴリに動画がなくてもリアクション画面へ移動
         showView('reaction');
-        renderReactionsPlaylist(null);
       }
       return;
     }
     showView('reaction');
-    renderReactionsPlaylist(_reactionsCurrentVideoId);
     return;
   }
   showView(view);
@@ -4284,10 +4275,7 @@ document.getElementById('catFilter').addEventListener('click', e => {
   currentCat = newCat;
   localStorage.setItem(LS_CAT, currentCat);
   document.querySelectorAll('.cat-seg-btn').forEach(b => b.classList.toggle('active', b === btn));
-  if (currentView === 'vote') renderVote();
-  else if (currentView === 'list') renderList();
-  else if (currentView === 'ranking') renderRanking();
-  else if (currentView === 'reaction') renderReactionsPlaylist(_reactionsCurrentVideoId);
+  renderCurrentView();
 });
 
 // --- チュートリアル ---
