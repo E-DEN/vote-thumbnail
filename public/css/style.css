@@ -498,6 +498,13 @@ header {
   max-width: 280px;
 }
 .ch-tooltip.visible { opacity: 1; transform: translateX(0); pointer-events: auto; }
+:root[data-theme="light"] .ch-tooltip,
+:root[data-theme="light"] .sidebar-compact-add-pop,
+:root[data-theme="light"] .ch-compact-rename-pop,
+:root[data-theme="light"] .folder-color-pop {
+  background: var(--surface);
+  box-shadow: 2px 4px 14px rgba(0,0,0,0.16);
+}
 .ch-tooltip-name {
   font-size: 13px;
   font-weight: 600;
@@ -603,6 +610,60 @@ header {
   flex-shrink: 0;
 }
 .ch-compact-rename-submit:hover { opacity: 0.85; }
+/* フォルダ色変えポップオーバー */
+.folder-color-pop {
+  position: fixed;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 2px 6px 18px var(--shadow);
+  padding: 8px;
+  z-index: 9999;
+  display: grid;
+  grid-template-columns: repeat(4, 30px);
+  gap: 6px;
+  opacity: 0;
+  transform: translateX(4px);
+  transition: opacity 0.12s, transform 0.12s;
+  pointer-events: none;
+}
+.folder-color-pop.visible {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+}
+.folder-color-pop[hidden] { display: none !important; }
+.folder-color-swatch {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  padding: 0;
+  transition: transform 0.1s;
+  outline: none;
+}
+.folder-color-swatch:hover { transform: scale(1.15); }
+.folder-color-swatch:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.folder-color-swatch.active { box-shadow: 0 0 0 2px var(--surface2), 0 0 0 4px var(--text); }
+.folder-color-swatch--none {
+  background: transparent;
+  border-color: var(--border);
+  position: relative;
+}
+.folder-color-swatch--none::before {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  border-radius: 50%;
+  background: linear-gradient(
+    135deg,
+    transparent calc(50% - 1px),
+    var(--text-muted) calc(50% - 1px),
+    var(--text-muted) calc(50% + 1px),
+    transparent calc(50% + 1px)
+  );
+}
 /* チャンネル右クリックメニュー */
 /* チャンネルアクションボタン */
 .ch-actions {

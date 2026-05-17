@@ -71,6 +71,8 @@ let _chTooltipOutsideHandler = null;
 let _chTooltipLocked = false;
 let _chTooltipGearEscHandler = null;
 let _chTooltipF2Action = null;
+let _folderColorPop = null;
+let _folderColorPopOutsideHandler = null;
 let _shiftHeld = false;
 let _hoveredTooltipDangerBtn = null; // { iconEl, icon, shiftIcon }
 const _refreshingKeys = new Set();
@@ -1498,6 +1500,76 @@ function _hideCompactTooltip(delay) {
   }
 }
 
+function _showFolderColorPop(anchorRect, folder) {
+  if (!_folderColorPop) return;
+  if (_folderColorPopOutsideHandler) {
+    document.removeEventListener('click', _folderColorPopOutsideHandler);
+    _folderColorPopOutsideHandler = null;
+  }
+  _folderColorPop.innerHTML = '';
+
+  // 色なし
+  const noneBtn = document.createElement('button');
+  noneBtn.className = 'folder-color-swatch folder-color-swatch--none' + (folder.color == null ? ' active' : '');
+  noneBtn.title = t('folder-color-none');
+  noneBtn.addEventListener('click', function(e) {
+    e.stopPropagation();
+    folder.color = null;
+    saveSidebarOrder();
+    renderSidebar();
+    _hideFolderColorPop();
+  });
+  _folderColorPop.appendChild(noneBtn);
+
+  // 和\u8272ス\u30A6\u30A9\u30C3\u30C1
+  WASHOKU_PALETTE.forEach(function(entry) {
+    const sw = document.createElement('button');
+    sw.className = 'folder-color-swatch' + (folder.color === entry.hue ? ' active' : '');
+    sw.style.background = 'hsl(' + entry.hue + ',40%,52%)';
+    sw.title = entry.name;
+    sw.addEventListener('click', function(e) {
+      e.stopPropagation();
+      folder.color = entry.hue;
+      saveSidebarOrder();
+      renderSidebar();
+      _hideFolderColorPop();
+    });
+    _folderColorPop.appendChild(sw);
+  });
+
+  _folderColorPop.hidden = false;
+  requestAnimationFrame(function() {
+    _folderColorPop.classList.add('visible');
+    const pw = _folderColorPop.offsetWidth;
+    const ph = _folderColorPop.offsetHeight;
+    let left = anchorRect.right + 8;
+    let top  = anchorRect.top;
+    if (left + pw > window.innerWidth - 4) left = anchorRect.left - pw - 8;
+    if (top  + ph > window.innerHeight - 4) top = Math.max(4, window.innerHeight - ph - 4);
+    _folderColorPop.style.left = Math.max(4, left) + 'px';
+    _folderColorPop.style.top  = top + 'px';
+  });
+
+  setTimeout(function() {
+    _folderColorPopOutsideHandler = function(e) {
+      if (_folderColorPop && !_folderColorPop.contains(e.target)) _hideFolderColorPop();
+    };
+    document.addEventListener('click', _folderColorPopOutsideHandler);
+  }, 0);
+}
+
+function _hideFolderColorPop() {
+  if (!_folderColorPop) return;
+  _folderColorPop.classList.remove('visible');
+  if (_folderColorPopOutsideHandler) {
+    document.removeEventListener('click', _folderColorPopOutsideHandler);
+    _folderColorPopOutsideHandler = null;
+  }
+  setTimeout(function() {
+    if (!_folderColorPop.classList.contains('visible')) _folderColorPop.hidden = true;
+  }, 150);
+}
+
 function _showCompactRename(anchorBtn, currentName, onCommit) {
   document.querySelectorAll('.ch-compact-rename-pop').forEach(function(p) { p.remove(); });
   var pop = document.createElement('div');
@@ -1694,8 +1766,22 @@ function buildChannelItem(ch) {
   return item;
 }
 
+const WASHOKU_PALETTE = [
+  { hue:   0, name: '茜' },
+  { hue:  15, name: '柿' },
+  { hue:  32, name: '山吹' },
+  { hue:  68, name: '萌黄' },
+  { hue: 105, name: '若竹' },
+  { hue: 155, name: '木賊' },
+  { hue: 185, name: '浅葱' },
+  { hue: 208, name: '縹' },
+  { hue: 228, name: '瑠璃' },
+  { hue: 258, name: '桔梗' },
+  { hue: 292, name: '牡丹' },
+];
+
 function randomFolderColor() {
-  return Math.floor(Math.random() * 360);
+  return WASHOKU_PALETTE[Math.floor(Math.random() * WASHOKU_PALETTE.length)].hue;
 }
 
 function buildFolderItem(folder) {
@@ -1892,6 +1978,11 @@ function buildFolderItem(folder) {
       { icon: 'refresh-cw', label: t('ch-refresh-title'), title: t('folder-refresh-title'), onClick: (btn) => {
         _hideCompactTooltip(0);
         folderRefreshBtn.dispatchEvent(new MouseEvent('click', { shiftKey: true }));
+      }},
+      { icon: 'palette', label: t('folder-color-title'), title: t('folder-color-title'), onClick: (btn) => {
+        const savedRect = btn.getBoundingClientRect();
+        _hideCompactTooltip(0);
+        _showFolderColorPop(savedRect, folder);
       }},
       { icon: 'x', shiftIcon: 'trash-2', label: t('folder-delete-title'), title: t('folder-delete-title'), danger: true, onClick: (btn, e) => {
         const savedRect = btn.getBoundingClientRect();
@@ -3620,6 +3711,11 @@ function init() {
   }, true);
   document.body.appendChild(_chTooltip);
 
+  // フォルダ色変えポップオーバー
+  _folderColorPop = document.createElement('div');
+  _folderColorPop.className = 'folder-color-pop';
+  _folderColorPop.hidden = true;
+  document.body.appendChild(_folderColorPop);
 
   // コンパクトモード: チャンネル追加ポップオーバーを生成
   const _compactAddBtn = document.getElementById('sidebarCompactAddBtn');
