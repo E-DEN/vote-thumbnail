@@ -96,6 +96,7 @@ let _reactionsPins  = [];       // DB全ピン座標 (KDEサンプリング用)
 let _reactionsKde   = null;     // KDE重みキャッシュ
 let _reactionsMyPins = {};      // videoId → { x, y }
 let _myPinOnDrop    = null;     // animationend リスナー参照（重複登録防止）
+let _myPinAnimRaf   = 0;        // showMyReactionsPin アニメーション再開 rAF ID
 let _reactionsStartPlayback = null; // Transport IIFE から注入
 let _reactionsStopPlayback  = null; // Transport IIFE から注入: RAFループを即停止
 let _reactionsResetTransport = null; // Transport IIFE から注入: トランスポートを初期状態にリセット
@@ -3023,6 +3024,10 @@ function showMyReactionsPin(x, y, withAnim) {
     pin.removeEventListener('animationend', _myPinOnDrop);
     _myPinOnDrop = null;
   }
+  if (_myPinAnimRaf) {
+    cancelAnimationFrame(_myPinAnimRaf);
+    _myPinAnimRaf = 0;
+  }
 
   // 既存アニメーションをキャンセルしてリセット
   pin.classList.remove('color-cycling');
@@ -3032,38 +3037,41 @@ function showMyReactionsPin(x, y, withAnim) {
   pin.style.opacity   = '';
   pin.style.animation = 'none';
   svg.style.animation = 'none';
-  pin.offsetWidth; // reflow
 
-  if (withAnim) {
-    pin.style.animation = 'reactionsPinDrop ' + DROP_SPEED + 's linear forwards';
-    svg.style.animation = 'reactionsPinSvgSquash ' + DROP_SPEED + 's linear forwards';
-    pin.animate(
-      [
-        { opacity: 0, offset: 0 },
-        { opacity: 1, offset: FADE_IN_FRAC },
-        { opacity: 1, offset: 1 },
-      ],
-      { duration: DROP_SPEED * 1000, fill: 'forwards', easing: 'linear' }
-    );
-    // drop完了後にフロート + カラーサイクルへ切り替え、rs-floating 付与
-    _myPinOnDrop = function(e) {
-      if (e.animationName !== 'reactionsPinDrop') return;
-      _myPinOnDrop = null;
+  // rAF で次フレームに適用: 強制リフローを回避しつつアニメーションをリセット
+  _myPinAnimRaf = requestAnimationFrame(function() {
+    _myPinAnimRaf = 0;
+    if (withAnim) {
+      pin.style.animation = 'reactionsPinDrop ' + DROP_SPEED + 's linear forwards';
+      svg.style.animation = 'reactionsPinSvgSquash ' + DROP_SPEED + 's linear forwards';
+      pin.animate(
+        [
+          { opacity: 0, offset: 0 },
+          { opacity: 1, offset: FADE_IN_FRAC },
+          { opacity: 1, offset: 1 },
+        ],
+        { duration: DROP_SPEED * 1000, fill: 'forwards', easing: 'linear' }
+      );
+      // drop完了後にフロート + カラーサイクルへ切り替え、rs-floating 付与
+      _myPinOnDrop = function(e) {
+        if (e.animationName !== 'reactionsPinDrop') return;
+        _myPinOnDrop = null;
+        var floatDur = (2.4 + Math.random() * 0.8).toFixed(2) + 's';
+        pin.style.animation = 'reactionsPinFloat ' + floatDur + ' ease-in-out infinite';
+        svg.style.animation = '';
+        pin.classList.add('color-cycling', 'rs-floating');
+      };
+      pin.addEventListener('animationend', _myPinOnDrop);
+    } else {
+      // 復元時: 即座に着地位置に表示 + float + カラーサイクル
+      pin.style.transform = 'translate(-50%, -100%)';
+      pin.style.opacity   = '1';
       var floatDur = (2.4 + Math.random() * 0.8).toFixed(2) + 's';
       pin.style.animation = 'reactionsPinFloat ' + floatDur + ' ease-in-out infinite';
       svg.style.animation = '';
       pin.classList.add('color-cycling', 'rs-floating');
-    };
-    pin.addEventListener('animationend', _myPinOnDrop);
-  } else {
-    // 復元時: 即座に着地位置に表示 + float + カラーサイクル
-    pin.style.transform = 'translate(-50%, -100%)';
-    pin.style.opacity   = '1';
-    var floatDur = (2.4 + Math.random() * 0.8).toFixed(2) + 's';
-    pin.style.animation = 'reactionsPinFloat ' + floatDur + ' ease-in-out infinite';
-    svg.style.animation = '';
-    pin.classList.add('color-cycling', 'rs-floating');
-  }
+    }
+  });
 }
 
 function openReactionsMode(videoId) {
