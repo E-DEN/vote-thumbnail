@@ -48,6 +48,7 @@ function rebuildLangDialog() {
         return;
       }
       applyLang(code);
+      rebuildLangDialog();
       if (typeof _normalizeSortBtnWidths === 'function') { _normalizeSortBtnWidths(); }
       if (typeof renderList === 'function') {
         if (typeof _listMode !== 'undefined' && _listMode === 'grid') { _renderGrid(); } else { renderList(); }

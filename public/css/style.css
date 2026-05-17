@@ -1314,6 +1314,14 @@ header {
 #voteScreen:has(.cat-empty-state) {
   display: flex;
   flex-direction: column;
+  overflow-y: hidden;
+  scrollbar-gutter: auto;
+}
+/* 空状態時は投票UI要素を CSS でも非表示（JS による display:none と二重保証） */
+#voteScreen:has(.cat-empty-state) .vote-tutorial,
+#voteScreen:has(.cat-empty-state) .vote-counter,
+#voteScreen:has(.cat-empty-state) .vote-pace-wrap {
+  display: none;
 }
 .vote-pair-wrap:has(.cat-empty-state) {
   flex: 1;
@@ -1326,8 +1334,34 @@ header {
   width: 100%;
 }
 #listGrid:has(.cat-empty-state) {
+  display: flex;
+  flex-direction: column;
   justify-content: center;
   align-items: center;
+  align-content: center;
+}
+#listScrollBody:has(.cat-empty-state) {
+  overflow-y: hidden;
+  scrollbar-gutter: auto;
+}
+#listScrollBody:has(.cat-empty-state) #shortsSentinel {
+  display: none;
+}
+/* ランキング: 空状態時はヘッダーを隠して残り高さに中央揃え */
+#rankingScreen:has(.cat-empty-state) {
+  display: flex;
+  flex-direction: column;
+  overflow-y: hidden;
+  scrollbar-gutter: auto;
+}
+#rankingScreen:has(.cat-empty-state) .ranking-header {
+  display: none;
+}
+#rankList:has(.cat-empty-state) {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 .vote-pair {
   display: grid;
@@ -1933,12 +1967,13 @@ header {
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  scrollbar-gutter: auto;
 }
 #listScrollBody {
   flex: 1;
   overflow-y: scroll;
   scrollbar-gutter: stable;
-  padding: 16px 24px 20px;
+  padding: 20px 24px;
   display: flex;
   flex-direction: column;
 }
@@ -2339,7 +2374,7 @@ header {
   .sidebar { width: 180px; }
 
   .screen { padding: 12px; }
-  #listScrollBody { padding: 12px 12px 16px; }
+  #listScrollBody { padding: 12px; }
 
   /* 投票: 縦積み */
   .vote-pair-wrap { padding: 16px 12px; border-radius: 8px; }
@@ -3176,6 +3211,29 @@ header {
   pointer-events: none;
   user-select: none;
   border-radius: 14px; /* replaced element は border-radius だけで角丸クリップされる */
+}
+.rs-img-placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  border-radius: 14px;
+  background: var(--surface2, #1e1e2a);
+  color: var(--text-muted, #888);
+  pointer-events: none;
+}
+.rs-img-placeholder svg {
+  width: 48px;
+  height: 48px;
+  opacity: 0.35;
+}
+.rs-img-placeholder p {
+  margin: 0;
+  font-size: 0.85rem;
+  opacity: 0.6;
 }
 
 /* 右サイドバー (gfと同テーマ) */

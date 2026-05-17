@@ -3175,22 +3175,34 @@ function renderReactionsPlaylist(selectedId) {
   var rsImgWrap   = document.getElementById('reactionsImgWrap');
   var rsToolbar   = document.querySelector('.rs-toolbar');
   var rsVideoInfo = document.querySelector('.rs-video-info');
+  var placeholder = document.getElementById('reactionsImgPlaceholder');
   body.innerHTML = '';
   if (countEl) countEl.textContent = pool.length;
   if (labelEl) {
-    var CAT_LABELS = { videos: '動画', shorts: 'ショート', live: 'ライブ' };
-    labelEl.textContent = CAT_LABELS[currentCat] || '動画';
+    var _catKey = 'cat-' + (currentCat || 'videos');
+    labelEl.dataset.i18n = _catKey;
+    labelEl.textContent = t(_catKey);
   }
   if (pool.length === 0) {
-    if (rsImgWrap)   rsImgWrap.style.display   = 'none';
+    if (rsImgWrap)   rsImgWrap.style.display   = '';
     if (rsToolbar)   rsToolbar.style.display   = 'none';
     if (rsVideoInfo) rsVideoInfo.style.display = 'none';
+    if (placeholder) placeholder.style.display = '';
     _renderEmptyCat(body);
     return;
   }
-  if (rsImgWrap)   rsImgWrap.style.display   = '';
-  if (rsToolbar)   rsToolbar.style.display   = '';
-  if (rsVideoInfo) rsVideoInfo.style.display = '';
+  var selectedInPool = selectedId && pool.some(function(v) { return v.id === selectedId; });
+  if (selectedInPool) {
+    if (rsImgWrap)   rsImgWrap.style.display   = '';
+    if (rsToolbar)   rsToolbar.style.display   = '';
+    if (rsVideoInfo) rsVideoInfo.style.display = '';
+    if (placeholder) placeholder.style.display = 'none';
+  } else {
+    if (rsImgWrap)   rsImgWrap.style.display   = '';
+    if (rsToolbar)   rsToolbar.style.display   = 'none';
+    if (rsVideoInfo) rsVideoInfo.style.display = 'none';
+    if (placeholder) placeholder.style.display = '';
+  }
   pool.forEach(function(v, i) {
     var card = document.createElement('div');
     card.className = 'rs-playlist-card' + (v.id === selectedId ? ' selected' : '');
