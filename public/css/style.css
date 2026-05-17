@@ -1311,6 +1311,24 @@ header {
 .vote-pair-wrap {
   margin-bottom: 16px;
 }
+#voteScreen:has(.cat-empty-state) {
+  display: flex;
+  flex-direction: column;
+}
+.vote-pair-wrap:has(.cat-empty-state) {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 0;
+}
+.vote-pair:has(.cat-empty-state) {
+  width: 100%;
+}
+#listGrid:has(.cat-empty-state) {
+  justify-content: center;
+  align-items: center;
+}
 .vote-pair {
   display: grid;
   grid-template-columns: 1fr auto 1fr;
@@ -1735,6 +1753,7 @@ header {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  flex: 1;
 }
 .gallery-row {
   display: flex;
@@ -1920,6 +1939,8 @@ header {
   overflow-y: scroll;
   scrollbar-gutter: stable;
   padding: 16px 24px 20px;
+  display: flex;
+  flex-direction: column;
 }
 #listScrollBody::-webkit-scrollbar { width: 8px; }
 #listScrollBody::-webkit-scrollbar-track { background: transparent; }

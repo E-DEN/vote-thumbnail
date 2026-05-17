@@ -681,6 +681,8 @@ function renderVote() {
   if (!pair) {
     if (_voteCounter) _voteCounter.style.display = 'none';
     if (_votePace)    _votePace.style.display    = 'none';
+    var _tutEl = document.getElementById('voteTutorial');
+    if (_tutEl) _tutEl.style.display = 'none';
     if (filteredVideos().length >= 2) {
       // 全組み合わせ評価確定済み
       container.innerHTML = '<p style="color:var(--text-muted);text-align:center;grid-column:1/-1;padding:60px 0;font-size:14px;">' + t('ranking-settled') + '</p>';
@@ -691,6 +693,8 @@ function renderVote() {
   }
   if (_voteCounter) _voteCounter.style.display = '';
   if (_votePace)    _votePace.style.display    = '';
+  var _tutEl = document.getElementById('voteTutorial');
+  if (_tutEl && !localStorage.getItem('thumb-vote-tutorial-seen')) _tutEl.style.display = '';
   const [pairA, pairB] = pair;
 
   // カードが既に存在する場合は再利用、なければ初期構築
@@ -917,7 +921,7 @@ function renderList() {
   // ギャラリーモード
   var grid = document.getElementById('listGrid');
   grid.innerHTML = '';
-  grid.classList.remove('mode-grid');
+  grid.classList.remove('mode-grid', 'mode-shorts');
 
   // ソート済みプール構築
   _listPage = 0;
@@ -3168,13 +3172,25 @@ function renderReactionsPlaylist(selectedId) {
   var labelEl = document.getElementById('rsPanelLabel');
   var body = document.getElementById('reactionsPlaylistBody');
   if (!body) return;
+  var rsImgWrap   = document.getElementById('reactionsImgWrap');
+  var rsToolbar   = document.querySelector('.rs-toolbar');
+  var rsVideoInfo = document.querySelector('.rs-video-info');
   body.innerHTML = '';
   if (countEl) countEl.textContent = pool.length;
   if (labelEl) {
     var CAT_LABELS = { videos: '動画', shorts: 'ショート', live: 'ライブ' };
     labelEl.textContent = CAT_LABELS[currentCat] || '動画';
   }
-  if (pool.length === 0) { _renderEmptyCat(body); return; }
+  if (pool.length === 0) {
+    if (rsImgWrap)   rsImgWrap.style.display   = 'none';
+    if (rsToolbar)   rsToolbar.style.display   = 'none';
+    if (rsVideoInfo) rsVideoInfo.style.display = 'none';
+    _renderEmptyCat(body);
+    return;
+  }
+  if (rsImgWrap)   rsImgWrap.style.display   = '';
+  if (rsToolbar)   rsToolbar.style.display   = '';
+  if (rsVideoInfo) rsVideoInfo.style.display = '';
   pool.forEach(function(v, i) {
     var card = document.createElement('div');
     card.className = 'rs-playlist-card' + (v.id === selectedId ? ' selected' : '');
