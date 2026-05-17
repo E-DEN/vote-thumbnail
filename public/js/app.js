@@ -3183,7 +3183,6 @@ function openModalReactions(v) {
   document.getElementById('reactionsVideoMeta').innerHTML = _buildVideoMeta(v) + _buildPinDot(v);
   if (v.id !== _reactionsCurrentVideoId) openReactionsMode(v.id);
   showView('reaction');
-  renderReactionsPlaylist(v.id);
 }
 
 function _refreshVideoMeta() {
@@ -3250,7 +3249,7 @@ function renderReactionsPlaylist(selectedId) {
     body.appendChild(card);
   });
   var selected = body.querySelector('.selected');
-  if (selected) selected.scrollIntoView({ block: 'nearest' });
+  if (selected) requestAnimationFrame(function() { selected.scrollIntoView({ block: 'nearest' }); });
 }
 
 document.getElementById('modalClose').addEventListener('click', closeThumbModal);
