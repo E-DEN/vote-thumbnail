@@ -262,8 +262,8 @@ async function handleApi(request, env, url, ctx) {
       const channelId = mVideos[1];
       const category  = url.searchParams.get('category');
       const videosSql = category
-        ? 'SELECT video_id, title, thumbnail_url, category, duration, view_count, published_at, rating, rd, volatility, wins, battles FROM videos WHERE channel_id = ? AND category = ? ORDER BY rating DESC'
-        : 'SELECT video_id, title, thumbnail_url, category, duration, view_count, published_at, rating, rd, volatility, wins, battles FROM videos WHERE channel_id = ? ORDER BY rating DESC';
+        ? 'SELECT video_id, title, thumbnail_url, category, duration, view_count, published_at, rating, rd, volatility, wins, battles FROM videos WHERE channel_id = ? AND category = ? ORDER BY rating DESC, view_count DESC, published_at DESC'
+        : 'SELECT video_id, title, thumbnail_url, category, duration, view_count, published_at, rating, rd, volatility, wins, battles FROM videos WHERE channel_id = ? ORDER BY rating DESC, view_count DESC, published_at DESC';
       const videosStmt = category
         ? env.DB.prepare(videosSql).bind(channelId, category)
         : env.DB.prepare(videosSql).bind(channelId);
