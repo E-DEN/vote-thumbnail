@@ -4577,7 +4577,6 @@ document.getElementById('catFilter').addEventListener('click', e => {
     var pinsLayer = document.getElementById('reactionsPinsLayer');
     if (pinsLayer) pinsLayer.innerHTML = '';
     _placedPins = buildPlacedPins(30);
-    if (!_placedPins.length) return;
     // あなたピンのemitAtをランダムに設定
     var saved = _reactionsMyPins[_reactionsCurrentVideoId];
     _myPinEmitted = false;
@@ -4585,6 +4584,17 @@ document.getElementById('catFilter').addEventListener('click', e => {
     var myPinShadow = document.getElementById('reactionsMyPinShadow');
     if (myPin) myPin.hidden = true;
     if (myPinShadow) myPinShadow.hidden = true;
+    // コミュニティピンなし: 自分ピンのみ即時表示して終了
+    if (!_placedPins.length) {
+      if (saved && _reactionsPinsVisible && REACTIONS_MAX_PINS > 0) {
+        _myPinEmitAt = 0;
+        showMyReactionsPin(saved.x, saved.y, true);
+        _myPinEmitted = true;
+      } else {
+        _myPinEmitAt = -1;
+      }
+      return;
+    }
     // 5ストリームの先頭スロット(stream[0]=0ms)をあなたピンに割り当て、
     // stream[0] をその分だけ進めてからみんなピンに使う
     var streams = [0, 80, 160, 240, 320]; // ms
