@@ -4354,6 +4354,7 @@ document.getElementById('catFilter').addEventListener('click', e => {
   const STORAGE_KEY = 'sidebar-width';
   const COMPACT_THRESHOLD = 100;
   const COMPACT_WIDTH = 72;
+  let _lastMX = 0, _lastMY = 0;
 
   function applyCompact(w, rerender) {
     const wasCompact = sidebar.classList.contains('sidebar--compact');
@@ -4376,6 +4377,10 @@ document.getElementById('catFilter').addEventListener('click', e => {
       // モード切替
       sidebar.classList.toggle('sidebar--compact', isNowCompact);
       renderSidebar();
+      // DOM再構築後、:hover が失われるため synthetic mousemove で強制再評価
+      if (!isNowCompact) {
+        document.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, cancelable: true, clientX: _lastMX, clientY: _lastMY }));
+      }
       // addWrapの高さをワイドの検索エリア高さに合わせてコンパクトのch1位置をワイドのch1位置に一致させる
       if (addWrap) {
         if (isNowCompact && measuredNavTop !== null) {
@@ -4415,6 +4420,8 @@ document.getElementById('catFilter').addEventListener('click', e => {
   });
   function onMove(e) {
     var clientX = e.clientX;
+    _lastMX = e.clientX;
+    _lastMY = e.clientY;
     if (_rafId) return;
     _rafId = requestAnimationFrame(function() {
       _rafId = null;
