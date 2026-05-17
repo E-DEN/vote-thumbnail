@@ -162,7 +162,7 @@ header {
   display: flex;
   align-items: center;
   gap: 0;
-  margin: 10px 10px 0;
+  margin: 4px 10px 0;
   height: 34px;
   background: var(--surface2);
   border-radius: 6px;
@@ -199,8 +199,8 @@ header {
 .sidebar-search-status {
   font-size: 11px;
   color: var(--text-muted);
-  padding: 4px 12px 0;
-  min-height: 20px;
+  padding: 2px 12px 0;
+  min-height: 14px;
   flex-shrink: 0;
   white-space: normal;
   overflow: visible;
@@ -264,14 +264,17 @@ header {
   flex-shrink: 0;
   width: 44px;
   height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 .sidebar-ch-avatar {
+  display: block;
   width: 44px;
   height: 44px;
   border-radius: 50%;
   object-fit: cover;
   background: var(--surface2);
-  transition: width 0.1s, height 0.1s;
 }
 .sidebar-ch-name {
   flex: 1;
@@ -392,7 +395,7 @@ header {
 }
 .sidebar--compact .sidebar-compact-add-wrap {
   display: flex;
-  height: 64px;
+  height: 52px;
   width: 50px;
   justify-content: center;
   align-items: center;
@@ -2184,7 +2187,6 @@ header {
   transition: max-height 0.2s ease;
   padding-left: 8px;
   margin-left: 22px;
-  margin-bottom: 2px;
   position: relative;
 }
 .sidebar-folder--open > .sidebar-folder-children::before {

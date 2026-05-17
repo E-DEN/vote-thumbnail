@@ -1921,19 +1921,22 @@ function renderSidebar() {
   syncSidebarOrder();
   const nav = document.getElementById('sidebarNav');
   const sidebar = document.getElementById('sidebar');
-  const isCompact = sidebar.classList.contains('sidebar--compact');
   const addWrap = document.getElementById('sidebarCompactAddWrap');
+  const isCompact = sidebar.classList.contains('sidebar--compact');
 
-  // nav内に移動済みなら先に救出する（nav.innerHTML=''で消えないよう）
+  // nav.innerHTML = '' の前に addWrap を退避
   if (addWrap && addWrap.parentNode === nav) {
-    sidebar.insertBefore(addWrap, nav);
+    nav.removeChild(addWrap);
   }
 
   nav.innerHTML = '';
 
-  // コンパクト時: add-wrapをチャンネル一覧の先頭に配置
   if (isCompact && addWrap) {
+    // コンパクト: navの先頭に配置（navのalign-items:centerで水平位置が揃う）
     nav.appendChild(addWrap);
+  } else if (addWrap && addWrap.parentNode !== sidebar) {
+    // ワイド: サイドバー直下・navの前に戻す（display:noneで非表示）
+    sidebar.insertBefore(addWrap, nav);
   }
 
   sidebarOrder.forEach(item => {
@@ -4261,8 +4264,43 @@ document.getElementById('catFilter').addEventListener('click', e => {
   function applyCompact(w, rerender) {
     const wasCompact = sidebar.classList.contains('sidebar--compact');
     const isNowCompact = w <= COMPACT_WIDTH;
-    sidebar.classList.toggle('sidebar--compact', isNowCompact);
-    if (rerender && wasCompact !== isNowCompact) renderSidebar();
+    if (rerender && wasCompact !== isNowCompact) {
+      const nav = document.getElementById('sidebarNav');
+      const addWrap = document.getElementById('sidebarCompactAddWrap');
+      // wide→compact切替時: navのサイドバー相対Y（=検索エリア高さ）を実測
+      let measuredNavTop = null;
+      if (!wasCompact) {
+        measuredNavTop = nav.getBoundingClientRect().top - sidebar.getBoundingClientRect().top;
+      }
+      // 切替前: 最初に見える[data-key]要素のサイドバー相対Y位置を実測
+      let anchorKey = null, anchorAbsTop = 0;
+      const sidebarTop = sidebar.getBoundingClientRect().top;
+      for (const el of nav.querySelectorAll('[data-key]')) {
+        const absTop = el.getBoundingClientRect().top - sidebarTop;
+        if (absTop > -52) { anchorKey = el.dataset.key; anchorAbsTop = absTop; break; }
+      }
+      // モード切替
+      sidebar.classList.toggle('sidebar--compact', isNowCompact);
+      renderSidebar();
+      // addWrapの高さをワイドの検索エリア高さに合わせてコンパクトのch1位置をワイドのch1位置に一致させる
+      if (addWrap) {
+        if (isNowCompact && measuredNavTop !== null) {
+          addWrap.style.height = measuredNavTop + 'px';
+        } else if (!isNowCompact) {
+          addWrap.style.height = '';
+        }
+      }
+      // スクロール補正: アンカー要素をモード切替前と同じサイドバー相対Y位置に戻す
+      if (anchorKey) {
+        const newEl = nav.querySelector('[data-key="' + CSS.escape(anchorKey) + '"]');
+        if (newEl) {
+          const currentAbsTop = newEl.getBoundingClientRect().top - sidebarTop;
+          nav.scrollTop = Math.max(0, nav.scrollTop + currentAbsTop - anchorAbsTop);
+        }
+      }
+    } else {
+      sidebar.classList.toggle('sidebar--compact', isNowCompact);
+    }
   }
 
   const saved = localStorage.getItem(STORAGE_KEY);
