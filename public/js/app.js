@@ -2111,11 +2111,9 @@ function initSidebarDrag() {
         // チャンネルアイテムの下ギャップ
         if (folderId) {
           const folderWrap = el.closest('.sidebar-folder');
-          // drop-bottom 付与中はパディング分(28px)を引いて自然な底辺で判定
-          const DROP_PAD = 28;
+          // drop-bottom 付与中は maxHeight がスナップ済みのため rawBot がそのまま正しい境界
           const rawBot = folderWrap ? folderWrap.getBoundingClientRect().bottom : r.bottom;
-          const naturalBot = (folderWrap && folderWrap.classList.contains('sidebar-folder--drop-bottom')) ? rawBot - DROP_PAD : rawBot;
-          if (mouseY > naturalBot) {
+          if (mouseY > rawBot) {
             return { action: 'channel-after-folder', folderId, el: folderWrap || el };
           }
           // 同フォルダ内に次のアイテムがあれば before に統一（フォルダ末尾ではない）
@@ -2190,12 +2188,10 @@ function initSidebarDrag() {
 
         // フォルダ内最後のアイテム下半分: add-to-folder ゾーン
         if (isLastInFolder && relY >= 0.5) {
-          // ラッパー超えチェック
+          // ラッパー超えチェック（drop-bottom 付与済みなら rawBot が拡張済みの正しい境界）
           const folderWrap = el.closest('.sidebar-folder');
-          const DROP_PAD = 28;
           const rawBot = folderWrap ? folderWrap.getBoundingClientRect().bottom : r.bottom;
-          const naturalBot = (folderWrap && folderWrap.classList.contains('sidebar-folder--drop-bottom')) ? rawBot - DROP_PAD : rawBot;
-          if (mouseY > naturalBot) return { action: 'channel-after-folder', folderId, el: folderWrap || el };
+          if (mouseY > rawBot) return { action: 'channel-after-folder', folderId, el: folderWrap || el };
 
           // no-op チェック: ソースが el の直後に DOM 上存在
           if (_draggedEl && nextItem) {
@@ -2212,10 +2208,8 @@ function initSidebarDrag() {
           // フォルダ内最終チャンネルでラッパー超え → 脱出
           if (folderId) {
             const folderWrap = el.closest('.sidebar-folder');
-            const DROP_PAD = 28;
             const rawBot = folderWrap ? folderWrap.getBoundingClientRect().bottom : r.bottom;
-            const naturalBot = (folderWrap && folderWrap.classList.contains('sidebar-folder--drop-bottom')) ? rawBot - DROP_PAD : rawBot;
-            if (mouseY > naturalBot) return { action: 'channel-after-folder', folderId, el: folderWrap || el };
+            if (mouseY > rawBot) return { action: 'channel-after-folder', folderId, el: folderWrap || el };
           }
           if (nextItem) {
             if (_draggedEl) {
@@ -2275,12 +2269,30 @@ function initSidebarDrag() {
     const newInfo = _hitTest(mouseY);
 
     // _hitTest の結果に基づいて drop-bottom を付与（ポスト判定）
-    // 付与後は次フレームの _hitTest が自然底辺で正しく再判定する
+    // 同フォルダなら毎フレームの除去・再付与をしない（rawBot 変動によるちらつき防止）
     if (_dragType === 'channel') {
-      nav.querySelectorAll('.sidebar-folder--drop-bottom').forEach(el => el.classList.remove('sidebar-folder--drop-bottom'));
-      if (newInfo && newInfo.action === 'after' && newInfo.folderId) {
-        const folder = nav.querySelector(`.sidebar-folder[data-folder-id="${newInfo.folderId}"]`);
-        if (folder) folder.classList.add('sidebar-folder--drop-bottom');
+      const targetFolderId = (newInfo && newInfo.action === 'after' && newInfo.folderId) ? newInfo.folderId : null;
+      nav.querySelectorAll('.sidebar-folder--drop-bottom').forEach(el => {
+        if (el.dataset.folderId === targetFolderId) return; // 現在のターゲットは維持
+        el.classList.remove('sidebar-folder--drop-bottom');
+        const ch = el.querySelector('.sidebar-folder-children');
+        if (ch) {
+          ch.style.transition = 'none';
+          ch.style.maxHeight = ch.scrollHeight + 'px';
+          requestAnimationFrame(() => { ch.style.transition = ''; });
+        }
+      });
+      if (targetFolderId) {
+        const folder = nav.querySelector(`.sidebar-folder[data-folder-id="${targetFolderId}"]`);
+        if (folder && !folder.classList.contains('sidebar-folder--drop-bottom')) {
+          folder.classList.add('sidebar-folder--drop-bottom');
+          const ch = folder.querySelector('.sidebar-folder-children');
+          if (ch) {
+            ch.style.transition = 'none';
+            ch.style.maxHeight = ch.scrollHeight + 'px';
+            requestAnimationFrame(() => { ch.style.transition = ''; });
+          }
+        }
       }
     }
     // ドラッグ元フォルダ上ではインジケータなし
