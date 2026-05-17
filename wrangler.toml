@@ -1,42 +1,17 @@
 name = "vote-thumbnail"
-main = "server/index.js"
+pages_build_output_dir = "public"
 compatibility_date = "2025-01-01"
 
-# 静的ファイルを / で配信する
-[assets]
-directory = "./public"
-not_found_handling = "single-page-application"
-
-# Cron Trigger: アクティブチャンネルの RSS ポーリング (新着動画の追加)
-[triggers]
-crons = ["* * * * *"]   # 毎分実行 (wrangler dev では `wrangler dev --test-scheduled` でテスト可)
-# ALLOWED_ORIGIN: 本番デプロイ時に本番ドメインを設定する (例: "https://example.com")
 [vars]
-ALLOWED_ORIGIN = ""
-# cron 1回あたりの処理チャンネル数。有料プランへ移行時は増やす
-CRON_BATCH_SIZE = "10"
+ALLOWED_ORIGIN = "https://vote-thumbnail.pages.dev"
 
 # D1 データベース
 [[d1_databases]]
 binding = "DB"
 database_name = "vote-thumbnail"
-database_id = "local"   # wrangler dev ではローカルSQLiteが使われるためダミー値でOK
+database_id = "2f52ba87-bf70-4394-add3-1e0a7676d430"
 
 # KV (レート制限・一時BAN用)
 [[kv_namespaces]]
-binding = "RATE_LIMIT_KV"
-id = "local"             # 同上
-
-# 本番環境 (main push → GitHub Actions → wrangler deploy --env production)
-[env.production.vars]
-ALLOWED_ORIGIN = ""        # 本番ドメイン例: "https://vote-thumbnail.xxx.workers.dev"
-CRON_BATCH_SIZE = "10"
-
-[[env.production.d1_databases]]
-binding = "DB"
-database_name = "vote-thumbnail"
-database_id = "2f52ba87-bf70-4394-add3-1e0a7676d430"
-
-[[env.production.kv_namespaces]]
 binding = "RATE_LIMIT_KV"
 id = "21669d61452d4dd58ae9bf7294c71a5d"

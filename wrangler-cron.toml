@@ -1,0 +1,15 @@
+﻿name = "vote-thumbnail-cron"
+main = "server/cron.js"
+compatibility_date = "2025-01-01"
+
+# RSS ポーリング: アクティブチャンネルの新着動画を毎分チェック
+[triggers]
+crons = ["* * * * *"]
+
+[vars]
+CRON_BATCH_SIZE = "10"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "vote-thumbnail"
+database_id = "2f52ba87-bf70-4394-add3-1e0a7676d430"
