@@ -100,11 +100,11 @@ let _reactionsStartPlayback = null; // Transport IIFE から注入
 let _reactionsStopPlayback  = null; // Transport IIFE から注入: RAFループを即停止
 let _reactionsResetTransport = null; // Transport IIFE から注入: トランスポートを初期状態にリセット
 let _reactionsAdjustPins    = null; // Transport IIFE から注入: ピン表示数を再アニメなしで増減
-let _reactionsRestoreMyPin  = null; // Transport IIFE から注入: 現在時刻に応じてあなたピンを復元
+let _reactionsRestoreMyPin  = null; // Transport IIFE から注入: 現在時刻に応じて自分ピンを復元
 let _reactionsSetVolFromPins = null; // Transport IIFE から注入: ピン数→vol変換してUIを更新
 let _isPlaylistSwitch = false; // 再生リストからの切り替えかどうか
 let _suppressHistory = false;  // history.pushState を抑制するフラグ
-const PIN_SNAPS = [0, 1, 5, 10, 15, 20, 25, 30]; // スナップ値: 1=あなたピンのみ表示
+const PIN_SNAPS = [0, 1, 5, 10, 15, 20, 25, 30]; // スナップ値: 1=自分ピンのみ表示
 let _reactionsPinColor  = localStorage.getItem('reactions-pin-color')  || '#ec4899';
 
 // ピンカラーパレット（各色につき3段階シェード）
@@ -2932,6 +2932,7 @@ function startReactionsLoop() {
   // コミュニティピンなし: 自分ピンのみ即時表示して終了
   if (!placed.length) {
     var saved = _reactionsMyPins[_reactionsCurrentVideoId];
+    console.log('[reactions] startReactionsLoop no community pins. saved=', saved, 'visible=', _reactionsPinsVisible, 'maxPins=', REACTIONS_MAX_PINS);
     if (saved && _reactionsPinsVisible && REACTIONS_MAX_PINS > 0) {
       showMyReactionsPin(saved.x, saved.y, true);
     }
@@ -4463,7 +4464,7 @@ document.getElementById('catFilter').addEventListener('click', e => {
   var _lastRafTs    = null;
   var _placedPins   = [];
   var _emittedCount = 0;
-  var _myPinEmitAt  = -1;  // あなたピンのemitAt (-1=ピンなし)
+  var _myPinEmitAt  = -1;  // 自分ピンのemitAt (-1=ピンなし)
   var _myPinEmitted = false;
 
   var _SVG_PLAY  = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>';
@@ -4507,7 +4508,7 @@ document.getElementById('catFilter').addEventListener('click', e => {
     progressThumb.style.left = pct + '%';
     timeLabel.textContent = _fmtTime(_currentTime) + ' / ' + _fmtTime(_duration);
   }
-  // max=1 はあなたピン専用: みんなピンは表示しない
+  // max=1 は自分ピン専用: コミュニティピンは表示しない
   function _communityLimit(max) { return max === 1 ? 0 : max; }
 
   function _emitPinsUpTo(time) {
@@ -4518,7 +4519,7 @@ document.getElementById('catFilter').addEventListener('click', e => {
       var p = _placedPins[_emittedCount++];
       pinsLayer.appendChild(makeReactionsPinEl(p.x, p.y, p.density, false, p));
     }
-    // あなたピン (max=0のときは非表示)
+    // 自分ピン (max=0のときは非表示)
     if (!_myPinEmitted && _myPinEmitAt >= 0 && time >= _myPinEmitAt && REACTIONS_MAX_PINS > 0) {
       var saved = _reactionsMyPins[_reactionsCurrentVideoId];
       if (saved && _reactionsPinsVisible) {
@@ -4544,7 +4545,7 @@ document.getElementById('catFilter').addEventListener('click', e => {
         }
       }
     }
-    // あなたピン: emitAt を過ぎていれば即表示、まだなら非表示（t=0またはmax=0は常に非表示）
+    // 自分ピン: emitAt を過ぎていれば即表示、まだなら非表示（t=0またはmax=0は常に非表示）
     var myPin = document.getElementById('reactionsMyPin');
     var myPinShadow = document.getElementById('reactionsMyPinShadow');
     if (_myPinEmitAt >= 0 && _currentTime > 0 && _currentTime >= _myPinEmitAt && REACTIONS_MAX_PINS > 0) {
@@ -4584,7 +4585,7 @@ document.getElementById('catFilter').addEventListener('click', e => {
     var pinsLayer = document.getElementById('reactionsPinsLayer');
     if (pinsLayer) pinsLayer.innerHTML = '';
     _placedPins = buildPlacedPins(30);
-    // あなたピンのemitAtをランダムに設定
+    // 自分ピンのemitAtをランダムに設定
     var saved = _reactionsMyPins[_reactionsCurrentVideoId];
     _myPinEmitted = false;
     var myPin = document.getElementById('reactionsMyPin');
@@ -4593,6 +4594,7 @@ document.getElementById('catFilter').addEventListener('click', e => {
     if (myPinShadow) myPinShadow.hidden = true;
     // コミュニティピンなし: 自分ピンのみ即時表示して終了
     if (!_placedPins.length) {
+      console.log('[reactions] no community pins. saved=', saved, 'visible=', _reactionsPinsVisible, 'maxPins=', REACTIONS_MAX_PINS);
       if (saved && _reactionsPinsVisible && REACTIONS_MAX_PINS > 0) {
         _myPinEmitAt = 0;
         showMyReactionsPin(saved.x, saved.y, true);
@@ -4602,8 +4604,8 @@ document.getElementById('catFilter').addEventListener('click', e => {
       }
       return;
     }
-    // 5ストリームの先頭スロット(stream[0]=0ms)をあなたピンに割り当て、
-    // stream[0] をその分だけ進めてからみんなピンに使う
+    // 5ストリームの先頭スロット(stream[0]=0ms)を自分ピンに割り当て、
+    // stream[0] をその分だけ進めてからコミュニティピンに使う
     var streams = [0, 80, 160, 240, 320]; // ms
     if (saved) {
       _myPinEmitAt = streams[0] / 1000; // = 0
@@ -4655,7 +4657,7 @@ document.getElementById('catFilter').addEventListener('click', e => {
     var pinsLayer = document.getElementById('reactionsPinsLayer');
     var myPin = document.getElementById('reactionsMyPin');
     var myPinShadow = document.getElementById('reactionsMyPinShadow');
-    // あなたピンの表示: _placedPins の有無に関わらず先に処理
+    // 自分ピンの表示: _placedPins の有無に関わらず先に処理
     if (newMax === 0) {
       if (myPin) myPin.hidden = true;
       if (myPinShadow) myPinShadow.hidden = true;
@@ -4699,7 +4701,7 @@ document.getElementById('catFilter').addEventListener('click', e => {
     _updateVolUI();
   };
 
-  // 現在時刻に応じてあなたピンを復元 (ツールバーIIFEから呼べるよう注入)
+  // 現在時刻に応じて自分ピンを復元 (ツールバーIIFEから呼べるよう注入)
   _reactionsRestoreMyPin = function() {
     if (REACTIONS_MAX_PINS > 0) {
       var saved = _reactionsMyPins[_reactionsCurrentVideoId];
@@ -4813,7 +4815,7 @@ document.getElementById('catFilter').addEventListener('click', e => {
   }
   _updateVolUI();
 
-  // ---- ミュートボタン: 自ピン + みんなピンレイヤー表示切替 ----
+  // ---- ミュートボタン: 自ピン + コミュニティピンレイヤー表示切替 ----
   var _mutedAll = false;
   muteBtn.addEventListener('click', function(e) {
     e.stopPropagation();
@@ -4959,7 +4961,7 @@ document.getElementById('catFilter').addEventListener('click', e => {
           }
         }
 
-        // みんなピン
+        // コミュニティピン
         if (_reactionsPinsVisible) {
           pinsLayer.querySelectorAll('.reactions-pin').forEach(function(pinEl) {
             var px = parseFloat(pinEl.dataset.x);
