@@ -383,7 +383,7 @@
     <div class="callout warn">
       <div class="callout-label">API 使用量について</div>
       YouTube Data API v3 は1日あたり <strong>10,000 ユニット</strong> の無料枠があります。
-      全件取得時は動画50件ごとに 1 ユニット、新着初回取得時は1件あたり 1 ユニット消費します。
+      全件取得時は動画50件ごとに約 2 ユニット（プレイリスト取得 1 ＋ 動画詳細取得 1）、新着動画のショート自動判定は 50 件まとめて 1 ユニット消費します。
       通常の個人利用では無料枠を超えることはほぼありません。
     </div>
   </section>
@@ -515,25 +515,18 @@
   <section id="set-apikey">
     <h2>4. アプリに API キーを入力する</h2>
 
-    <p>作成した API キーは、このサイトのウェルカム画面から直接登録できます。キーはブラウザ内にのみ保存され、他のデバイスやサーバーには共有されません。</p>
+    <p>作成した API キーは、アプリの設定画面から登録できます。キーはブラウザ内にのみ保存され、他のデバイスやサーバーには共有されません。</p>
 
     <div class="steps">
 
       <div class="step">
         <div class="step-num"></div>
         <div class="step-body">
-          <p>チャンネルが未選択の状態でウェルカム画面を表示します（チャンネルを1件も追加していない場合は自動的に表示されます）。</p>
-        </div>
-      </div>
-
-      <div class="step">
-        <div class="step-num"></div>
-        <div class="step-body">
-          <p>「YouTube API Key」の入力欄に、作成したキー（<code>AIzaSy...</code> で始まる39文字）を貼り付けます。</p>
+          <p>画面左上のヘッダーにある歯車アイコン（<strong>設定</strong>ボタン）をクリックします。</p>
           <div class="ss-wrap">
             <div class="ss-placeholder">
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-              <span>スクリーンショット: ウェルカム画面の「YouTube API Key」入力欄</span>
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+              <span>スクリーンショット: ヘッダーの歯車アイコン（設定ボタン）</span>
             </div>
           </div>
         </div>
@@ -542,7 +535,26 @@
       <div class="step">
         <div class="step-num"></div>
         <div class="step-body">
-          <p><strong>「保存」</strong> ボタンをクリックします。形式が正しければ保存され、以後のチャンネル追加時に API が使用されます。</p>
+          <p>設定モーダルの左サイドバーから <strong>「APIキー」</strong> タブを選択します。</p>
+          <div class="ss-wrap">
+            <div class="ss-placeholder">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0 3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+              <span>スクリーンショット: 設定モーダルの「APIキー」タブ選択後</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num"></div>
+        <div class="step-body">
+          <p>入力欄に作成したキー（<code>AIzaSy...</code> で始まる39文字）を貼り付け、<strong>「保存」</strong> をクリックします。形式が正しければ保存され、以後のチャンネル追加時に API が使用されます。</p>
+          <div class="ss-wrap">
+            <div class="ss-placeholder">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              <span>スクリーンショット: 「APIキー」タブの入力欄にキーを貼り付けた状態</span>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -590,7 +602,7 @@
       <div class="step">
         <div class="step-num"></div>
         <div class="step-body">
-          <p>本番環境では <strong>「アプリケーションの制限」</strong> に Cloudflare Workers のドメインを追加することも検討してください（「HTTP リファラー」または「IP アドレス」で制限可）。</p>
+          <p>本番環境では <strong>「アプリケーションの制限」</strong> で「HTTP リファラー」を選択し、<code>https://vote-thumbnail.pages.dev/*</code> を追加することも検討してください。</p>
         </div>
       </div>
 
