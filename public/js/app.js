@@ -2929,7 +2929,14 @@ function startReactionsLoop() {
   if (!pinsLayer) return;
   pinsLayer.innerHTML = '';
   var placed = buildPlacedPins();
-  if (!placed.length) return;
+  // コミュニティピンなし: 自分ピンのみ即時表示して終了
+  if (!placed.length) {
+    var saved = _reactionsMyPins[_reactionsCurrentVideoId];
+    if (saved && _reactionsPinsVisible && REACTIONS_MAX_PINS > 0) {
+      showMyReactionsPin(saved.x, saved.y, true);
+    }
+    return;
+  }
   _reactionsActive = true;
   var emitted = 0;
   function spawnOne() {
