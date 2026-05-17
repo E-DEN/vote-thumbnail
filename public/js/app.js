@@ -553,6 +553,18 @@ function filteredVideos() {
   return allVideos.filter(v => v.category === currentCat);
 }
 
+// カテゴリに動画が0件のとき共通の空状態UIを指定コンテナに描画する
+function _renderEmptyCat(container) {
+  container.innerHTML =
+    '<div class="cat-empty-state">' +
+      '<svg class="cat-empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">' +
+        '<path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>' +
+        '<path d="M22 12h-6l-2 3H10l-2-3H2"/>' +
+      '</svg>' +
+      '<p class="cat-empty-text">' + t('no-videos-in-cat') + '</p>' +
+    '</div>';
+}
+
 // --- 投票 ---
 // RDが高い（対戦数が少ない）サムネを優先的に選出
 // RDがこの値以下なら「評価確定」= 両者確定のペアは再戦不要
@@ -665,11 +677,21 @@ function renderVote() {
   }
   const pair = _currentVotePair;
   const container = document.getElementById('votePair');
+  const _voteCounter = document.querySelector('.vote-counter');
+  const _votePace    = document.querySelector('.vote-pace-wrap');
   if (!pair) {
-    const isSettled = filteredVideos().length >= 2;
-    container.innerHTML = `<p style="color:var(--text-muted);text-align:center;grid-column:1/-1;padding:60px 0;font-size:14px;">${t(isSettled ? 'ranking-settled' : 'no-videos-in-cat')}</p>`;
+    if (_voteCounter) _voteCounter.style.display = 'none';
+    if (_votePace)    _votePace.style.display    = 'none';
+    if (filteredVideos().length >= 2) {
+      // 全組み合わせ評価確定済み
+      container.innerHTML = '<p style="color:var(--text-muted);text-align:center;grid-column:1/-1;padding:60px 0;font-size:14px;">' + t('ranking-settled') + '</p>';
+    } else {
+      _renderEmptyCat(container);
+    }
     return;
   }
+  if (_voteCounter) _voteCounter.style.display = '';
+  if (_votePace)    _votePace.style.display    = '';
   const [pairA, pairB] = pair;
 
   // カードが既に存在する場合は再利用、なければ初期構築
@@ -891,6 +913,7 @@ var _GALLERY_PATTERNS = [
 
 function renderList() {
   _rebuildRatingRankMap();
+  const _listViewBar = document.getElementById('listViewBar');
   if (_listMode === 'grid') { _renderGrid(); return; }
   // ギャラリーモード
   var grid = document.getElementById('listGrid');
@@ -900,6 +923,12 @@ function renderList() {
   // ソート済みプール構築
   _listPage = 0;
   _listSortedPool = _buildSortedPool();
+  if (_listSortedPool.length === 0) {
+    if (_listViewBar) _listViewBar.style.display = 'none';
+    _renderEmptyCat(grid);
+    return;
+  }
+  if (_listViewBar) _listViewBar.style.display = '';
   // 無限スクロール observer リセット
   if (_listScrollObserver) { _listScrollObserver.disconnect(); }
   _listScrollObserver = new IntersectionObserver(function(entries) {
@@ -1072,6 +1101,14 @@ function _renderGrid() {
   // ソート済みプール構築
   _listPage = 0;
   _listSortedPool = _buildSortedPool();
+  if (_listSortedPool.length === 0) {
+    const bar = document.getElementById('listViewBar');
+    if (bar) bar.style.display = 'none';
+    _renderEmptyCat(grid);
+    return;
+  }
+  const bar = document.getElementById('listViewBar');
+  if (bar) bar.style.display = '';
   // 無限スクロール observer リセット
   if (_listScrollObserver) { _listScrollObserver.disconnect(); }
   _listScrollObserver = new IntersectionObserver(function(entries) {
@@ -1171,6 +1208,14 @@ function renderRanking() {
   document.getElementById('rankSubtitle').textContent = t('rank-subtitle', { count: pool.length, cat: currentCat });
   const list = document.getElementById('rankList');
   list.innerHTML = '';
+  const _rankHeader = document.querySelector('.ranking-header');
+
+  if (pool.length === 0) {
+    if (_rankHeader) _rankHeader.style.display = 'none';
+    _renderEmptyCat(list);
+    return;
+  }
+  if (_rankHeader) _rankHeader.style.display = '';
 
   renderRankingItems(sorted, maxRating, minRating, range, 0, Math.min(rankShowCount, sorted.length));
 
@@ -3135,6 +3180,7 @@ function renderReactionsPlaylist(selectedId) {
     var CAT_LABELS = { videos: '動画', shorts: 'ショート', live: 'ライブ' };
     labelEl.textContent = CAT_LABELS[currentCat] || '動画';
   }
+  if (pool.length === 0) { _renderEmptyCat(body); return; }
   pool.forEach(function(v, i) {
     var card = document.createElement('div');
     card.className = 'rs-playlist-card' + (v.id === selectedId ? ' selected' : '');
@@ -4214,7 +4260,13 @@ document.getElementById('channelHeader').addEventListener('click', e => {
   if (view === 'reaction') {
     if (!_reactionsCurrentVideoId) {
       const pool = filteredVideos();
-      if (pool.length > 0) openModalReactions(pool[0]);
+      if (pool.length > 0) {
+        openModalReactions(pool[0]);
+      } else {
+        // カテゴリに動画がなくてもリアクション画面へ移動
+        showView('reaction');
+        renderReactionsPlaylist(null);
+      }
       return;
     }
     showView('reaction');

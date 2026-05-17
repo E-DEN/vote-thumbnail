@@ -1491,6 +1491,30 @@ header {
   flex-direction: column;
   gap: 6px;
 }
+
+/* カテゴリ空状態 */
+.cat-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  color: var(--text-muted);
+  gap: 14px;
+  grid-column: 1 / -1;
+  width: 100%;
+}
+.cat-empty-icon {
+  width: 44px;
+  height: 44px;
+  opacity: 0.35;
+}
+.cat-empty-text {
+  font-size: 13px;
+  text-align: center;
+  margin: 0;
+  line-height: 1.6;
+}
 .rank-item {
   position: relative;
   display: flex;
