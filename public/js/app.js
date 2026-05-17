@@ -4249,7 +4249,7 @@ document.getElementById('sidebarSearchBtn').addEventListener('click', () => {
       sidebarOrder: JSON.parse(localStorage.getItem(LS_SIDEBAR_ORDER) || '[]'),
       channels: JSON.parse(localStorage.getItem(LS_CHANNELS) || '{}'),
     };
-    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+    const blob = new Blob(['\uFEFF' + JSON.stringify(exportData, null, 2)], { type: 'application/json;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -4271,7 +4271,7 @@ document.getElementById('sidebarSearchBtn').addEventListener('click', () => {
     const reader = new FileReader();
     reader.onload = function(ev) {
       try {
-        const parsed = JSON.parse(ev.target.result);
+        const parsed = JSON.parse(ev.target.result.replace(/^\uFEFF/, ''));
         if (!parsed || !Array.isArray(parsed.sidebarOrder)) throw new Error();
         localStorage.setItem(LS_SIDEBAR_ORDER, JSON.stringify(parsed.sidebarOrder));
         if (parsed.channels) {

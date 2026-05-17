@@ -391,7 +391,7 @@ registerLang('en', 'English', {
 
 // JSON テキストを解析して言語を登録し localStorage に永続化する
 function loadLangJSON(jsonText) {
-  const data = JSON.parse(jsonText);
+  const data = JSON.parse(jsonText.replace(/^\uFEFF/, ''));
   const { code, label, dict } = data;
   if (!code || !label || typeof dict !== 'object' || Array.isArray(dict)) {
     throw new Error('invalid lang JSON');
@@ -432,7 +432,7 @@ function downloadLangTemplate() {
     label: 'Language Name',
     dict,
   };
-  const json = JSON.stringify(template, null, 2);
+  const json = '\uFEFF' + JSON.stringify(template, null, 2);
   const a = document.createElement('a');
   a.href = 'data:application/json;charset=utf-8,' + encodeURIComponent(json);
   a.download = 'thumb-lang-template.json';
