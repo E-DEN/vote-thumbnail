@@ -26,3 +26,17 @@ database_id = "local"   # wrangler dev ではローカルSQLiteが使われる�
 [[kv_namespaces]]
 binding = "RATE_LIMIT_KV"
 id = "local"             # 同上
+
+# 本番環境 (main push → GitHub Actions → wrangler deploy --env production)
+[env.production.vars]
+ALLOWED_ORIGIN = ""        # 本番ドメイン例: "https://vote-thumbnail.xxx.workers.dev"
+CRON_BATCH_SIZE = "10"
+
+[[env.production.d1_databases]]
+binding = "DB"
+database_name = "vote-thumbnail"
+database_id = ""           # wrangler d1 create vote-thumbnail で取得した UUID
+
+[[env.production.kv_namespaces]]
+binding = "RATE_LIMIT_KV"
+id = ""                    # wrangler kv namespace create RATE_LIMIT_KV で取得した ID
