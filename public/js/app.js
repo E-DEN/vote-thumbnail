@@ -90,6 +90,7 @@ var _reactionsSessionId = (function() {
   return id;
 })();
 let _reactionsCurrentVideoId = null;
+let _catVideoState = {};             // カテゴリ → 最後に選択した videoId
 let _reactionsActive = false;     // 投下ストリーム制御フラグ
 let _reactionsPinsVisible    = localStorage.getItem(LS_PINS_VISIBLE) !== '0';
 let _reactionsHeatmapVisible = localStorage.getItem(LS_HEATMAP_VISIBLE) === '1';
@@ -2689,6 +2690,16 @@ async function selectChannel(key) {
   if (!ch) return;
   currentChannelKey = key;
   _reactionsCurrentVideoId = null;
+  _catVideoState = {};  // チャンネルをまたいだ動画状態は無効化
+  // チャンネル切り替え時にピン・ヒートマップ・自分ピンをクリア
+  var _pinsLayerCh = document.getElementById('reactionsPinsLayer');
+  if (_pinsLayerCh) _pinsLayerCh.innerHTML = '';
+  var _hmLayerCh = document.getElementById('reactionsHeatmapLayer');
+  if (_hmLayerCh) { _hmLayerCh.innerHTML = ''; _hmLayerCh.style.cssText = 'opacity:0;visibility:hidden;'; }
+  var _myPinCh = document.getElementById('reactionsMyPin');
+  if (_myPinCh) _myPinCh.hidden = true;
+  var _myPinShadowCh = document.getElementById('reactionsMyPinShadow');
+  if (_myPinShadowCh) _myPinShadowCh.hidden = true;
 
   // サイドバーのアクティブ状態を更新
   document.querySelectorAll('.sidebar-channel-item').forEach(el => {
@@ -3479,16 +3490,17 @@ async function addChannelFromSidebarInput() {
     ? { handle: '@' + handleMatch[1] }
     : { videoId: videoIdMatch[1] };
 
-  // DB 既登録チェック (handle の場合のみ)
+  // 既登録チェック: 存在すればリフレッシュボタンと同じ挙動にする
   if (postBody.handle) {
-    const handle = postBody.handle;
-    const existing = Object.values(channels).find(ch => ch.handle === handle);
+    const existing = Object.values(channels).find(ch => ch.handle === postBody.handle);
     if (existing) {
-      showToast(t('channel-already-added', { name: existing.displayName || existing.handle || handle }));
+      document.getElementById('sidebarSearchInput').value = '';
       statusEl.textContent = '';
-      statusEl.className = 'sidebar-search-status';
-      renderSidebar();
-      await selectChannel(existing.key);
+      const _existingEl = document.querySelector(`.sidebar-channel-item[data-key="${existing.key}"]`);
+      const _existingRefBtn = _existingEl && _existingEl.querySelector('.ch-action-refresh');
+      if (_existingRefBtn) {
+        _existingRefBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      }
       return;
     }
   }
@@ -3526,10 +3538,15 @@ async function addChannelFromSidebarInput() {
     }
     document.getElementById('sidebarSearchInput').value = '';
     statusEl.textContent = '';
-    // nav.innerHTML='' による全破棄を避け、新規アイテムのみ追加する（ホバー状態保持）
+    // nav.innerHTML='' による全破棄を避け、既存アイテムは置き換え・新規は追加（ホバー状態保持）
     const _nav = document.getElementById('sidebarNav');
     const _newItem = buildChannelItem(channels[ch.channel_id]);
-    _nav.appendChild(_newItem);
+    const _existingItem = _nav.querySelector(`.sidebar-channel-item[data-key="${ch.channel_id}"]`);
+    if (_existingItem) {
+      _existingItem.replaceWith(_newItem);
+    } else {
+      _nav.appendChild(_newItem);
+    }
     await selectChannel(ch.channel_id);
     // API キーが設定されていれば全件取得を自動実行
     if (getStoredApiKey() && !getRssOnly()) {
@@ -4085,6 +4102,7 @@ function init() {
   // ---- 画像エリア: クリック = ピン配置（トランスポート要素上は除外） ----
   _rsImgWrap.addEventListener('click', function(e) {
     if (currentView !== 'reaction') return;
+    if (!_reactionsCurrentVideoId) return;
     if (e.target.closest('#rsTransport, #rsTransportToggleBtn')) return;
     if (_rsDragFromTransport) { _rsDragFromTransport = false; return; }
     // トランスポート強制非表示中のみピン配置
@@ -4437,10 +4455,30 @@ document.getElementById('catFilter').addEventListener('click', e => {
   const btn = e.target.closest('.cat-seg-btn');
   if (!btn) return;
   const newCat = btn.dataset.cat;
+  if (newCat === currentCat) return;
+  // 現カテゴリの動画選択を記憶してから切り替え
+  const prevCat = currentCat;
+  if (_reactionsCurrentVideoId) _catVideoState[prevCat] = _reactionsCurrentVideoId;
   currentCat = newCat;
   localStorage.setItem(LS_CAT, currentCat);
   document.querySelectorAll('.cat-seg-btn').forEach(b => b.classList.toggle('active', b === btn));
+  // 動画選択・ピンをリセット
+  _reactionsCurrentVideoId = null;
+  var _pinsLayerCat = document.getElementById('reactionsPinsLayer');
+  if (_pinsLayerCat) _pinsLayerCat.innerHTML = '';
+  var _hmLayerCat = document.getElementById('reactionsHeatmapLayer');
+  if (_hmLayerCat) { _hmLayerCat.innerHTML = ''; _hmLayerCat.style.cssText = 'opacity:0;visibility:hidden;'; }
+  var _myPinCat = document.getElementById('reactionsMyPin');
+  if (_myPinCat) _myPinCat.hidden = true;
+  var _myPinShadowCat = document.getElementById('reactionsMyPinShadow');
+  if (_myPinShadowCat) _myPinShadowCat.hidden = true;
   renderCurrentView();
+  // 新カテゴリに保存済みの動画があれば復元
+  const _savedId = _catVideoState[newCat];
+  if (_savedId && currentView === 'reaction') {
+    const _savedV = (allVideos || []).find(function(v) { return v.id === _savedId; });
+    if (_savedV) { _isPlaylistSwitch = true; openModalReactions(_savedV); }
+  }
 });
 
 // --- チュートリアル ---
@@ -4474,9 +4512,13 @@ document.getElementById('catFilter').addEventListener('click', e => {
       const nav = document.getElementById('sidebarNav');
       const addWrap = document.getElementById('sidebarCompactAddWrap');
       // wide→compact切替時: navのサイドバー相対Y（=検索エリア高さ）を実測
+      // ただし status テキストが膨らんでいる場合は min-height(14px)超過分を除外する
       let measuredNavTop = null;
       if (!wasCompact) {
-        measuredNavTop = nav.getBoundingClientRect().top - sidebar.getBoundingClientRect().top;
+        const sRect   = sidebar.getBoundingClientRect();
+        const statusEl = document.getElementById('sidebarSearchStatus');
+        const statusExtra = statusEl ? Math.max(0, statusEl.getBoundingClientRect().height - 14) : 0;
+        measuredNavTop = nav.getBoundingClientRect().top - sRect.top - statusExtra;
       }
       // 切替前: 最初に見える[data-key]要素のサイドバー相対Y位置を実測
       let anchorKey = null, anchorAbsTop = 0;
