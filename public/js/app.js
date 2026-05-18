@@ -511,15 +511,31 @@ async function importAllChannelVideos(channelId, onStatus) {
   onStatus('プレイリスト ID を取得中...');
   const { playlistId } = await getUploadsPlaylistId(apiKey, { type: 'id', value: channelId });
 
+  const suffix = channelId.slice(2);
   onStatus('動画 ID を取得中 (0 件)...');
-  const videoIds = await getAllVideoIds(apiKey, playlistId, (done, total) => {
-    onStatus('動画 ID を取得中 (' + done + ' / ' + total + ' 件)...');
-  });
+  // UU・UUSH・UULV を並列取得してプレイリスト所属で正確に振り分け
+  const safeIds = (plId) => getAllVideoIds(apiKey, plId, () => {}).catch(() => []);
+  const [videoIds, shortsIds, liveIds] = await Promise.all([
+    getAllVideoIds(apiKey, playlistId, (done, total) => {
+      onStatus('動画 ID を取得中 (' + done + ' / ' + total + ' 件)...');
+    }),
+    safeIds('UUSH' + suffix),
+    safeIds('UULV' + suffix),
+  ]);
+  const shortsSet = new Set(shortsIds);
+  const liveSet = new Set(liveIds);
 
   onStatus('動画情報を取得中 (0 / ' + videoIds.length + ' 件)...');
   const videos = await getVideoDetails(apiKey, videoIds, (done, total) => {
     onStatus('動画情報を取得中 (' + done + ' / ' + total + ' 件)...');
   });
+
+  // プレイリスト所属で分類を上書き (duration 判定より正確)
+  for (const v of videos) {
+    if (liveSet.has(v.id)) v.category = 'live';
+    else if (shortsSet.has(v.id)) v.category = 'shorts';
+    else v.category = 'videos';
+  }
 
   const BATCH = 200;
   for (let i = 0; i < videos.length; i += BATCH) {
@@ -1699,6 +1715,9 @@ function buildChannelItem(ch) {
     item.classList.add('compact-refreshing');
     if (key !== currentChannelKey) await selectChannel(key);
     _startRefreshSpinner(refreshBtn);
+    const _refreshStatusEl = document.getElementById('sidebarSearchStatus');
+    _refreshStatusEl.className = 'sidebar-search-status';
+    _refreshStatusEl.textContent = t('fetching-channel');
     // リフレッシュ中に定期ポーリングしてギャラリーをライブ更新
     const _pollRefresh = setInterval(async () => {
       if (key !== currentChannelKey) return;
@@ -1711,15 +1730,17 @@ function buildChannelItem(ch) {
     try {
       const res = await fetch('/api/channels/' + key + '/refresh', { method: 'POST', headers: getRssOnly() ? { 'X-RSS-Only': '1' } : apiKeyHeaders() });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) { showToast(data.error || t('err-refresh-failed'), true); return; }
+      if (!res.ok) { showToast(data.error || t('err-refresh-failed'), true); _refreshStatusEl.textContent = ''; return; }
       if (data.apiKeyError) { markApiKeyError(); showToast(t('err-apikey-invalid-details'), true); }
       const toastMsg = getRssOnly()
         ? t('refresh-done-rss').replace('{changed}', (data.added ?? 0) + (data.updated ?? 0))
         : t('refresh-done-api').replace('{total}', data.total ?? '?');
       showToast(toastMsg);
+      _refreshStatusEl.textContent = (data.total ?? '') + ' 件取得完了';
+      setTimeout(() => { if (_refreshStatusEl.textContent.endsWith('件取得完了')) _refreshStatusEl.textContent = ''; }, 3000);
       allVideos = await fetchChannelVideos(key);
       renderCurrentView();
-    } catch (err) { showToast(t('err-refresh-failed'), true); console.error('refresh:', err); }
+    } catch (err) { showToast(t('err-refresh-failed'), true); console.error('refresh:', err); _refreshStatusEl.textContent = ''; }
     finally {
       clearInterval(_pollRefresh);
       _refreshingKeys.delete(key);
@@ -1855,6 +1876,8 @@ function buildFolderItem(folder) {
       keys.forEach(k => _refreshingKeys.add(k));
       _startRefreshSpinner(folderRefreshBtn);
       header.classList.add('compact-refreshing');
+      const _folderStatusEl = document.getElementById('sidebarSearchStatus');
+      _folderStatusEl.className = 'sidebar-search-status';
       try {
         let totalVideos = 0;
         let addedVideos = 0;
@@ -1865,10 +1888,11 @@ function buildFolderItem(folder) {
           const chRefBtn = chItem?.querySelector('.ch-action-refresh');
           if (chRefBtn) _startRefreshSpinner(chRefBtn);
           if (chItem) chItem.classList.add('compact-refreshing');
+          _folderStatusEl.textContent = (channels[key]?.displayName || channels[key]?.handle || '') + ' を更新中...';
           try {
             const res = await fetch('/api/channels/' + key + '/refresh', { method: 'POST', headers: getRssOnly() ? { 'X-RSS-Only': '1' } : apiKeyHeaders() });
             const data = await res.json().catch(() => ({}));
-            if (data.apiKeyError) { markApiKeyError(); showToast(t('err-apikey-invalid-details'), true); if (chRefBtn) _stopRefreshSpinner(chRefBtn); _refreshingKeys.delete(key); document.querySelectorAll(`.sidebar-channel-item[data-key="${key}"]`).forEach(el => el.classList.remove('compact-refreshing')); break; }
+            if (data.apiKeyError) { markApiKeyError(); showToast(t('err-apikey-invalid-details'), true); if (chRefBtn) _stopRefreshSpinner(chRefBtn); _refreshingKeys.delete(key); document.querySelectorAll(`.sidebar-channel-item[data-key="${key}"]`).forEach(el => el.classList.remove('compact-refreshing')); _folderStatusEl.textContent = ''; break; }
             if (data.total != null) totalVideos += data.total;
             if (data.added != null) addedVideos += data.added;
             if (data.updated != null) updatedVideos += data.updated;
@@ -1886,6 +1910,8 @@ function buildFolderItem(folder) {
           ? t('refresh-done-rss').replace('{changed}', addedVideos + updatedVideos)
           : t('refresh-done-api').replace('{total}', totalVideos);
         showToast(toastMsg);
+        _folderStatusEl.textContent = totalVideos + ' 件取得完了';
+        setTimeout(() => { if (_folderStatusEl.textContent.endsWith('件取得完了')) _folderStatusEl.textContent = ''; }, 3000);
       } finally {
         _stopRefreshSpinner(folderRefreshBtn);
         document.querySelector(`.sidebar-folder-header[data-folder-id="${folder.id}"]`)?.classList.remove('compact-refreshing');

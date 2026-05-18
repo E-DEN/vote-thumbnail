@@ -224,7 +224,7 @@ async function fetchVideoDetails(videoIds, env) {
   for (let i = 0; i < videoIds.length; i += CHUNK) {
     const chunk = videoIds.slice(i, i + CHUNK);
     try {
-      const apiUrl = `https://www.googleapis.com/youtube/v3/videos?part=statistics%2CcontentDetails%2Csnippet&id=${chunk.join(',')}&key=${env.YOUTUBE_API_KEY}`;
+      const apiUrl = `https://www.googleapis.com/youtube/v3/videos?part=statistics%2CcontentDetails%2Csnippet%2CliveStreamingDetails&id=${chunk.join(',')}&key=${env.YOUTUBE_API_KEY}`;
       const res = await fetch(apiUrl);
       if (!res.ok) {
         if (res.status === 400 || res.status === 403) return { ok: false, apiKeyError: true };
@@ -242,9 +242,10 @@ async function fetchVideoDetails(videoIds, env) {
           item.snippet?.thumbnails?.medium?.url ||
           `https://i.ytimg.com/vi/${item.id}/maxresdefault.jpg`
         );
-        // liveBroadcastContent でライブ判定 (カテゴリはプレイリスト判定優先のため live のみ上書き)
+        // liveBroadcastContent またはアーカイブ済みライブ (liveStreamingDetails.actualStartTime) でライブ判定
         const lbc = item.snippet?.liveBroadcastContent ?? 'none';
-        if (lbc === 'live' || lbc === 'upcoming') {
+        const isLiveStream = lbc === 'live' || lbc === 'upcoming' || !!item.liveStreamingDetails?.actualStartTime;
+        if (isLiveStream) {
           await env.DB.prepare(
             "UPDATE videos SET title = ?, thumbnail_url = ?, published_at = ?, view_count = ?, duration = ?, category = 'live' WHERE video_id = ?"
           ).bind(title, thumbnailUrl, publishedAt, viewCount, duration, item.id).run();

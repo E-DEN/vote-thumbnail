@@ -186,26 +186,38 @@ async function handleApi(request, env, url, ctx) {
         "SELECT video_id FROM videos WHERE channel_id = ? AND duration = 0 LIMIT 20"
       ).bind(channelId).all();
       const toDetect = [...new Set([...newVideoIds, ...undetected.results.map(r => r.video_id)])];
+      // 新規・未判定動画の詳細取得 (少数のためレスポンス前に実行)
+      // APIキーあり時は fetchAllVideosViaApi でプレイリスト判定済みのため detectShortsCategories は不要
+      // APIキーなし時のみ URL リダイレクト判定を使う
       if (toDetect.length > 0) {
-        await detectShortsCategories(toDetect, effectiveEnv);
-      }
-      // APIキーがあれば全動画のview_count/durationを更新
-      const toUpdate = [...new Set([...apiAllVideoIds, ...toDetect])];
-      if (toUpdate.length > 0) {
-        const detailResult = await fetchVideoDetails(toUpdate, effectiveEnv);
+        if (!effectiveEnv.YOUTUBE_API_KEY) await detectShortsCategories(toDetect, effectiveEnv);
+        const detailResult = await fetchVideoDetails(toDetect, effectiveEnv);
         if (detailResult?.apiKeyError) return json({ ok: true, added, rssStatus, apiKeyError: true });
       } else if (clientApiKey) {
         const validResult = await validateApiKey(effectiveEnv);
         if (validResult?.apiKeyError) return json({ ok: true, added, rssStatus, apiKeyError: true });
       }
-      // duration が短くカテゴリが videos のまま残っている動画をURL判定で再確認
-      // (UUSHプレイリストに入っていないショートの救済)
-      const shortCandidates = await env.DB.prepare(
-        "SELECT video_id FROM videos WHERE channel_id = ? AND category = 'videos' AND duration > 0 AND duration <= 180 LIMIT 40"
-      ).bind(channelId).all();
-      if (shortCandidates.results.length > 0) {
-        await detectShortsCategories(shortCandidates.results.map(r => r.video_id), effectiveEnv, { updateDuration: false });
-      }
+      // 全動画の view_count/duration 更新 + shortCandidates 再判定はバックグラウンドで実行
+      // (大量 subrequest が必要なためレスポンスをブロックしない)
+      ctx.waitUntil((async () => {
+        if (apiAllVideoIds.length > 0) {
+          await fetchVideoDetails(apiAllVideoIds, effectiveEnv).catch(() => {});
+        }
+        // APIキーなし時のみ duration<=180 の動画を URL 判定で再確認
+        // (APIキーあり時は fetchAllVideosViaApi のプレイリスト判定が正となるため不要)
+        if (!effectiveEnv.YOUTUBE_API_KEY) {
+          const shortCandidates = await env.DB.prepare(
+            "SELECT video_id FROM videos WHERE channel_id = ? AND category = 'videos' AND duration > 0 AND duration <= 180 LIMIT 40"
+          ).bind(channelId).all();
+          if (shortCandidates.results.length > 0) {
+            await detectShortsCategories(
+              shortCandidates.results.map(r => r.video_id),
+              effectiveEnv,
+              { updateDuration: false }
+            ).catch(() => {});
+          }
+        }
+      })());
       // DB上の総動画数を返す
       const countRow = await env.DB.prepare(
         'SELECT COUNT(*) AS cnt FROM videos WHERE channel_id = ?'
@@ -273,13 +285,12 @@ async function handleApi(request, env, url, ctx) {
           "UPDATE channels SET last_accessed = datetime('now') WHERE channel_id = ?"
         ).bind(channelId).run(),
       ]);
-      // duration=0 の動画 (RSS経由・未判定) をバックグラウンドでカテゴリ判定
-      const unchecked = rows.results.filter(v => v.duration === 0 && v.category === 'videos');
+      // duration=0 の動画 (RSS経由・未判定) をバックグラウンドで詳細取得
+      // detectShortsCategories は Cloudflare からのリダイレクト判定が不安定なため使わない
+      // カテゴリ修正は /refresh (fetchAllVideosViaApi) に委ねる
+      const unchecked = rows.results.filter(v => v.duration === 0);
       if (unchecked.length > 0) {
-        ctx.waitUntil((async () => {
-          await detectShortsCategories(unchecked.map(v => v.video_id), env);
-          await fetchVideoDetails(unchecked.map(v => v.video_id), env);
-        })());
+        ctx.waitUntil(fetchVideoDetails(unchecked.map(v => v.video_id), env));
       }
       return json(rows.results);
     }
@@ -464,12 +475,16 @@ async function fetchAndSaveRss(channelId, env) {
 async function _fetchPlaylistVideoIds(playlistId, apiKey) {
   const ids = new Set();
   let pageToken = '';
+  let fetchError = false;
   try {
     do {
       let url = `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&playlistId=${playlistId}&maxResults=50&key=${apiKey}`;
       if (pageToken) url += '&pageToken=' + encodeURIComponent(pageToken);
       const res = await fetch(url);
-      if (!res.ok) break;
+      if (!res.ok) {
+        if (res.status !== 404) fetchError = true; // 404 = プレイリスト存在せず = 正常 (動画なし)
+        break;
+      }
       const data = await res.json();
       for (const item of (data.items ?? [])) {
         const videoId = item.snippet?.resourceId?.videoId;
@@ -477,19 +492,22 @@ async function _fetchPlaylistVideoIds(playlistId, apiKey) {
       }
       pageToken = data.nextPageToken ?? '';
     } while (pageToken);
-  } catch { /* サイレント失敗 */ }
-  return ids;
+  } catch { fetchError = true; }
+  return { ids, ok: !fetchError };
 }
 
 async function fetchAllVideosViaApi(channelId, env) {
   if (!env.YOUTUBE_API_KEY) return { ok: true, videoIds: [] };
   const suffix = channelId.slice(2);
   // uploads / shorts / live の各プレイリストを並行取得
-  const [allIds, shortsIds, liveIds] = await Promise.all([
+  const [allResult, shortsResult, liveResult] = await Promise.all([
     _fetchPlaylistVideoIds('UU' + suffix, env.YOUTUBE_API_KEY),
     _fetchPlaylistVideoIds('UUSH' + suffix, env.YOUTUBE_API_KEY),
     _fetchPlaylistVideoIds('UULV' + suffix, env.YOUTUBE_API_KEY),
   ]);
+  const allIds = allResult.ids;
+  const shortsIds = shortsResult.ids;
+  const liveIds = liveResult.ids;
   if (allIds.size === 0) {
     // apiKeyError かどうかは uploads プレイリストが空の場合で区別できないためスキップ
     return { ok: true, videoIds: [] };
@@ -513,19 +531,44 @@ async function fetchAllVideosViaApi(channelId, env) {
   }
   const newItems = allItems.filter(i => !existingIds.has(i.videoId));
 
-  for (const { videoId, category } of newItems) {
-    await env.DB.prepare(
-      `INSERT INTO videos (video_id, channel_id, title, thumbnail_url, category, published_at)
-       VALUES (?, ?, '', ?, ?, NULL)
-       ON CONFLICT(video_id) DO NOTHING`
-    ).bind(videoId, channelId, `https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg`, category).run();
+  // 新規動画を一括 INSERT (50件ずつバッチ処理で D1 クエリ数を削減)
+  const INSERT_BATCH = 50;
+  for (let i = 0; i < newItems.length; i += INSERT_BATCH) {
+    const chunk = newItems.slice(i, i + INSERT_BATCH);
+    await env.DB.batch(chunk.map(({ videoId, category }) =>
+      env.DB.prepare(
+        `INSERT INTO videos (video_id, channel_id, title, thumbnail_url, category, published_at)
+         VALUES (?, ?, '', ?, ?, NULL)
+         ON CONFLICT(video_id) DO NOTHING`
+      ).bind(videoId, channelId, `https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg`, category)
+    ));
   }
 
-  // 既存動画のカテゴリも更新 (shorts/live の場合のみ上書き)
-  for (const { videoId, category } of allItems.filter(i => existingIds.has(i.videoId) && i.category !== 'videos')) {
-    await env.DB.prepare(
-      "UPDATE videos SET category = ? WHERE video_id = ? AND category = 'videos'"
-    ).bind(category, videoId).run();
+  // 既存動画のカテゴリを正規化
+  // 1. UUSH/UULV 登録済み → shorts/live に昇格 (videos → shorts/live)
+  const toUpdateCategory = allItems.filter(i => existingIds.has(i.videoId) && i.category !== 'videos');
+  for (let i = 0; i < toUpdateCategory.length; i += INSERT_BATCH) {
+    const chunk = toUpdateCategory.slice(i, i + INSERT_BATCH);
+    await env.DB.batch(chunk.map(({ videoId, category }) =>
+      env.DB.prepare(
+        "UPDATE videos SET category = ? WHERE video_id = ? AND category = 'videos'"
+      ).bind(category, videoId)
+    ));
+  }
+  // 2. UUSH に未登録 (= playlist 上 videos) なのに DB が 'shorts' → 'videos' に修正
+  //    (クライアント側 importAllChannelVideos の duration<=180 誤分類を補正)
+  //    UUSH の取得が成功した場合のみ実行 (API エラー時は触らない)
+  //    404 (ショートなし) も成功扱い → チャンネルにショートが0本でも補正する
+  if (shortsResult.ok) {
+    const toCorrectToVideos = allItems.filter(i => existingIds.has(i.videoId) && i.category === 'videos');
+    for (let i = 0; i < toCorrectToVideos.length; i += INSERT_BATCH) {
+      const chunk = toCorrectToVideos.slice(i, i + INSERT_BATCH);
+      await env.DB.batch(chunk.map(({ videoId }) =>
+        env.DB.prepare(
+          "UPDATE videos SET category = 'videos' WHERE video_id = ? AND category = 'shorts'"
+        ).bind(videoId)
+      ));
+    }
   }
 
   return { ok: true, videoIds: allItems.map(i => i.videoId) };
