@@ -1853,7 +1853,7 @@ header {
 .gallery-row {
   display: flex;
   gap: 12px;
-  height: 300px;
+  height: 320px;
 }
 .gallery-cell {
   position: relative;
