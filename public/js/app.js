@@ -900,7 +900,7 @@ function fmtDuration(sec) {
 }
 
 // --- 一覧 ---
-var _listMode = localStorage.getItem('thumb-list-mode') || 'gallery';
+var _listMode = localStorage.getItem('thumb-list-mode') || 'grid';
 var _shortsObserver = null;
 var _listSortOrder = localStorage.getItem(LS_SORT) || 'views';  // 'date' | 'views' | 'rating' | 'random'
 var _sortDir = localStorage.getItem('thumb-sort-dir') || 'desc'; // 'asc' | 'desc'
