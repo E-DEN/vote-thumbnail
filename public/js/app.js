@@ -3927,7 +3927,7 @@ function init() {
   document.getElementById('chAvatar').addEventListener('click', _openChannelOnYouTube);
   document.getElementById('chName').addEventListener('click', _openChannelOnYouTube);
 
-  // サーバーのチャンネルリストをローカルストレージへ自動同期（DBに登録済みのチャンネルを追加）
+  // サーバーのチャンネルリストでローカルのメタ情報を更新（新規追加は行わない）
   (async function _syncChannelsFromServer() {
     try {
       const res = await fetch('/api/channels');
@@ -3935,29 +3935,17 @@ function init() {
       const serverChannels = await res.json();
       let changed = false;
       for (const sc of serverChannels) {
-        if (!channels[sc.channel_id]) {
-          channels[sc.channel_id] = {
-            key: sc.channel_id,
-            channelId: sc.channel_id,
-            handle: sc.handle,
-            displayName: sc.title,
-            avatar: sc.icon_url,
-            tags: [],
-            addedAt: new Date().toISOString(),
-          };
-          changed = true;
-        }
-        if (!sidebarOrder.some(i =>
-          (i.type === 'channel' && i.key === sc.channel_id) ||
-          (i.type === 'folder' && Array.isArray(i.children) && i.children.includes(sc.channel_id))
-        )) {
-          sidebarOrder.push({ type: 'channel', key: sc.channel_id });
+        if (!channels[sc.channel_id]) continue; // ローカルにないチャンネルは追加しない
+        const ch = channels[sc.channel_id];
+        if (ch.handle !== sc.handle || ch.displayName !== sc.title || ch.avatar !== sc.icon_url) {
+          ch.handle      = sc.handle;
+          ch.displayName = sc.title;
+          ch.avatar      = sc.icon_url;
           changed = true;
         }
       }
       if (changed) {
         saveChannels();
-        saveSidebarOrder();
         renderSidebar();
       }
     } catch { /* サイレント失敗 */ }
