@@ -1120,6 +1120,7 @@ function _renderGrid() {
   grid.innerHTML = '';
   grid.classList.remove('mode-shorts');
   grid.classList.add('mode-grid');
+  grid.classList.toggle('mode-grid-shorts', currentCat === 'shorts');
   // ソート済みプール構築
   _listPage = 0;
   _listSortedPool = _buildSortedPool();

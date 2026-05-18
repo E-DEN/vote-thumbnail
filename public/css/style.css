@@ -14,6 +14,8 @@
   --shadow:     rgba(0,0,0,0.55);
   --drop-hover: rgba(0,176,244,0.09);
   --drop-ok:    rgba(35,165,90,0.10);
+  --view-bar-bg: rgba(53,55,60,0.88);
+  --view-bar-shadow: 0 2px 12px rgba(0,0,0,0.55);
 }
 :root[data-theme="light"] {
   --bg:         #f2f3f5;
@@ -30,6 +32,8 @@
   --shadow:     rgba(0,0,0,0.08);
   --drop-hover: rgba(0,150,207,0.07);
   --drop-ok:    rgba(45,125,70,0.08);
+  --view-bar-bg: rgba(227,229,232,0.92);
+  --view-bar-shadow: 0 2px 12px rgba(0,0,0,0.22);
 }
 
 /* --- Reset --- */
@@ -1926,6 +1930,8 @@ header {
 .gallery-meta-rank {
   font-size: 9px;
   margin-left: 1px;
+  align-self: center;
+  line-height: 1;
 }
 .gallery-meta-pin-dot {
   width: 5px;
@@ -1944,11 +1950,13 @@ header {
   display: inline-flex;
   align-items: center;
   height: 32px;
-  background: var(--surface2);
+  background: var(--view-bar-bg);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   border: 1px solid var(--border);
   border-radius: 9px;
   padding: 0 4px;
-  box-shadow: 0 1px 4px var(--shadow);
+  box-shadow: var(--view-bar-shadow);
 }
 .vb-btn {
   height: 26px;
@@ -1967,7 +1975,7 @@ header {
   transition: color 0.12s, background 0.12s;
 }
 .vb-btn:hover { color: var(--text); background: rgba(255,255,255,.06); }
-.vb-sort-key { color: var(--text-muted); min-width: 80px; justify-content: space-between; }
+.vb-sort-key { color: var(--text); min-width: 80px; justify-content: space-between; }
 .vb-sort-dir { padding: 0 8px; }
 .vb-sort-dir.asc { color: var(--accent); }
 .vb-lay { padding: 0 8px; }
@@ -2050,11 +2058,17 @@ header {
 /* グリッドモード */
 #listGrid.mode-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   gap: 16px;
   align-content: start;
   align-items: start;
 }
+/* ショートグリッドモード（通常グリッド + ショートカテゴリ） */
+#listGrid.mode-grid.mode-grid-shorts {
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 14px;
+}
+
 /* ショートギャラリーモード（waterfall + IntersectionObserver） */
 #listGrid.mode-shorts {
   display: grid;
