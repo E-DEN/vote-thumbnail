@@ -15,6 +15,7 @@
  *   --clear                     投入前に対象動画の既存データを削除
  *   --clear-seed                投入前に対象動画のseedデータのみ削除
  *   --db      <path>            DBファイルのパスを直接指定
+ *   --remote                    ローカルSQLiteではなくリモートD1に対して実行
  *
  * 例:
  *   node db/seed-reactions.mjs --video abc123
@@ -48,6 +49,7 @@ let cliOutlier   = null;
 let cliClear     = false;
 let cliClearSeed = false;
 let cliDb        = null;
+let cliRemote    = false;
 
 for (let i = 0; i < args.length; i++) {
   switch (args[i]) {
@@ -58,6 +60,7 @@ for (let i = 0; i < args.length; i++) {
     case '--clear':      cliClear     = true; break;
     case '--clear-seed': cliClearSeed = true; break;
     case '--db':         cliDb        = args[++i]; break;
+    case '--remote':     cliRemote    = true; break;
     default:
       console.error(`Unknown option: ${args[i]}`);
       process.exit(1);
@@ -79,12 +82,13 @@ function findDb() {
   return null;
 }
 
-const DB = cliDb ?? findDb();
-if (!DB) {
-  console.error('DBファイルが見つかりません。--db <path> で指定するか、wrangler dev を起動してください。');
+const DB = cliRemote ? null : (cliDb ?? findDb());
+if (!cliRemote && !DB) {
+  console.error('DBファイルが見つかりません。--db <path> で指定するか、wrangler dev を起動するか、--remote を使ってください。');
   process.exit(1);
 }
-console.log(`DB: ${DB}`);
+if (DB) console.log(`DB: ${DB}`);
+if (cliRemote) console.log('Mode: remote D1 (vote-thumbnail)');
 
 // --- sqlite3 クエリヘルパー（JSON Lines出力） ---
 function sqlQuery(sql) {
@@ -95,9 +99,24 @@ function sqlQuery(sql) {
   return out ? JSON.parse(out) : [];
 }
 
+// --- リモート D1 クエリヘルパー ---
+function sqlQueryRemote(sql) {
+  const raw = execSync(
+    `npx wrangler d1 execute vote-thumbnail --remote --command=${JSON.stringify(sql)}`,
+    { shell: 'cmd.exe', encoding: 'utf8' }
+  );
+  const jsonStart = raw.indexOf('[');
+  if (jsonStart === -1) return [];
+  const parsed = JSON.parse(raw.slice(jsonStart));
+  return parsed[0]?.results ?? [];
+}
+
 // --- チャンネル配下の動画IDをDBから取得 ---
 function videoIdsForChannel(channelId) {
-  const rows = sqlQuery(`SELECT video_id FROM videos WHERE channel_id = '${channelId.replace(/'/g, "''")}';`);
+  const escaped = channelId.replace(/'/g, "''");
+  const rows = cliRemote
+    ? sqlQueryRemote(`SELECT video_id FROM videos WHERE channel_id = '${escaped}'`)
+    : sqlQuery(`SELECT video_id FROM videos WHERE channel_id = '${escaped}';`);
   return rows.map(r => r.video_id);
 }
 
@@ -190,12 +209,26 @@ for (const video of VIDEOS) {
     rows.push(`('${video.id}', '${sid}', ${x.toFixed(6)}, ${y.toFixed(6)}, '${now}')`);
   }
 }
-sqls.push(`INSERT OR IGNORE INTO reactions (video_id, session_id, x, y, updated_at) VALUES\n${rows.join(',\n')};`);
+// D1 の SQLITE_TOOBIG 対策: 500行ごとに分割
+const BATCH = 500;
+for (let i = 0; i < rows.length; i += BATCH) {
+  sqls.push(`INSERT OR IGNORE INTO reactions (video_id, session_id, x, y, updated_at) VALUES\n${rows.slice(i, i + BATCH).join(',\n')};`);
+}
 
 // --- 実行 ---
 const tmpFile = join(tmpdir(), 'seed-reactions.sql');
-writeFileSync(tmpFile, sqls.join('\n'), 'utf8');
-execSync(`sqlite3 "${DB}" ".read ${tmpFile}"`, { stdio: 'inherit', shell: 'cmd.exe' });
+if (cliRemote) {
+  // リモート: バッチごとに個別ファイルで実行（SQLITE_TOOBIG 対策）
+  for (let i = 0; i < sqls.length; i++) {
+    process.stdout.write(`\rBatch ${i + 1}/${sqls.length}...`);
+    writeFileSync(tmpFile, sqls[i], 'utf8');
+    execSync(`npx wrangler d1 execute vote-thumbnail --remote --yes --file "${tmpFile}"`, { stdio: 'pipe', shell: 'cmd.exe' });
+  }
+  process.stdout.write('\n');
+} else {
+  writeFileSync(tmpFile, sqls.join('\n'), 'utf8');
+  execSync(`sqlite3 "${DB}" ".read ${tmpFile}"`, { stdio: 'inherit', shell: 'cmd.exe' });
+}
 unlinkSync(tmpFile);
 
 console.log(`Done: inserted ${rows.length} rows (${VIDEOS.length} video(s), ${COUNT} each).`);
