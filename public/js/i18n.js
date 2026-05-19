@@ -89,6 +89,9 @@ registerLang('ja', '日本語', {
   'sidebar-logo':   'ラブ♥ねいる',
   'search-ph':      'YouTube の @handle またはチャンネル／動画URL',
   'search-add':     '追加',
+  // モバイル専用
+  'm-ch-panel-title':  'チャンネル',
+  'm-select-channel':  'チャンネルを選択',
   // チャンネルヘッダー
   'tab-vote':    '投票',
   'tab-list':    '一覧',
@@ -246,6 +249,9 @@ registerLang('en', 'English', {
   'sidebar-logo':   'Love♥Nail',
   'search-ph':      'YouTube @handle or channel/video URL',
   'search-add':     'Add',
+  // Mobile-specific
+  'm-ch-panel-title':  'Channels',
+  'm-select-channel':  'Select Channel',
   // Channel header
   'tab-vote':    'Vote',
   'tab-list':    'Videos',

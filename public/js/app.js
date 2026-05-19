@@ -1,3 +1,12 @@
+import { state, LS_CHANNELS, LS_VIDEOS, LS_RATING, LS_CAT, LS_VOTE_PAIR, LS_SORT, LS_SIDEBAR_ORDER, LS_API_KEY, LS_RSS_ONLY, LS_HEATMAP_VISIBLE } from './state.js';
+import { G2_SETTLED_RD, loadRating as loadRatingCore, applyVoteLocal, syncVoteToServer, getVotePair, setVotePair, pickPair, _playedPairs, _pairKey, getRating, getRd, getWins, getBattles } from './rating.js';
+import { loadChannels, saveChannels, loadVideosForChannel, saveVideosForChannel, fetchChannelVideos, filteredVideos } from './storage.js';
+import { formatViews, formatRelTime, formatViewsShort, formatDuration } from './format.js';
+
+// ratingData と channels はオブジェクトのエイリアス（参照が同一なので変更は state に反映される）
+const ratingData = state.ratingData;
+const channels   = state.channels;
+
 // ---
 const BASE = 'https://www.googleapis.com/youtube/v3';
 
@@ -23,20 +32,10 @@ function showToast(msg, isError) {
   }
   container.appendChild(toast);
 }
-const LS_RATING = 'thumb-ranking-elo';
-const LS_VIDEOS = 'thumb-ranking-videos';
-const LS_CHANNELS = 'thumb-ranking-channels';
-const LS_SIDEBAR_ORDER = 'thumb-sidebar-order';
-const LS_API_KEY  = 'yt-api-key';
-const LS_RSS_ONLY = 'yt-rss-only';
-const LS_CAT      = 'thumb-cat';
-const LS_VIEW     = 'thumb-view';
-const LS_VOTE_PAIR = 'thumb-vote-pair';
-const LS_SORT = 'thumb-sort';
-const LS_MAX_PINS       = 'thumb-max-pins';
-const LS_PINS_VISIBLE   = 'thumb-pins-visible';
-const LS_HEATMAP_VISIBLE = 'thumb-heatmap-visible';
-const LS_SETTINGS_TAB   = 'thumb-settings-tab';
+const LS_VIEW         = 'thumb-view';
+const LS_MAX_PINS     = 'thumb-max-pins';
+const LS_PINS_VISIBLE = 'thumb-pins-visible';
+const LS_SETTINGS_TAB = 'thumb-settings-tab';
 
 function getStoredApiKey() { return localStorage.getItem(LS_API_KEY) || ''; }
 function getRssOnly() { return localStorage.getItem(LS_RSS_ONLY) === '1'; }
@@ -53,15 +52,9 @@ function apiKeyHeaders() {
   return k ? { 'X-YouTube-Api-Key': k } : {};
 }
 
-let allVideos = [];
-let currentCat = localStorage.getItem(LS_CAT) || 'videos';
 let currentView = 'welcome';
 let _prevView = 'list';
 let _pollTimer = null;
-let ratingData = {};
-let voteTotal = 0;
-let channels = {};
-let currentChannelKey = null;
 let sidebarOrder = [];
 let _chTooltip = null;
 let _chTooltipNameEl = null;
@@ -171,168 +164,29 @@ function reactionsSampleFromKde() {
   return _reactionsPins[lo];
 }
 
-// --- Glicko-2 レーティング ---
-const G2_TAU   = 0.5;
-const G2_SCALE = 173.7178;
-
-function g2Init() {
-  return { rating: 1500, rd: 350, volatility: 0.06, wins: 0, battles: 0 };
-}
-
-function getRating(id)  { return ratingData[id]?.rating   ?? 1500; }
-function getRd(id)      { return ratingData[id]?.rd        ?? 350; }
-function getBattles(id) { return ratingData[id]?.battles   ?? 0; }
-function getWins(id)    { return ratingData[id]?.wins      ?? 0; }
-
-function g2Update(player, opponent, score) {
-  const mu    = (player.rating - 1500) / G2_SCALE;
-  const phi   = player.rd / G2_SCALE;
-  const sigma = player.volatility;
-  const muJ   = (opponent.rating - 1500) / G2_SCALE;
-  const phiJ  = opponent.rd / G2_SCALE;
-
-  const gPhiJ = 1 / Math.sqrt(1 + 3 * phiJ * phiJ / (Math.PI * Math.PI));
-  const E     = 1 / (1 + Math.exp(-gPhiJ * (mu - muJ)));
-  const v     = 1 / (gPhiJ * gPhiJ * E * (1 - E));
-  const delta = v * gPhiJ * (score - E);
-
-  // ボラティリティ更新（Illinois アルゴリズム）
-  const a = Math.log(sigma * sigma);
-  const f = x => {
-    const ex = Math.exp(x);
-    const d2 = phi * phi + v + ex;
-    return (ex * (delta * delta - d2)) / (2 * d2 * d2) - (x - a) / (G2_TAU * G2_TAU);
-  };
-  let A = a;
-  let B = delta * delta > phi * phi + v
-    ? Math.log(delta * delta - phi * phi - v)
-    : (() => { let k = 1; while (f(a - k * G2_TAU) < 0) k++; return a - k * G2_TAU; })();
-  let fA = f(A), fB = f(B);
-  for (let i = 0; Math.abs(B - A) > 1e-6 && i < 100; i++) {
-    const C = A + (A - B) * fA / (fB - fA);
-    const fC = f(C);
-    if (fC * fB <= 0) { A = B; fA = fB; } else { fA /= 2; }
-    B = C; fB = fC;
-  }
-  const sigmaPrime = Math.exp(A / 2);
-  const phiStar    = Math.sqrt(phi * phi + sigmaPrime * sigmaPrime);
-  const phiPrime   = 1 / Math.sqrt(1 / (phiStar * phiStar) + 1 / v);
-  const muPrime    = mu + phiPrime * phiPrime * gPhiJ * (score - E);
-
-  return {
-    rating:     G2_SCALE * muPrime + 1500,
-    rd:         G2_SCALE * phiPrime,
-    volatility: sigmaPrime,
-  };
-}
 
 function applyVote(winnerId, loserId) {
-  // ローカルを楽観的に更新（即時UI反映用）
-  if (!ratingData[winnerId]) ratingData[winnerId] = g2Init();
-  if (!ratingData[loserId])  ratingData[loserId]  = g2Init();
-  const w = ratingData[winnerId];
-  const l = ratingData[loserId];
-  const wUp = g2Update(w, l, 1);
-  const lUp = g2Update(l, w, 0);
-  ratingData[winnerId] = { ...wUp, wins: w.wins + 1, battles: w.battles + 1 };
-  ratingData[loserId]  = { ...lUp, wins: l.wins,     battles: l.battles + 1 };
-  saveRating();
-  voteTotal++;
-  document.getElementById('voteCount').textContent = voteTotal;
+  applyVoteLocal(winnerId, loserId);
+  state.voteTotal++;
+  document.getElementById('voteCount').textContent = state.voteTotal;
   updatePaceGauge();
-
-  // サーバーへ送信してグローバル統計を更新
-  if (currentChannelKey) {
-    fetch('/api/vote', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ winner_id: winnerId, loser_id: loserId, channel_id: currentChannelKey }),
-    }).then(function(res) {
-      if (!res.ok) return;
-      return res.json();
-    }).then(function(data) {
-      if (!data || !data.ok) return;
-      // サーバー計算値でローカルを上書き（全ユーザーの投票が反映された値）
-      if (data.winner) {
-        ratingData[winnerId] = {
-          rating: data.winner.rating, rd: data.winner.rd, volatility: data.winner.volatility,
-          wins: (ratingData[winnerId]?.wins ?? 0), battles: (ratingData[winnerId]?.battles ?? 0),
-        };
-      }
-      if (data.loser) {
-        ratingData[loserId] = {
-          rating: data.loser.rating, rd: data.loser.rd, volatility: data.loser.volatility,
-          wins: (ratingData[loserId]?.wins ?? 0), battles: (ratingData[loserId]?.battles ?? 0),
-        };
-      }
-      saveRating();
-    }).catch(function() { /* サイレント失敗 */ });
-  }
-}
-
-function saveRating() {
-  localStorage.setItem(LS_RATING, JSON.stringify({ ratingData, voteTotal }));
-}
-
-// --- API動画ヘルパー ---
-// サーバーレスポンスをフロントエンドの allVideos 形式に変換
-function apiVideoToFrontend(v) {
-  return {
-    id:          v.video_id,
-    title:       v.title,
-    thumb:       v.thumbnail_url,
-    category:    v.category,
-    url:         'https://www.youtube.com/watch?v=' + v.video_id,
-    viewCount:   v.view_count  ?? 0,
-    publishedAt: v.published_at ?? '',
-    duration:    v.duration    ?? 0,
-  };
-}
-
-// サーバーレスポンスから ratingData を更新
-function updateRatingFromApi(apiVideos) {
-  for (const v of apiVideos) {
-    ratingData[v.video_id] = {
-      rating:     v.rating,
-      rd:         v.rd,
-      volatility: v.volatility,
-      wins:       v.wins,
-      battles:    v.battles,
-    };
-  }
-}
-
-// チャンネルの全動画を取得して allVideos と ratingData を更新する
-async function fetchChannelVideos(channelId) {
-  const res = await fetch('/api/channels/' + channelId + '/videos');
-  if (!res.ok) throw new Error('videos fetch failed: ' + res.status);
-  const apiVideos = await res.json();
-  updateRatingFromApi(apiVideos);
-  return apiVideos.map(apiVideoToFrontend);
+  syncVoteToServer(winnerId, loserId);
 }
 
 // list/ranking 表示中に 1 分ごとサーバーから動画を再取得して再描画する
 async function _pollRefresh() {
-  if (!currentChannelKey) return;
+  if (!state.currentChannelKey) return;
   if (currentView !== 'list' && currentView !== 'ranking') return;
   try {
-    allVideos = await fetchChannelVideos(currentChannelKey);
+    state.allVideos = await fetchChannelVideos(state.currentChannelKey);
     renderCurrentView();
   } catch { /* サイレント失敗 */ }
 }
 
+// rating.js の loadRating を呼び出し、DOM も更新する
 function loadRating() {
-  const raw = localStorage.getItem(LS_RATING);
-  if (!raw) return;
-  const d = JSON.parse(raw);
-  const raw2 = d.ratingData ?? d['eloData'] ?? {};
-  // 旧Eloデータ（.elo フィールド）をGlicko-2形式に移行
-  ratingData = Object.fromEntries(Object.entries(raw2).map(([id, v]) => [
-    id,
-    v.rating != null ? v : { ...g2Init(), rating: v.elo ?? 1500, wins: v.wins ?? 0, battles: v.battles ?? 0 },
-  ]));
-  voteTotal = d.voteTotal ?? 0;
-  document.getElementById('voteCount').textContent = voteTotal;
+  loadRatingCore();
+  document.getElementById('voteCount').textContent = state.voteTotal;
 }
 
 // --- チャンネルストレージ ---
@@ -342,13 +196,6 @@ function channelKeyFromUrl(url) {
   const mi = url.match(/UC([\w-]+)/);
   if (mi) return 'UC' + mi[1];
   return url.replace(/[^a-z0-9]/gi, '').toLowerCase().slice(0, 20) || 'channel';
-}
-function loadChannels() {
-  const raw = localStorage.getItem(LS_CHANNELS);
-  channels = raw ? JSON.parse(raw) : {};
-}
-function saveChannels() {
-  try { localStorage.setItem(LS_CHANNELS, JSON.stringify(channels)); } catch {}
 }
 function loadSidebarOrder() {
   const raw = localStorage.getItem(LS_SIDEBAR_ORDER);
@@ -382,13 +229,6 @@ function syncSidebarOrder() {
   Object.keys(channels).forEach(k => {
     if (!inOrder.has(k)) sidebarOrder.push({ type: 'channel', key: k });
   });
-}
-function saveVideosForChannel(key, videos) {
-  try { localStorage.setItem(LS_VIDEOS + '_' + key, JSON.stringify(videos)); } catch {}
-}
-function loadVideosForChannel(key) {
-  const raw = localStorage.getItem(LS_VIDEOS + '_' + key);
-  return raw ? JSON.parse(raw) : null;
 }
 
 // --- API ヘルパー ---
@@ -556,21 +396,17 @@ async function importAllChannelVideos(channelId, onStatus) {
 function loadChannelVideos(key) {
   const videos = loadVideosForChannel(key);
   if (!videos?.length) return false;
-  allVideos = videos;
+  state.allVideos = videos;
   const counts = { videos: 0, shorts: 0, live: 0 };
-  allVideos.forEach(v => { if (counts[v.category] !== undefined) counts[v.category]++; });
-  currentCat = counts.live >= counts.videos && counts.live >= counts.shorts ? 'live'
+  state.allVideos.forEach(v => { if (counts[v.category] !== undefined) counts[v.category]++; });
+  state.currentCat = counts.live >= counts.videos && counts.live >= counts.shorts ? 'live'
              : counts.shorts > counts.videos ? 'shorts' : 'videos';
   document.querySelectorAll('.cat-seg-btn').forEach(b => {
-    b.classList.toggle('active', b.dataset.cat === currentCat);
+    b.classList.toggle('active', b.dataset.cat === state.currentCat);
   });
   return true;
 }
 
-// --- カテゴリフィルタ ---
-function filteredVideos() {
-  return allVideos.filter(v => v.category === currentCat);
-}
 
 // カテゴリに動画が0件のとき共通の空状態UIを指定コンテナに描画する
 function _renderEmptyCat(container) {
@@ -582,51 +418,6 @@ function _renderEmptyCat(container) {
       '</svg>' +
       '<p class="cat-empty-text">' + t('no-videos-in-cat') + '</p>' +
     '</div>';
-}
-
-// --- 投票 ---
-// RDが高い（対戦数が少ない）サムネを優先的に選出
-// RDがこの値以下なら「評価確定」= 両者確定のペアは再戦不要
-const G2_SETTLED_RD = 80;
-
-function pickPair() {
-  const pool = filteredVideos();
-  if (pool.length < 2) return null;
-
-  // 候補リスト: 少なくとも一方が未確定 かつ このセッションで未対戦
-  function buildCandidates() {
-    const list = [];
-    for (let i = 0; i < pool.length; i++) {
-      for (let j = i + 1; j < pool.length; j++) {
-        if (getRd(pool[i].id) <= G2_SETTLED_RD && getRd(pool[j].id) <= G2_SETTLED_RD) continue;
-        if (_playedPairs.has(_pairKey(pool[i].id, pool[j].id))) continue;
-        list.push([i, j]);
-      }
-    }
-    return list;
-  }
-
-  let candidates = buildCandidates();
-  if (candidates.length === 0) {
-    // セッション内の記録をリセットして2周目へ（確定済みは引き続き除外）
-    _playedPairs.clear();
-    candidates = buildCandidates();
-  }
-  if (candidates.length === 0) return null; // 全ペア確定済み
-
-  // 重み = 両者のRD合計（不確かなペアを優先）
-  const weights = candidates.map(([i, j]) => getRd(pool[i].id) + getRd(pool[j].id));
-  const totalW  = weights.reduce((s, w) => s + w, 0);
-  let r = Math.random() * totalW;
-  for (let k = 0; k < candidates.length; k++) {
-    r -= weights[k];
-    if (r <= 0) {
-      const [i, j] = candidates[k];
-      return [pool[i], pool[j]];
-    }
-  }
-  const [i, j] = candidates[candidates.length - 1];
-  return [pool[i], pool[j]];
 }
 
 // --- 投票ペースゲージ ---
@@ -654,28 +445,10 @@ function updatePaceGauge() {
   lbl.textContent = t(level.labelKey);
 }
 
-function _loadVotePairByCat() {
-  try { return JSON.parse(localStorage.getItem(LS_VOTE_PAIR)) || {}; } catch(e) { return {}; }
-}
-function _saveVotePairByCat(d) {
-  try { localStorage.setItem(LS_VOTE_PAIR, JSON.stringify(d)); } catch(e) {}
-}
-var _votePairByCat = _loadVotePairByCat(); // カテゴリごとのペアキャッシュ（localStorage永続化）
-var _playedPairs = new Set(); // セッション内の対戦済みペア
-
-function _pairKey(idA, idB) {
-  return idA < idB ? idA + '|' + idB : idB + '|' + idA;
-}
-
-// _currentVotePair の get/set をチャンネル+カテゴリ別に委譲
+// _currentVotePair の get/set を rating.js の getVotePair/setVotePair に委譲
 Object.defineProperty(window, '_currentVotePair', {
-  get() { return _votePairByCat[(currentChannelKey || '') + ':' + currentCat] ?? null; },
-  set(v) {
-    const k = (currentChannelKey || '') + ':' + currentCat;
-    if (v === null) { delete _votePairByCat[k]; }
-    else { _votePairByCat[k] = v; }
-    _saveVotePairByCat(_votePairByCat);
-  },
+  get() { return getVotePair(); },
+  set(v) { setVotePair(v); },
   configurable: true,
 });
 
@@ -692,7 +465,7 @@ function renderVote() {
     }
   }
   if (!_currentVotePair) {
-    _currentVotePair = pickPair();
+    _currentVotePair = pickPair(filteredVideos);
   }
   const pair = _currentVotePair;
   const container = document.getElementById('votePair');
@@ -850,14 +623,6 @@ document.addEventListener('click', function(e) {
   setTimeout(renderVote, 500);
 });
 
-// --- フォーマットユーティリティ ---
-function fmtViews(n) {
-  if (!n) return '';
-  if (n >= 100000000) return t('views-100m', { n: (n / 100000000).toFixed(1).replace(/\.0$/, '') });
-  if (n >= 10000)     return t('views-10k',  { n: Math.floor(n / 10000) });
-  if (n >= 1000)      return t('views-1k',   { n: (n / 1000).toFixed(1).replace(/\.0$/, '') });
-  return t('views-raw', { n: n.toLocaleString() });
-}
 // ギャラリーオーバーレイ用: 再生数・投稿日・レーティングのメタHTML
 var _SVG_EYE  = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
 var _SVG_CLK  = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>';
@@ -872,10 +637,10 @@ function _rebuildRatingRankMap() {
 function _buildVideoMeta(v) {
   var items = [];
   if (v.viewCount) {
-    items.push('<span class="gallery-meta-item">' + _SVG_EYE + fmtViewsShort(v.viewCount) + '</span>');
+    items.push('<span class="gallery-meta-item">' + _SVG_EYE + formatViewsShort(v.viewCount) + '</span>');
   }
   if (v.publishedAt) {
-    items.push('<span class="gallery-meta-item">' + _SVG_CLK + fmtRelTime(v.publishedAt) + '</span>');
+    items.push('<span class="gallery-meta-item">' + _SVG_CLK + formatRelTime(v.publishedAt) + '</span>');
   }
   var rating = getRating(v.id);
   var rank = _ratingRankMap[v.id];
@@ -888,32 +653,6 @@ function _buildPinDot(v) {
   if (!hasPinned) return '';
   var dot = '<span class="gallery-meta-pin-dot" style="background:' + (_reactionsPinColor || '#ec4899') + '"></span>';
   return '<span class="gallery-meta-item">' + _SVG_PIN + dot + '</span>';
-}
-// ギャラリーオーバーレイ用: 単位なし短縮表記
-function fmtViewsShort(n) {
-  if (!n) return '';
-  if (n >= 100000000) return t('views-short-100m', { n: (n / 100000000).toFixed(1).replace(/\.0$/, '') });
-  if (n >= 10000)     return t('views-short-10k',  { n: (n / 10000).toFixed(1).replace(/\.0$/, '') });
-  return t('views-short-raw', { n: n.toLocaleString() });
-}
-function fmtRelTime(isoStr) {
-  if (!isoStr) return '';
-  const diff = (Date.now() - new Date(isoStr).getTime()) / 1000;
-  if (diff < 60)         return t('time-now');
-  if (diff < 3600)       return t('time-min',   { n: Math.floor(diff / 60) });
-  if (diff < 86400)      return t('time-hour',  { n: Math.floor(diff / 3600) });
-  if (diff < 86400 * 7)  return t('time-day',   { n: Math.floor(diff / 86400) });
-  if (diff < 86400 * 30) return t('time-week',  { n: Math.floor(diff / (86400 * 7)) });
-  if (diff < 86400 * 365)return t('time-month', { n: Math.floor(diff / (86400 * 30)) });
-  return t('time-year', { n: Math.floor(diff / (86400 * 365)) });
-}
-function fmtDuration(sec) {
-  if (!sec) return '';
-  const h = Math.floor(sec / 3600);
-  const m = Math.floor((sec % 3600) / 60);
-  const s = sec % 60;
-  if (h > 0) return `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
-  return `${m}:${String(s).padStart(2,'0')}`;
 }
 
 // --- 一覧 ---
@@ -960,7 +699,7 @@ function renderList() {
   var sentinel = document.getElementById('shortsSentinel');
   if (sentinel) { _listScrollObserver.observe(sentinel); }
 
-  if (currentCat === 'shorts') {
+  if (state.currentCat === 'shorts') {
     // ショート: waterfall + IntersectionObserver
     grid.classList.add('mode-shorts');
     if (_shortsObserver) { _shortsObserver.disconnect(); }
@@ -1013,7 +752,7 @@ function _appendGalleryPage() {
   if (start >= _listSortedPool.length) return;
   var slice = _listSortedPool.slice(start, start + _LIST_PAGE_SIZE);
   _listPage++;
-  if (currentCat === 'shorts') {
+  if (state.currentCat === 'shorts') {
     // ショート: waterfall セル
     slice.forEach(function(v) {
       var cell = document.createElement('div');
@@ -1121,7 +860,7 @@ function _renderGrid() {
   grid.innerHTML = '';
   grid.classList.remove('mode-shorts');
   grid.classList.add('mode-grid');
-  grid.classList.toggle('mode-grid-shorts', currentCat === 'shorts');
+  grid.classList.toggle('mode-grid-shorts', state.currentCat === 'shorts');
   // ソート済みプール構築
   _listPage = 0;
   _listSortedPool = _buildSortedPool();
@@ -1152,7 +891,7 @@ function _appendGridPage() {
   _listPage++;
   slice.forEach(function(v) {
     var durHtml = v.duration
-      ? '<span class="list-duration">' + fmtDuration(v.duration) + '</span>'
+      ? '<span class="list-duration">' + formatDuration(v.duration) + '</span>'
       : '';
     var metaHtml = _buildVideoMeta(v) + _buildPinDot(v);
     var card = document.createElement('div');
@@ -1192,8 +931,8 @@ function renderRankingItems(sorted, maxRating, minRating, range, from, to) {
     const lowRd = rd > 150;
     const videoUrl = v.url ?? `https://www.youtube.com/watch?v=${v.id}`;
     const rankNum = idx < 3 ? idx + 1 : idx + 1;
-    const views = v.viewCount ? fmtViews(v.viewCount) : '';
-    const date  = v.publishedAt ? fmtRelTime(v.publishedAt) : '';
+    const views = v.viewCount ? formatViews(v.viewCount) : '';
+    const date  = v.publishedAt ? formatRelTime(v.publishedAt) : '';
     const viewDate = [views, date].filter(Boolean).join(' · ');
     const metaHtml = _buildVideoMeta(v) + _buildPinDot(v);
     const item = document.createElement('div');
@@ -1229,7 +968,7 @@ function renderRanking() {
   const range = maxRating - minRating || 1;
 
   rankShowCount = RANK_PAGE;
-  document.getElementById('rankSubtitle').textContent = t('rank-subtitle', { count: pool.length, cat: currentCat });
+  document.getElementById('rankSubtitle').textContent = t('rank-subtitle', { count: pool.length, cat: state.currentCat });
   const list = document.getElementById('rankList');
   list.innerHTML = '';
   const _rankHeader = document.querySelector('.ranking-header');
@@ -1390,8 +1129,8 @@ function deleteChannel(key) {
       ? { type: 'channel', key: item.children[0] } : item
   );
   saveSidebarOrder();
-  if (currentChannelKey === key) {
-    currentChannelKey = null;
+  if (state.currentChannelKey === key) {
+    state.currentChannelKey = null;
     document.getElementById('chAvatar').style.display = 'none';
     document.getElementById('chName').style.display = 'none';
     document.getElementById('chTabs').style.display = 'none';
@@ -1680,7 +1419,7 @@ function _startTooltipInlineRename(currentName, onCommit) {
 
 function buildChannelItem(ch) {
   const item = document.createElement('div');
-  item.className = 'sidebar-channel-item' + (currentChannelKey === ch.key ? ' active' : '');
+  item.className = 'sidebar-channel-item' + (state.currentChannelKey === ch.key ? ' active' : '');
   item.dataset.key = ch.key;
   if (_refreshingKeys.has(ch.key)) item.classList.add('compact-refreshing');
   const name = ch.displayName || ch.handle || ch.key;
@@ -1715,17 +1454,17 @@ function buildChannelItem(ch) {
     if (_refreshingKeys.has(key)) return;
     _refreshingKeys.add(key);
     item.classList.add('compact-refreshing');
-    if (key !== currentChannelKey) await selectChannel(key);
+    if (key !== state.currentChannelKey) await selectChannel(key);
     _startRefreshSpinner(refreshBtn);
     const _refreshStatusEl = document.getElementById('sidebarSearchStatus');
     _refreshStatusEl.className = 'sidebar-search-status';
     _refreshStatusEl.textContent = t('fetching-channel');
     // リフレッシュ中に定期ポーリングしてギャラリーをライブ更新
     const _pollRefresh = setInterval(async () => {
-      if (key !== currentChannelKey) return;
+      if (key !== state.currentChannelKey) return;
       const videos = await fetchChannelVideos(key);
-      if (videos.length !== allVideos.length) {
-        allVideos = videos;
+      if (videos.length !== state.allVideos.length) {
+        state.allVideos = videos;
         renderCurrentView();
       }
     }, 2500);
@@ -1740,7 +1479,7 @@ function buildChannelItem(ch) {
       showToast(toastMsg);
       _refreshStatusEl.textContent = (data.total ?? '') + ' 件取得完了';
       setTimeout(() => { if (_refreshStatusEl.textContent.endsWith('件取得完了')) _refreshStatusEl.textContent = ''; }, 3000);
-      allVideos = await fetchChannelVideos(key);
+      state.allVideos = await fetchChannelVideos(key);
       renderCurrentView();
     } catch (err) { showToast(t('err-refresh-failed'), true); console.error('refresh:', err); _refreshStatusEl.textContent = ''; }
     finally {
@@ -1903,8 +1642,8 @@ function buildFolderItem(folder) {
           if (chRefBtn) _stopRefreshSpinner(chRefBtn);
           document.querySelectorAll(`.sidebar-channel-item[data-key="${key}"]`).forEach(el => el.classList.remove('compact-refreshing'));
           // チャンネル完了ごとに即UIへ反映
-          if (key === currentChannelKey) {
-            allVideos = await fetchChannelVideos(key);
+          if (key === state.currentChannelKey) {
+            state.allVideos = await fetchChannelVideos(key);
             renderCurrentView();
           }
         }
@@ -2688,7 +2427,7 @@ function initSidebarDrag() {
 async function selectChannel(key) {
   const ch = channels[key];
   if (!ch) return;
-  currentChannelKey = key;
+  state.currentChannelKey = key;
   _reactionsCurrentVideoId = null;
   _catVideoState = {};  // チャンネルをまたいだ動画状態は無効化
   // チャンネル切り替え時にピン・ヒートマップ・自分ピンをクリア
@@ -2717,25 +2456,25 @@ async function selectChannel(key) {
   document.getElementById('catFilter').style.display = '';
 
   try {
-    allVideos = await fetchChannelVideos(key);
+    state.allVideos = await fetchChannelVideos(key);
     await loadMyPins();
     const counts = { videos: 0, shorts: 0, live: 0 };
-    allVideos.forEach(v => { if (counts[v.category] !== undefined) counts[v.category]++; });
-    // currentCat を維持。ただし現在のカテゴリに動画が 0 件なら有効なカテゴリに切り替え
-    if (!counts[currentCat]) {
-      currentCat = counts.live >= counts.videos && counts.live >= counts.shorts ? 'live'
+    state.allVideos.forEach(v => { if (counts[v.category] !== undefined) counts[v.category]++; });
+    // state.currentCat を維持。ただし現在のカテゴリに動画が 0 件なら有効なカテゴリに切り替え
+    if (!counts[state.currentCat]) {
+      state.currentCat = counts.live >= counts.videos && counts.live >= counts.shorts ? 'live'
                  : counts.shorts > counts.videos ? 'shorts' : 'videos';
-      localStorage.setItem(LS_CAT, currentCat);
+      localStorage.setItem(LS_CAT, state.currentCat);
     }
     document.querySelectorAll('.cat-seg-btn').forEach(b => {
-      b.classList.toggle('active', b.dataset.cat === currentCat);
+      b.classList.toggle('active', b.dataset.cat === state.currentCat);
     });
     const savedView = localStorage.getItem(LS_VIEW) || 'list';
     const keepView = CAT_VIEWS.includes(currentView) ? currentView : savedView;
     showView(keepView);
   } catch (e) {
     console.error('[selectChannel] FETCH ERROR:', e);
-    allVideos = [];
+    state.allVideos = [];
     const savedView = localStorage.getItem(LS_VIEW) || 'list';
     const keepView = CAT_VIEWS.includes(currentView) ? currentView : savedView;
     showView(keepView);
@@ -3315,7 +3054,7 @@ function openModalReactions(v) {
 }
 
 function _refreshVideoMeta() {
-  var v = (allVideos || []).find(function(x) { return x.id === _reactionsCurrentVideoId; });
+  var v = (state.allVideos || []).find(function(x) { return x.id === _reactionsCurrentVideoId; });
   var el = document.getElementById('reactionsVideoMeta');
   if (v && el) el.innerHTML = _buildVideoMeta(v) + _buildPinDot(v);
 }
@@ -3334,7 +3073,7 @@ function renderReactionsPlaylist(selectedId) {
   body.innerHTML = '';
   if (countEl) countEl.textContent = pool.length;
   if (labelEl) {
-    var _catKey = 'cat-' + (currentCat || 'videos');
+    var _catKey = 'cat-' + (state.currentCat || 'videos');
     labelEl.dataset.i18n = _catKey;
     labelEl.textContent = t(_catKey);
   }
@@ -3405,7 +3144,7 @@ function buildHash(channelKey, view, vid) {
   const p = new URLSearchParams();
   p.set('ch', channelKey);
   p.set('view', view || 'list');
-  if (currentCat && currentCat !== 'videos') p.set('cat', currentCat);
+  if (state.currentCat && state.currentCat !== 'videos') p.set('cat', state.currentCat);
   if (vid) p.set('vid', vid);
   return '#' + p.toString();
 }
@@ -3451,14 +3190,14 @@ function showView(view) {
   });
   if (!_suppressHistory) {
     const vid = view === 'reaction' ? _reactionsCurrentVideoId : null;
-    const hash = buildHash(currentChannelKey, view, vid);
+    const hash = buildHash(state.currentChannelKey, view, vid);
     const curSt = history.state;
     const isDuplicate = curSt &&
-      curSt.channelKey === currentChannelKey &&
+      curSt.channelKey === state.currentChannelKey &&
       curSt.view === view &&
       curSt.vid === (vid || null);
     if (!isDuplicate) {
-      history.pushState({ channelKey: currentChannelKey, view, vid: vid || null }, '', hash);
+      history.pushState({ channelKey: state.currentChannelKey, view, vid: vid || null }, '', hash);
     }
   }
   renderCurrentView();
@@ -3552,7 +3291,7 @@ async function addChannelFromSidebarInput() {
     if (getStoredApiKey() && !getRssOnly()) {
       try {
         const count = await importAllChannelVideos(ch.channel_id, msg => { statusEl.textContent = msg; });
-        allVideos = await fetchChannelVideos(ch.channel_id);
+        state.allVideos = await fetchChannelVideos(ch.channel_id);
         renderCurrentView();
         statusEl.textContent = count + ' 件取得完了';
         setTimeout(() => { statusEl.textContent = ''; }, 3000);
@@ -3591,7 +3330,7 @@ function applyTheme(theme) {
 function init() {
   // 保存済み状態を即座に DOM へ反映（チャンネル選択前の切り替わりを防ぐ）
   document.querySelectorAll('.cat-seg-btn').forEach(b => {
-    b.classList.toggle('active', b.dataset.cat === currentCat);
+    b.classList.toggle('active', b.dataset.cat === state.currentCat);
   });
   // ソートスプリットボタン初期化
   var _sortLabel  = document.getElementById('sortSplitLabel');
@@ -3856,8 +3595,8 @@ function init() {
     _suppressHistory = true;
     try {
       if (!st.channelKey || !channels[st.channelKey]) {
-        currentChannelKey = null;
-        allVideos = [];
+        state.currentChannelKey = null;
+        state.allVideos = [];
         document.querySelectorAll('.sidebar-channel-item').forEach(el => el.classList.remove('active'));
         document.getElementById('chAvatar').style.display = 'none';
         document.getElementById('chName').style.display = 'none';
@@ -3865,7 +3604,7 @@ function init() {
         document.getElementById('catFilter').style.display = 'none';
         showView('welcome');
       } else {
-        if (st.channelKey !== currentChannelKey) {
+        if (st.channelKey !== state.currentChannelKey) {
           await selectChannel(st.channelKey);
         }
         if (st.view && st.view !== currentView) {
@@ -3883,8 +3622,8 @@ function init() {
     _suppressHistory = true;
     try {
       if (!st.channelKey || st.view === 'welcome') {
-        currentChannelKey = null;
-        allVideos = [];
+        state.currentChannelKey = null;
+        state.allVideos = [];
         document.querySelectorAll('.sidebar-channel-item').forEach(el => el.classList.remove('active'));
         document.getElementById('chAvatar').style.display = 'none';
         document.getElementById('chName').style.display = 'none';
@@ -3892,13 +3631,13 @@ function init() {
         document.getElementById('catFilter').style.display = 'none';
         showView('welcome');
       } else {
-        if (st.channelKey !== currentChannelKey) {
+        if (st.channelKey !== state.currentChannelKey) {
           await selectChannel(st.channelKey);
         }
         const view = st.view || 'list';
         if (view === 'reaction') {
           if (st.vid) {
-            const v = (allVideos || []).find(x => x.id === st.vid);
+            const v = (state.allVideos || []).find(x => x.id === st.vid);
             if (v) { _isPlaylistSwitch = true; openModalReactions(v); }
             else { showView('reaction'); }
           } else {
@@ -3918,15 +3657,15 @@ function init() {
     const st = parseHash();
     if (st.channelKey && channels[st.channelKey]) {
       if (st.cat) {
-        currentCat = st.cat;
-        localStorage.setItem(LS_CAT, currentCat);
-        document.querySelectorAll('.cat-seg-btn').forEach(b => b.classList.toggle('active', b.dataset.cat === currentCat));
+        state.currentCat = st.cat;
+        localStorage.setItem(LS_CAT, state.currentCat);
+        document.querySelectorAll('.cat-seg-btn').forEach(b => b.classList.toggle('active', b.dataset.cat === state.currentCat));
       }
       _suppressHistory = true;
       try {
         await selectChannel(st.channelKey);
         if (st.view === 'reaction' && st.vid) {
-          const v = (allVideos || []).find(x => x.id === st.vid);
+          const v = (state.allVideos || []).find(x => x.id === st.vid);
           if (v) { _isPlaylistSwitch = true; openModalReactions(v); }
           else { showView('reaction'); }
         } else if (st.view && st.view !== currentView) {
@@ -3936,7 +3675,7 @@ function init() {
         _suppressHistory = false;
       }
       history.replaceState(
-        { channelKey: currentChannelKey, view: currentView, vid: currentView === 'reaction' ? (_reactionsCurrentVideoId || null) : null },
+        { channelKey: state.currentChannelKey, view: currentView, vid: currentView === 'reaction' ? (_reactionsCurrentVideoId || null) : null },
         '',
         location.hash || '#'
       );
@@ -3948,8 +3687,8 @@ function init() {
 
   // タイトルクリック → welcome 画面へ戻る
   document.querySelector('.app-logo').addEventListener('click', function() {
-    currentChannelKey = null;
-    allVideos = [];
+    state.currentChannelKey = null;
+    state.allVideos = [];
     document.querySelectorAll('.sidebar-channel-item').forEach(el => el.classList.remove('active'));
     document.getElementById('chAvatar').style.display = 'none';
     document.getElementById('chName').style.display = 'none';
@@ -3960,12 +3699,12 @@ function init() {
 
   // チャンネルヘッダー（アバター・チャンネル名）クリック → YouTube を別タブで開く
   function _openChannelOnYouTube() {
-    if (!currentChannelKey) return;
-    const ch = channels[currentChannelKey];
+    if (!state.currentChannelKey) return;
+    const ch = channels[state.currentChannelKey];
     if (!ch) return;
     const url = ch.handle
       ? 'https://www.youtube.com/' + ch.handle
-      : 'https://www.youtube.com/channel/' + currentChannelKey;
+      : 'https://www.youtube.com/channel/' + state.currentChannelKey;
     window.open(url, '_blank', 'noopener');
   }
   document.getElementById('chAvatar').addEventListener('click', _openChannelOnYouTube);
@@ -4455,12 +4194,12 @@ document.getElementById('catFilter').addEventListener('click', e => {
   const btn = e.target.closest('.cat-seg-btn');
   if (!btn) return;
   const newCat = btn.dataset.cat;
-  if (newCat === currentCat) return;
+  if (newCat === state.currentCat) return;
   // 現カテゴリの動画選択を記憶してから切り替え
-  const prevCat = currentCat;
+  const prevCat = state.currentCat;
   if (_reactionsCurrentVideoId) _catVideoState[prevCat] = _reactionsCurrentVideoId;
-  currentCat = newCat;
-  localStorage.setItem(LS_CAT, currentCat);
+  state.currentCat = newCat;
+  localStorage.setItem(LS_CAT, state.currentCat);
   document.querySelectorAll('.cat-seg-btn').forEach(b => b.classList.toggle('active', b === btn));
   // 動画選択・ピンをリセット
   _reactionsCurrentVideoId = null;
@@ -4476,7 +4215,7 @@ document.getElementById('catFilter').addEventListener('click', e => {
   // 新カテゴリに保存済みの動画があれば復元
   const _savedId = _catVideoState[newCat];
   if (_savedId && currentView === 'reaction') {
-    const _savedV = (allVideos || []).find(function(v) { return v.id === _savedId; });
+    const _savedV = (state.allVideos || []).find(function(v) { return v.id === _savedId; });
     if (_savedV) { _isPlaylistSwitch = true; openModalReactions(_savedV); }
   }
 });
@@ -5170,8 +4909,8 @@ document.getElementById('catFilter').addEventListener('click', e => {
         }
 
         // 透かし: チャンネルアイコン・チャンネル名・動画タイトル
-        var _ltCh  = channels[currentChannelKey];
-        var _ltVid = allVideos.find(function(v) { return v.id === _reactionsCurrentVideoId; });
+        var _ltCh  = channels[state.currentChannelKey];
+        var _ltVid = state.allVideos.find(function(v) { return v.id === _reactionsCurrentVideoId; });
 
         function _roundRectPath(c, x, y, w, h, r) {
           c.beginPath();
