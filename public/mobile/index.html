@@ -1,0 +1,281 @@
+﻿<!DOCTYPE html>
+<html lang="ja" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title data-i18n="app-title">ラブ❤ねいる</title>
+  <meta name="referrer" content="no-referrer">
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- チャンネルパネル背景オーバーレイ -->
+  <div id="mChOverlay" class="m-ch-overlay"></div>
+
+  <!-- チャンネルパネル（左からスライドイン） -->
+  <div id="mChPanel" class="m-ch-panel">
+    <div class="m-ch-panel-header">
+      <span class="m-ch-panel-title" data-i18n="m-ch-panel-title">チャンネル</span>
+    </div>
+    <div id="mChList" class="m-ch-list"></div>
+    <div class="m-ch-panel-footer">
+      <div class="m-ch-add-wrap">
+        <input type="text" id="mChAddInput" class="m-ch-add-input"
+          placeholder="@handle または URL" data-i18n-ph="search-ph" autocomplete="off">
+        <button id="mChAddBtn" class="m-ch-add-btn" aria-label="追加">
+          <i data-lucide="plus"></i>
+        </button>
+      </div>
+      <div id="mChAddStatus" class="m-ch-add-status"></div>
+    </div>
+  </div>
+
+  <!-- ヘッダー -->
+  <header class="m-header" id="mHeader">
+    <button class="m-ch-panel-btn" id="mChPanelBtn">
+      <span id="mChNameDisplay" data-i18n="m-select-channel">チャンネルを選択</span>
+      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="6 9 12 15 18 9"/>
+      </svg>
+    </button>
+    <button class="m-header-icon-btn" id="mSettingsBtn" aria-label="設定">
+      <i data-lucide="settings"></i>
+    </button>
+  </header>
+
+  <!-- カテゴリサブバー（一覧・投票・ランキング表示時のみ表示） -->
+  <div class="m-cat-bar" id="mCatBar" hidden>
+    <button class="m-cat-btn active" data-cat="videos" aria-label="動画">
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+    </button>
+    <button class="m-cat-btn" data-cat="shorts" aria-label="ショート">
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+    </button>
+    <button class="m-cat-btn" data-cat="live" aria-label="ライブ">
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="2"/><path d="M16.24 7.76a6 6 0 0 1 0 8.49m-8.48-.01a6 6 0 0 1 0-8.49m11.31-2.82a10 10 0 0 1 0 14.14m-14.14 0a10 10 0 0 1 0-14.14"/></svg>
+    </button>
+  </div>
+
+  <!-- メインコンテンツ領域 -->
+  <main class="m-content" id="mContent">
+
+    <!-- Tab1: 一覧（2列グリッド） -->
+    <div class="m-screen active" id="mScreenList">
+      <div id="mListGrid" class="m-list-grid"></div>
+      <div id="mListSentinel"></div>
+    </div>
+
+    <!-- Tab2: 投票（縦並び A/B） -->
+    <div class="m-screen" id="mScreenVote">
+      <div id="mVoteWrap" class="m-vote-wrap"></div>
+    </div>
+
+    <!-- Tab3: ランキング（1列リスト） -->
+    <div class="m-screen" id="mScreenRanking">
+      <div id="mRankList" class="m-rank-list"></div>
+    </div>
+
+    <!-- Tab4: リアクション（ReactionPin） -->
+    <div class="m-screen" id="mScreenReaction">
+      <!-- サムネイル + ピン重ね表示エリア -->
+      <div class="m-rs-img-wrap" id="mRsImgWrap">
+        <img id="mRsImg" src="" alt="" referrerpolicy="no-referrer" draggable="false">
+        <div class="reactions-heatmap-layer" id="mRsHeatmapLayer"></div>
+        <div class="reactions-pins-layer" id="mRsPinsLayer"></div>
+        <div class="reactions-my-pin-shadow" id="mRsMyPinShadow" hidden></div>
+        <div class="reactions-my-pin" id="mRsMyPin" hidden>
+          <svg id="mRsMyPinSvg" class="reactions-pin-svg reactions-my-pin-svg" viewBox="0 0 24 30" width="36" height="45" xmlns="http://www.w3.org/2000/svg">
+            <path class="pin-balloon" d="M12,29 C5.5,21.5 1.5,17 1.5,11 a10.5,10.5,0,0,1,21,0 C22.5,17 18.5,21.5 12,29 Z"/>
+            <g transform="translate(12 11) scale(0.38) translate(-12 -12)">
+              <path class="pin-icon" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+            </g>
+          </svg>
+          <span class="reactions-my-pin-label" data-i18n="reactions-you">あなた</span>
+        </div>
+        <div class="m-rs-placeholder" id="mRsPlaceholder"></div>
+      </div>
+
+      <!-- コントロールパネル（タイトル・メタ・モードボタン・スウォッチ・スライダー・トランスポート） -->
+      <div class="m-rs-panel" id="mRsToolbar" hidden>
+        <!-- タイトル + メタ -->
+        <div class="m-rs-info">
+          <a class="m-rs-video-title" id="mRsVideoTitle" href="#" target="_blank" rel="noopener noreferrer"></a>
+          <div class="m-rs-video-meta" id="mRsVideoMeta"></div>
+        </div>
+        <!-- モードボタン + カラースウォッチ -->
+        <div class="m-rs-controls-row">
+          <button class="m-rs-mode-btn active" id="mRsPinsBtn">
+            <svg viewBox="0 0 24 24" fill="currentColor" width="13" height="13"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+            <span data-i18n="reactions-pins">好き</span>
+          </button>
+          <button class="m-rs-mode-btn" id="mRsHeatmapBtn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>
+            <span data-i18n="reactions-heatmap">人気</span>
+          </button>
+          <button class="m-rs-mode-btn active" id="mRsTransportBtn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            <span data-i18n="reactions-transport">再生</span>
+          </button>
+          <div class="m-rs-swatches">
+            <button class="m-rs-swatch active" data-color="#ec4899" style="background:#ec4899"></button>
+            <button class="m-rs-swatch" data-color="#00b0f4" style="background:#00b0f4"></button>
+            <button class="m-rs-swatch" data-color="#57f287" style="background:#57f287"></button>
+            <button class="m-rs-swatch" data-color="#f59e0b" style="background:#f59e0b"></button>
+            <button class="m-rs-swatch" data-color="#a855f7" style="background:#a855f7"></button>
+          </div>
+        </div>
+        <!-- 最大ピン数スライダー -->
+        <div class="m-rs-slider-row">
+          <span class="m-rs-slider-label" data-i18n="reactions-max-pins">最大ピン数</span>
+          <input type="range" id="mRsPinCountSlider" class="m-rs-slider" min="0" max="30" step="1" value="12">
+          <span class="m-rs-slider-val" id="mRsPinCountVal">12</span>
+        </div>
+        <!-- トランスポート -->
+        <div class="m-rs-transport" id="mRsTransport">
+          <button class="m-rs-tbtn" id="mRsPlayBtn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          </button>
+          <button class="m-rs-tbtn" id="mRsStopBtn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
+          </button>
+          <div class="m-rs-progress-wrap">
+            <div class="m-rs-progress-track" id="mRsProgressTrack">
+              <div class="m-rs-progress-fill" id="mRsProgressFill"></div>
+              <div class="m-rs-progress-thumb" id="mRsProgressThumb"></div>
+            </div>
+          </div>
+          <div class="m-rs-time" id="mRsTimeLabel">0:00 / 0:00</div>
+        </div>
+      </div>
+
+      <!-- プレイリスト（ソートヘッダー + 一覧） -->
+      <div class="m-rs-playlist-section">
+        <div class="m-rs-playlist-header">
+          <div class="m-rs-sort-wrap" id="mRsSortWrap">
+            <button class="m-rs-sort-key" id="mRsSortKey">
+              <span id="mRsSortLabel" data-i18n="sort-views">再生数順</span>
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+            <div class="m-rs-sort-popup" id="mRsSortPopup">
+              <div class="m-rs-sort-item" data-sort="views" data-i18n="sort-views">再生数順</div>
+              <div class="m-rs-sort-item" data-sort="date" data-i18n="sort-date">投稿日順</div>
+              <div class="m-rs-sort-item" data-sort="rating" data-i18n="sort-rating">得票率順</div>
+              <div class="m-rs-sort-item" data-sort="random" data-i18n="sort-random">ランダム</div>
+            </div>
+            <button class="m-rs-sort-dir" id="mRsSortDir">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 16 4 4 4-4"/><path d="M7 20V4"/><path d="M11 4h10"/><path d="M11 8h7"/><path d="M11 12h4"/></svg>
+            </button>
+          </div>
+        </div>
+        <div id="mRsPlaylist" class="m-rs-playlist"></div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- ボトムナビゲーション -->
+  <nav class="m-bottom-nav" id="mBottomNav">
+    <button class="m-nav-btn active" data-tab="list">
+      <i data-lucide="layout-grid"></i>
+      <span data-i18n="tab-list">一覧</span>
+    </button>
+    <button class="m-nav-btn" data-tab="vote">
+      <i data-lucide="zap"></i>
+      <span data-i18n="tab-vote">投票</span>
+    </button>
+    <button class="m-nav-btn" data-tab="ranking">
+      <i data-lucide="trophy"></i>
+      <span data-i18n="tab-ranking">ランキング</span>
+    </button>
+    <button class="m-nav-btn" data-tab="reaction">
+      <i data-lucide="map-pin"></i>
+      <span data-i18n="tab-reactions">ここ好き</span>
+    </button>
+  </nav>
+
+  <!-- トースト通知コンテナ -->
+  <div id="app-toast-container" class="m-toast-container"></div>
+
+  <!-- 設定モーダル -->
+  <div id="mSettingsModal" class="m-settings-backdrop" hidden>
+    <div class="m-settings-sheet" role="dialog" aria-modal="true" aria-labelledby="mSettingsTitle">
+      <div class="m-settings-hdr">
+        <span class="m-settings-title" id="mSettingsTitle" data-i18n="settings-title">設定</span>
+        <button class="m-settings-close" id="mSettingsClose" aria-label="閉じる">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="m-settings-tabs" role="tablist">
+        <button class="m-settings-tab-btn active" data-tab="display" data-i18n="settings-tab-display">表示</button>
+        <button class="m-settings-tab-btn" data-tab="lang" data-i18n="settings-tab-lang">言語</button>
+        <button class="m-settings-tab-btn" data-tab="apikey" data-i18n="settings-tab-apikey">APIキー</button>
+        <button class="m-settings-tab-btn" data-tab="data" data-i18n="settings-tab-sidebar">データ</button>
+      </div>
+      <div class="m-settings-body">
+        <!-- 表示タブ -->
+        <div id="mSettingsPanel-display" class="m-settings-panel">
+          <div class="m-settings-field">
+            <div class="m-settings-field-lbl" data-i18n="settings-theme-label">テーマ</div>
+            <div class="m-settings-theme-btns">
+              <button class="m-settings-theme-btn" id="mSettingsThemeDark" data-i18n="settings-theme-dark">ダーク</button>
+              <button class="m-settings-theme-btn" id="mSettingsThemeLight" data-i18n="settings-theme-light">ライト</button>
+            </div>
+          </div>
+        </div>
+        <!-- 言語タブ -->
+        <div id="mSettingsPanel-lang" class="m-settings-panel" hidden>
+          <div id="mLangOptionList" class="m-lang-option-list"></div>
+        </div>
+        <!-- APIキータブ -->
+        <div id="mSettingsPanel-apikey" class="m-settings-panel" hidden>
+          <div class="m-settings-field">
+            <div class="m-settings-field-lbl" data-i18n="settings-apikey-label">YouTube APIキー</div>
+            <form class="m-apikey-wrap" autocomplete="off" onsubmit="return false">
+              <input id="mApikeyInput" class="m-apikey-input" type="password"
+                placeholder="AIzaSy..." autocomplete="new-password" spellcheck="false">
+              <button id="mApikeyToggle" class="m-apikey-toggle" type="button"
+                data-i18n-title="apikey-toggle-title" title="表示切り替え">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
+              </button>
+            </form>
+            <div id="mApikeyStatus" class="m-settings-status"></div>
+            <div class="m-apikey-actions">
+              <button id="mApikeySave" class="m-settings-action-btn m-settings-action-btn--primary" data-i18n="settings-apikey-save">保存</button>
+              <button id="mApikeyDelete" class="m-settings-action-btn m-settings-action-btn--danger" hidden data-i18n="settings-apikey-delete">削除</button>
+            </div>
+            <p class="m-settings-field-desc"><a href="https://www.youtube.com/watch?v=9VJ_7tVEDUQ" data-i18n-href="settings-apikey-guide-url" target="_blank" rel="noopener" class="m-settings-link" data-i18n="settings-apikey-guide">API キーの発行方法</a></p>
+          </div>
+          <div class="m-settings-field">
+            <label class="m-settings-toggle-row">
+              <input type="checkbox" id="mRssOnlyToggle">
+              <span class="m-settings-toggle-lbl" data-i18n="settings-rssonly-label">RSSのみ取得（最新15件）</span>
+            </label>
+            <p class="m-settings-field-desc" data-i18n="settings-rssonly-desc">APIキーを無視してRSSだけで取得。</p>
+          </div>
+        </div>
+        <!-- データタブ -->
+        <div id="mSettingsPanel-data" class="m-settings-panel" hidden>
+          <div class="m-settings-field">
+            <div class="m-settings-field-lbl" data-i18n="settings-data-label">バックアップ</div>
+            <div class="m-settings-data-btns">
+              <button id="mDataExportBtn" class="m-settings-action-btn" data-i18n="settings-data-export">エクスポート</button>
+              <button id="mDataImportBtn" class="m-settings-action-btn" data-i18n="settings-data-import">インポート</button>
+              <input type="file" id="mDataImportFile" accept=".json" style="display:none">
+            </div>
+            <div id="mDataStatus" class="m-settings-status"></div>
+            <p class="m-settings-field-desc" data-i18n="settings-data-desc">サイドバーのチャンネル・フォルダ構成を JSON ファイルとして保存・復元します。</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="../js/i18n.js"></script>
+  <script type="module" src="js/app.js"></script>
+
+</body>
+</html>
