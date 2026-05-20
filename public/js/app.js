@@ -3969,10 +3969,10 @@ document.getElementById('sidebarSearchBtn').addEventListener('click', () => {
     });
     heading.textContent = t('settings-tab-' + name);
     heading.dataset.tab = name;
+    if (name === 'lang' && typeof rebuildLangDialog === 'function') rebuildLangDialog();
     if (name === 'apikey') {
       showDisplayMode();
     }
-    if (name === 'lang' && typeof rebuildLangDialog === 'function') rebuildLangDialog();
   }
 
   // ---- 開閉 ----

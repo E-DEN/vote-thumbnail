@@ -266,10 +266,8 @@ function switchTab(tab) {
   const content = document.getElementById('mContent');
   if (CAT_TABS.has(tab)) {
     catBar.hidden = false;
-    content.classList.add('has-catbar');
   } else {
     catBar.hidden = true;
-    content.classList.remove('has-catbar');
   }
 
   renderCurrentTab();
@@ -846,6 +844,8 @@ function mRsStartLoop() {
 
 // 自分のピンを指定位置に表示（withAnim=true で落下アニメーション）
 function mRsShowMyPin(x, y, withAnim) {
+  // 好きOFF時はピンを表示しない
+  if (!_mRsPinsVisible) return;
   const pin    = document.getElementById('mRsMyPin');
   const svg    = document.getElementById('mRsMyPinSvg');
   const shadow = document.getElementById('mRsMyPinShadow');
@@ -924,6 +924,8 @@ async function mRsOpenMode(videoId) {
     img.onerror = function() { this.src = 'https://i.ytimg.com/vi/' + v.id + '/hqdefault.jpg'; };
     if (placeholder) placeholder.hidden = true;
     if (toolbar)  toolbar.hidden = false;
+    const seekEl = document.getElementById('mRsSeek');
+    if (seekEl) seekEl.hidden = !_mRsTransportVisible;
     if (titleEl)  { titleEl.textContent = v.title || ''; titleEl.href = 'https://www.youtube.com/watch?v=' + v.id; }
     mRsRenderVideoMeta(v);
   }
@@ -945,9 +947,11 @@ async function mRsOpenMode(videoId) {
     if (hm) { hm.style.visibility = 'visible'; hm.style.opacity = '1'; }
     mRsRenderHeatmap();
   }
-  if (_mRsPinsVisible) {
-    if (_mRsTransportVisible) _mRsStartPlayback();
-    else mRsStartLoop();
+  // トランスポートONなら必ず再生開始（ピン表示の有無に関わらず）
+  if (_mRsTransportVisible) {
+    _mRsStartPlayback();
+  } else if (_mRsPinsVisible) {
+    mRsStartLoop();
   }
 }
 
@@ -964,6 +968,8 @@ function renderReaction() {
     const toolbar     = document.getElementById('mRsToolbar');
     if (placeholder) { placeholder.hidden = false; placeholder.textContent = 'チャンネルを選択してください'; }
     if (toolbar) toolbar.hidden = true;
+    const seekElNoC = document.getElementById('mRsSeek');
+    if (seekElNoC) seekElNoC.hidden = true;
     document.getElementById('mRsImg').src = '';
     mRsRenderPlaylist();
     return;
@@ -976,6 +982,8 @@ function renderReaction() {
     if (placeholder) { placeholder.hidden = false; placeholder.textContent = 'このカテゴリには動画がありません'; }
     const toolbar = document.getElementById('mRsToolbar');
     if (toolbar) toolbar.hidden = true;
+    const seekElNoV = document.getElementById('mRsSeek');
+    if (seekElNoV) seekElNoV.hidden = true;
     return;
   }
   const targetId = (_mRsCurrentVideoId && pool.find(v => v.id === _mRsCurrentVideoId))
@@ -1213,8 +1221,17 @@ function mRsRenderPlaylist() {
     meta.textContent = parts.join(' · ');
     info.appendChild(title);
     info.appendChild(meta);
+    const moreBtn = document.createElement('button');
+    moreBtn.className = 'm-rs-playlist-more';
+    moreBtn.setAttribute('aria-label', '詳細');
+    moreBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>';
+    moreBtn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      mOpenVideoMenu(v);
+    });
     item.appendChild(thumb);
     item.appendChild(info);
+    item.appendChild(moreBtn);
     item.addEventListener('click', () => {
       if (v.id === _mRsCurrentVideoId) return;
       listEl.querySelectorAll('.m-rs-playlist-item').forEach(el => el.classList.remove('selected'));
@@ -1231,6 +1248,100 @@ function mRsRenderPlaylist() {
   });
 }
 
+// --- 動画概要シート ---
+let _mVmenuVideo = null;
+let _mVmenuDescExpanded = false;
+
+function mOpenVideoMenu(v) {
+  _mVmenuVideo = v;
+  _mVmenuDescExpanded = false;
+  const wrap = document.getElementById('mVideoMenu');
+  if (!wrap) return;
+
+  // タイトル
+  const titleEl = document.getElementById('mVmenuTitle');
+  if (titleEl) titleEl.textContent = v.title || '';
+
+  // 統計ブロック
+  const ratingEl  = document.getElementById('mVmenuRating');
+  const viewsEl    = document.getElementById('mVmenuViews');
+  const dateYearEl = document.getElementById('mVmenuDateYear');
+  const dateMDEl   = document.getElementById('mVmenuDateMD');
+  if (ratingEl) ratingEl.textContent = Math.round(getRating(v.id));
+  if (viewsEl) viewsEl.textContent = v.viewCount ? formatViewsShort(v.viewCount) : '-';
+  if (v.publishedAt) {
+    const d = new Date(v.publishedAt);
+    if (dateYearEl) dateYearEl.textContent = d.getFullYear() + '年';
+    if (dateMDEl)   dateMDEl.textContent   = (d.getMonth() + 1) + '月' + d.getDate() + '日';
+  } else {
+    if (dateYearEl) dateYearEl.textContent = '-';
+    if (dateMDEl)   dateMDEl.textContent   = '';
+  }
+
+  // 概要欄
+  const descEl  = document.getElementById('mVmenuDesc');
+  const moreBtn = document.getElementById('mVmenuMore');
+  if (descEl) {
+    descEl.classList.remove('expanded');
+    if (v.description === null || v.description === undefined) {
+      descEl.textContent = '';
+      descEl.hidden = true;
+      if (moreBtn) moreBtn.hidden = true;
+    } else if (v.description === '') {
+      descEl.textContent = 'この動画には説明が追加されていません。';
+      descEl.dataset.empty = '1';
+      descEl.hidden = false;
+      if (moreBtn) moreBtn.hidden = true;
+    } else {
+      descEl.removeAttribute('data-empty');
+      descEl.textContent = v.description;
+      descEl.hidden = false;
+      if (moreBtn) { moreBtn.textContent = 'もっと見る'; moreBtn.hidden = false; }
+    }
+  }
+
+  // チャンネル情報
+  const ch = channels && channels[state.currentChannelKey];
+  const chNameEl = document.getElementById('mVmenuChName');
+  if (chNameEl) chNameEl.textContent = ch?.title || '';
+
+  // 動画の詳細行
+  const detailDateEl   = document.getElementById('mVmenuDetailDateVal');
+  const detailViewsEl  = document.getElementById('mVmenuDetailViewsVal');
+  const detailRatingEl = document.getElementById('mVmenuDetailRatingVal');
+  if (detailDateEl)   detailDateEl.textContent   = v.publishedAt ? new Date(v.publishedAt).toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' }) : '';
+  if (detailViewsEl)  detailViewsEl.textContent  = v.viewCount   ? v.viewCount.toLocaleString() + ' 回' : '';
+  if (detailRatingEl) detailRatingEl.textContent = Math.round(getRating(v.id)).toLocaleString();
+
+  // シートのtopをサムネ下端にアンカー
+  const imgWrap = document.getElementById('mRsImgWrap');
+  if (imgWrap) {
+    wrap.style.setProperty('--desc-anchor', imgWrap.getBoundingClientRect().bottom + 'px');
+  }
+
+  // スクロール位置リセット
+  const body = document.getElementById('mDescBody');
+  if (body) body.scrollTop = 0;
+
+  wrap.hidden = false;
+  requestAnimationFrame(() => wrap.classList.add('open'));
+}
+
+function mCloseVideoMenu() {
+  const wrap = document.getElementById('mVideoMenu');
+  if (!wrap) return;
+  wrap.classList.remove('open');
+  const sheet = document.getElementById('mDescSheet');
+  if (sheet) {
+    sheet.addEventListener('transitionend', function handler() {
+      wrap.hidden = true;
+      sheet.removeEventListener('transitionend', handler);
+    }, { once: true });
+  } else {
+    wrap.hidden = true;
+  }
+}
+
 // --- テーマ切り替え ---
 const THEME_KEY = 'thumb-theme';
 
@@ -1245,19 +1356,15 @@ function applyTheme(theme) {
 }
 
 // --- 設定モーダル ---
-let _mSettingsCurrentTab = 'display';
 
 function openSettings() {
   const modal = document.getElementById('mSettingsModal');
   if (!modal) return;
   modal.hidden = false;
-  mSettingsSwitchTab(_mSettingsCurrentTab);
-  // テーマボタンの初期状態
+  mCloseSub(true);
   applyTheme(document.documentElement.dataset.theme || 'dark');
-  // APIキー入力欄を更新
   mApikeySettingsOpen();
-  // 言語リストを構築
-  mRebuildLangList();
+  mSyncLangSeg();
 }
 
 function closeSettings() {
@@ -1265,37 +1372,45 @@ function closeSettings() {
   if (modal) modal.hidden = true;
 }
 
-function mSettingsSwitchTab(name) {
-  _mSettingsCurrentTab = name;
-  document.querySelectorAll('.m-settings-tab-btn').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.tab === name);
-  });
-  ['display', 'lang', 'apikey', 'data'].forEach(tab => {
-    const panel = document.getElementById('mSettingsPanel-' + tab);
-    if (panel) panel.hidden = (tab !== name);
-  });
-  // 言語タブに切り替えた時はリストを再構築
-  if (name === 'lang') mRebuildLangList();
+function mSyncLangSeg() {
+  const cur = localStorage.getItem('thumb-lang') || 'ja';
+  const ja = document.getElementById('mLangBtnJa');
+  const en = document.getElementById('mLangBtnEn');
+  if (ja) ja.classList.toggle('active', cur === 'ja');
+  if (en) en.classList.toggle('active', cur === 'en');
 }
 
-function mRebuildLangList() {
-  const list = document.getElementById('mLangOptionList');
-  if (!list) return;
-  list.innerHTML = '';
-  const langs = (typeof getRegisteredLangs === 'function') ? getRegisteredLangs() : [];
-  const curLang = localStorage.getItem('thumb-lang') || 'ja';
-  langs.forEach(function(item) {
-    const btn = document.createElement('button');
-    btn.className = 'm-lang-option-item' + (item.code === curLang ? ' active' : '');
-    btn.innerHTML =
-      '<span class="m-lang-option-check">' + (item.code === curLang ? '\u2713' : '') + '</span>' +
-      '<span>' + item.label + '</span>';
-    btn.addEventListener('click', function() {
-      if (typeof applyLang === 'function') applyLang(item.code);
-      mRebuildLangList();
-    });
-    list.appendChild(btn);
+function mOpenSub(name) {
+  const sub = document.getElementById('mSettingsSub');
+  if (!sub) return;
+  const panels = ['apikey', 'data'];
+  panels.forEach(function(n) {
+    const p = document.getElementById('mSettingsPanel-' + n);
+    if (p) p.hidden = (n !== name);
   });
+  const titleEl = document.getElementById('mSetSubTitle');
+  if (titleEl) {
+    const labels = {
+      apikey: typeof t === 'function' ? t('settings-tab-apikey') : 'APIキー',
+      data: typeof t === 'function' ? t('settings-tab-sidebar') : 'データ'
+    };
+    titleEl.textContent = labels[name] || name;
+  }
+  if (name === 'apikey') mApikeySettingsOpen();
+  sub.classList.add('open');
+}
+
+function mCloseSub(instant) {
+  const sub = document.getElementById('mSettingsSub');
+  if (!sub) return;
+  if (instant) {
+    sub.style.transition = 'none';
+    sub.classList.remove('open');
+    sub.offsetHeight; // reflow
+    sub.style.transition = '';
+  } else {
+    sub.classList.remove('open');
+  }
 }
 
 function mApikeySettingsOpen() {
@@ -1315,6 +1430,13 @@ function mApikeySettingsOpen() {
 
 // --- 初期化 ---
 document.addEventListener('DOMContentLoaded', function() {
+  // ブラウザのスワイプバック（左端スワイプで戻る）を防止するためダミー履歴エントリを積む。
+  // popstate が発生した場合は再度積み直して同一ページに留まる。
+  history.pushState({ swipeGuard: true }, '');
+  window.addEventListener('popstate', function() {
+    history.pushState({ swipeGuard: true }, '');
+  });
+
   // テーマ・言語を localStorage から復元
   const savedTheme = localStorage.getItem(THEME_KEY) || 'dark';
   applyTheme(savedTheme);
@@ -1367,9 +1489,31 @@ document.addEventListener('DOMContentLoaded', function() {
     btn.addEventListener('click', () => switchTab(btn.dataset.tab));
   });
 
-  // イベントリスナー: リアクション画面タップ → ピンを打つ
+  // イベントリスナー: リアクション画面タップ → 再生トグル またはピン差し
   document.getElementById('mRsImgWrap').addEventListener('click', e => {
     if (!_mRsCurrentVideoId) return;
+    // 再生ON: タップは再生/一時停止トグル（ピン差しより優先）
+    if (_mRsTransportVisible) {
+      if (!_mRsPlaying) {
+        if (_mRsPlacedPins.length === 0 || _mRsCurrentTime >= _mRsDuration) {
+          _mRsStartPlayback();
+        } else {
+          _mRsPlaying   = true;
+          _mRsLastRafTs = null;
+          document.getElementById('mRsPlayBtn').innerHTML = _M_SVG_PAUSE;
+          _mRsRafId = requestAnimationFrame(_mRsTickFn);
+        }
+      } else {
+        if (_mRsRafId) { cancelAnimationFrame(_mRsRafId); _mRsRafId = null; }
+        _mRsPlaying   = false;
+        _mRsLastRafTs = null;
+        document.getElementById('mRsPlayBtn').innerHTML = _M_SVG_PLAY;
+      }
+      return;
+    }
+    // 好きOFF: ピン差し不可
+    if (!_mRsPinsVisible) return;
+    // 好きON & 再生OFF: ピン差し
     const wrap = document.getElementById('mRsImgWrap');
     const rect = wrap.getBoundingClientRect();
     const x = (e.clientX - rect.left) / rect.width;
@@ -1393,6 +1537,13 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('mRsPinsBtn').classList.toggle('active', _mRsPinsVisible);
     const pinsLayer = document.getElementById('mRsPinsLayer');
     if (pinsLayer) pinsLayer.style.visibility = _mRsPinsVisible ? '' : 'hidden';
+    const myPin    = document.getElementById('mRsMyPin');
+    const myPinShadow = document.getElementById('mRsMyPinShadow');
+    if (!_mRsPinsVisible) {
+      // ピンOFF: 自分のピンも非表示
+      if (myPin)       myPin.hidden = true;
+      if (myPinShadow) myPinShadow.hidden = true;
+    }
     if (_mRsPinsVisible && _mRsCurrentVideoId) {
       if (_mRsTransportVisible) _mRsStartPlayback();
       else mRsStartLoop();
@@ -1421,14 +1572,16 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('mRsTransportBtn').classList.toggle('active', _mRsTransportVisible);
     const transport = document.getElementById('mRsTransport');
     if (transport) transport.hidden = !_mRsTransportVisible;
-    if (_mRsCurrentVideoId && _mRsPinsVisible) {
+    const seek = document.getElementById('mRsSeek');
+    if (seek) seek.hidden = !_mRsTransportVisible;
+    if (_mRsCurrentVideoId) {
       if (_mRsTransportVisible) {
         _mRsStartPlayback();
       } else {
-        // トランスポートOFF: RAFを止めて通常ループに戻す
+        // トランスポートOFF: RAFを止めてピンONなら通常ループに戻す
         if (_mRsRafId) { cancelAnimationFrame(_mRsRafId); _mRsRafId = null; }
         _mRsPlaying = false;
-        mRsStartLoop();
+        if (_mRsPinsVisible) mRsStartLoop();
       }
     }
   });
@@ -1451,26 +1604,18 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   });
 
-  // イベントリスナー: 最大ピン数スライダー
+  // イベントリスナー: 最大ピン数セレクト
   (function() {
-    const slider = document.getElementById('mRsPinCountSlider');
-    const valEl  = document.getElementById('mRsPinCountVal');
-    if (!slider) return;
-    function _updateFill(v) {
-      const pct = (v - parseFloat(slider.min)) / (parseFloat(slider.max) - parseFloat(slider.min)) * 100;
-      slider.style.setProperty('--fill', pct.toFixed(1) + '%');
-    }
-    slider.value = _mRsMaxPins;
-    valEl.textContent = _mRsMaxPins;
-    _updateFill(_mRsMaxPins);
-    slider.addEventListener('input', function() {
-      const raw = parseInt(this.value, 10);
-      const snapped = PIN_SNAPS_M.reduce((a, b) => Math.abs(b - raw) < Math.abs(a - raw) ? b : a);
-      this.value = snapped;
-      _mRsMaxPins = snapped;
-      localStorage.setItem(LS_RS_MAX_PINS, snapped);
-      valEl.textContent = snapped;
-      _updateFill(snapped);
+    const sel = document.getElementById('mRsPinCountSelect');
+    if (!sel) return;
+    // localStorageの値に最も近いoptionを選択
+    const opts = Array.from(sel.options).map(o => parseInt(o.value, 10));
+    const nearest = opts.reduce((a, b) => Math.abs(b - _mRsMaxPins) < Math.abs(a - _mRsMaxPins) ? b : a);
+    sel.value = String(nearest);
+    _mRsMaxPins = nearest;
+    sel.addEventListener('change', function() {
+      _mRsMaxPins = parseInt(this.value, 10);
+      localStorage.setItem(LS_RS_MAX_PINS, _mRsMaxPins);
       // 再生中は再スタート、そうでなければ通常ループ再スタート
       if (_mRsPinsVisible && _mRsCurrentVideoId) {
         if (_mRsTransportVisible) _mRsStartPlayback();
@@ -1482,7 +1627,6 @@ document.addEventListener('DOMContentLoaded', function() {
   // イベントリスナー: 再生ボタン
   document.getElementById('mRsPlayBtn').addEventListener('click', e => {
     e.stopPropagation();
-    if (!_mRsPinsVisible) return;
     if (!_mRsPlaying) {
       if (_mRsPlacedPins.length === 0 || _mRsCurrentTime >= _mRsDuration) {
         _mRsStartPlayback();
@@ -1539,6 +1683,7 @@ document.addEventListener('DOMContentLoaded', function() {
       track.setPointerCapture(e.pointerId);
       _seek(e.clientX);
       e.preventDefault();
+      e.stopPropagation();
     });
     track.addEventListener('pointermove', e => { if (_dragging) _seek(e.clientX); });
     track.addEventListener('pointerup', () => { _dragging = false; track.classList.remove('dragging'); });
@@ -1575,19 +1720,116 @@ document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('mSettingsBtn').addEventListener('click', openSettings);
   document.getElementById('mSettingsClose').addEventListener('click', closeSettings);
 
+  // 動画詳細メニュー: タイトルタップ
+  document.getElementById('mRsVideoTitle').addEventListener('click', function(e) {
+    e.preventDefault();
+    const v = filteredVideos().find(vid => vid.id === _mRsCurrentVideoId);
+    if (v) mOpenVideoMenu(v);
+  });
+
+  // 動画概要シート: Xボタンで閉じる
+  document.getElementById('mVmenuClose').addEventListener('click', mCloseVideoMenu);
+
+  // 動画概要シート: もっと見る
+  document.getElementById('mVmenuMore').addEventListener('click', function() {
+    _mVmenuDescExpanded = !_mVmenuDescExpanded;
+    const descEl = document.getElementById('mVmenuDesc');
+    if (descEl) descEl.classList.toggle('expanded', _mVmenuDescExpanded);
+    this.textContent = _mVmenuDescExpanded ? '閉じる' : 'もっと見る';
+  });
+
+  // 動画概要シート: スワイプで閉じる
+  (function() {
+    const sheet = document.getElementById('mDescSheet');
+    const body  = document.getElementById('mDescBody');
+    if (!sheet || !body) return;
+    let _sy = 0, _ty = 0, _dragging = false;
+    sheet.addEventListener('touchstart', function(e) {
+      if (body.scrollTop > 0) return;
+      _sy = e.touches[0].clientY;
+      _ty = 0;
+      _dragging = true;
+      sheet.style.transition = 'none';
+    }, { passive: true });
+    sheet.addEventListener('touchmove', function(e) {
+      if (!_dragging) return;
+      if (body.scrollTop > 0) {
+        _dragging = false;
+        sheet.style.transform = '';
+        sheet.style.transition = '';
+        return;
+      }
+      const dy = e.touches[0].clientY - _sy;
+      if (dy > 0) {
+        _ty = dy;
+        sheet.style.transform = 'translateY(' + dy + 'px)';
+        e.preventDefault();
+      }
+    }, { passive: false });
+    sheet.addEventListener('touchend', function() {
+      if (!_dragging) return;
+      _dragging = false;
+      sheet.style.transition = '';
+      sheet.style.transform = '';
+      if (_ty > 80) mCloseVideoMenu();
+      _ty = 0;
+    });
+  })();
+
+  // 動画概要シート: YouTubeで開く
+  document.getElementById('mVmenuOpenYt').addEventListener('click', function() {
+    if (_mVmenuVideo) window.open('https://www.youtube.com/watch?v=' + _mVmenuVideo.id, '_blank', 'noopener');
+    mCloseVideoMenu();
+  });
+
+  // 動画詳細メニュー: URLをコピー
+  document.getElementById('mVmenuCopyUrl').addEventListener('click', function() {
+    if (!_mVmenuVideo) return;
+    const url = 'https://www.youtube.com/watch?v=' + _mVmenuVideo.id;
+    navigator.clipboard.writeText(url).then(() => {
+      showToast('URLをコピーしました');
+    }).catch(() => {
+      showToast('コピーに失敗しました', true);
+    });
+    mCloseVideoMenu();
+  });
+
+  // 動画詳細メニュー: チャンネルを開く
+  document.getElementById('mVmenuOpenChannel').addEventListener('click', function() {
+    const key = state.currentChannelKey;
+    if (key) {
+      const ch = channels[key];
+      const url = ch && ch.handle
+        ? 'https://www.youtube.com/' + ch.handle
+        : 'https://www.youtube.com/channel/' + key;
+      window.open(url, '_blank', 'noopener');
+    }
+    mCloseVideoMenu();
+  });
+
   // 設定モーダル: バックドロップクリックで閉じる
   document.getElementById('mSettingsModal').addEventListener('click', function(e) {
     if (e.target === this) closeSettings();
   });
 
-  // 設定モーダル: タブ切り替え
-  document.querySelectorAll('.m-settings-tab-btn').forEach(btn => {
-    btn.addEventListener('click', () => mSettingsSwitchTab(btn.dataset.tab));
-  });
-
   // 設定モーダル: テーマ切り替え
   document.getElementById('mSettingsThemeDark').addEventListener('click', () => applyTheme('dark'));
   document.getElementById('mSettingsThemeLight').addEventListener('click', () => applyTheme('light'));
+
+  // 設定モーダル: 言語切り替え
+  document.getElementById('mLangBtnJa').addEventListener('click', function() {
+    if (typeof applyLang === 'function') applyLang('ja');
+    mSyncLangSeg();
+  });
+  document.getElementById('mLangBtnEn').addEventListener('click', function() {
+    if (typeof applyLang === 'function') applyLang('en');
+    mSyncLangSeg();
+  });
+
+  // 設定モーダル: ドリルダウン
+  document.getElementById('mSetItemApikey').addEventListener('click', () => mOpenSub('apikey'));
+  document.getElementById('mSetItemData').addEventListener('click', () => mOpenSub('data'));
+  document.getElementById('mSetSubBack').addEventListener('click', () => mCloseSub(false));
 
   // 設定モーダル: APIキー 表示切り替え
   document.getElementById('mApikeyToggle').addEventListener('click', function() {
@@ -1699,29 +1941,24 @@ document.addEventListener('DOMContentLoaded', function() {
     b.classList.toggle('active', b.dataset.cat === state.currentCat);
   });
 
-  // リアクション: スウォッチ・スライダー・ソートの初期状態
+  // リアクション: スウォッチ・セレクト・ソートの初期状態
   document.querySelectorAll('.m-rs-swatch').forEach(b => {
     b.classList.toggle('active', b.dataset.color === _mRsPinColor);
   });
   (function() {
-    const slider = document.getElementById('mRsPinCountSlider');
-    const valEl  = document.getElementById('mRsPinCountVal');
-    if (slider && valEl) {
-      slider.value = _mRsMaxPins;
-      valEl.textContent = _mRsMaxPins;
-      const pct = (_mRsMaxPins / 30 * 100).toFixed(1);
-      slider.style.setProperty('--fill', pct + '%');
-    }
+    const sel = document.getElementById('mRsPinCountSelect');
+    if (sel) sel.value = String(_mRsMaxPins);
   })();
   _mRsUpdateSortUI();
-  // トランスポート行は初期表示
+  // トランスポート行とシークバーの初期表示
   const transport = document.getElementById('mRsTransport');
   if (transport) transport.hidden = !_mRsTransportVisible;
+  const seekBar = document.getElementById('mRsSeek');
+  if (seekBar) seekBar.hidden = !_mRsTransportVisible;
   document.getElementById('mRsTransportBtn').classList.toggle('active', _mRsTransportVisible);
   // サブバーを表示しコンテンツ領域を下げる
   const catBar = document.getElementById('mCatBar');
   catBar.hidden = false;
-  document.getElementById('mContent').classList.add('has-catbar');
 
   // 前回のチャンネルを復元
   const lastChannel = localStorage.getItem('m-last-channel');

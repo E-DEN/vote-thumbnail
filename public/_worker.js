@@ -123,6 +123,8 @@ async function handleApi(request, env, url, ctx) {
         await detectShortsCategories(newVideoIds, effectiveEnv);
         await fetchVideoDetails(newVideoIds, effectiveEnv);
       }
+      // banner_url をバックグラウンドで取得
+      ctx.waitUntil(fetchChannelDetails(channelId, effectiveEnv).catch(() => {}));
 
       const channel = { channel_id: channelId, handle: channelHandle, title, icon_url: iconUrl };
       return json({ ok: true, channel, cached: false, videoCount: newVideoIds.length });
@@ -181,9 +183,9 @@ async function handleApi(request, env, url, ctx) {
         if (apiResult?.apiKeyError) return json({ ok: true, added, rssStatus, apiKeyError: true });
         if (apiResult.videoIds.length > 0) apiAllVideoIds = apiResult.videoIds;
       }
-      // 新規動画 + 既存の未判定動画 (duration=0) をまとめてカテゴリ判定
+      // 新規動画 + 既存の未判定動画 (duration=0 または description 未取得) をまとめてカテゴリ判定
       const undetected = await env.DB.prepare(
-        "SELECT video_id FROM videos WHERE channel_id = ? AND duration = 0 LIMIT 20"
+        "SELECT video_id FROM videos WHERE channel_id = ? AND (duration = 0 OR description IS NULL) LIMIT 50"
       ).bind(channelId).all();
       const toDetect = [...new Set([...newVideoIds, ...undetected.results.map(r => r.video_id)])];
       // 新規・未判定動画の詳細取得 (少数のためレスポンス前に実行)
@@ -197,11 +199,13 @@ async function handleApi(request, env, url, ctx) {
         const validResult = await validateApiKey(effectiveEnv);
         if (validResult?.apiKeyError) return json({ ok: true, added, rssStatus, apiKeyError: true });
       }
+      // banner_url をバックグラウンドで取得
+      ctx.waitUntil(fetchChannelDetails(channelId, effectiveEnv).catch(() => {}));
       // 全動画の view_count/duration 更新 + shortCandidates 再判定はバックグラウンドで実行
       // (大量 subrequest が必要なためレスポンスをブロックしない)
       ctx.waitUntil((async () => {
         if (apiAllVideoIds.length > 0) {
-          await fetchVideoDetails(apiAllVideoIds, effectiveEnv).catch(() => {});
+          await fetchVideoDetails(apiAllVideoIds, effectiveEnv).catch(e => console.error('[bg fetchVideoDetails]', e));
         }
         // APIキーなし時のみ duration<=180 の動画を URL 判定で再確認
         // (APIキーあり時は fetchAllVideosViaApi のプレイリスト判定が正となるため不要)
@@ -274,8 +278,8 @@ async function handleApi(request, env, url, ctx) {
       const channelId = mVideos[1];
       const category  = url.searchParams.get('category');
       const videosSql = category
-        ? 'SELECT video_id, title, thumbnail_url, category, duration, view_count, published_at, rating, rd, volatility, wins, battles FROM videos WHERE channel_id = ? AND category = ? ORDER BY rating DESC, view_count DESC, published_at DESC'
-        : 'SELECT video_id, title, thumbnail_url, category, duration, view_count, published_at, rating, rd, volatility, wins, battles FROM videos WHERE channel_id = ? ORDER BY rating DESC, view_count DESC, published_at DESC';
+        ? 'SELECT video_id, title, thumbnail_url, category, duration, view_count, published_at, description, rating, rd, volatility, wins, battles FROM videos WHERE channel_id = ? AND category = ? ORDER BY rating DESC, view_count DESC, published_at DESC'
+        : 'SELECT video_id, title, thumbnail_url, category, duration, view_count, published_at, description, rating, rd, volatility, wins, battles FROM videos WHERE channel_id = ? ORDER BY rating DESC, view_count DESC, published_at DESC';
       const videosStmt = category
         ? env.DB.prepare(videosSql).bind(channelId, category)
         : env.DB.prepare(videosSql).bind(channelId);
@@ -398,6 +402,30 @@ async function handleApi(request, env, url, ctx) {
     console.error(e);
     return err('Internal Server Error', 500);
   }
+}
+
+// ---------------------------------------------------------------------------
+// チャンネル詳細取得 (banner_url)
+// ---------------------------------------------------------------------------
+async function fetchChannelDetails(channelId, env) {
+  if (!env.YOUTUBE_API_KEY) return;
+  const url = `https://www.googleapis.com/youtube/v3/channels?part=brandingSettings%2Csnippet&id=${channelId}&key=${env.YOUTUBE_API_KEY}`;
+  const res = await fetch(url);
+  if (!res.ok) return;
+  const data = await res.json();
+  const item = data.items?.[0];
+  if (!item) return;
+  const bannerUrl = item.brandingSettings?.image?.bannerExternalUrl ?? '';
+  const handle    = item.snippet?.customUrl ?? '';
+  const updates   = [];
+  const binds     = [];
+  if (bannerUrl) { updates.push('banner_url = ?'); binds.push(bannerUrl); }
+  if (handle)    { updates.push('handle = ?');     binds.push(handle);    }
+  if (updates.length === 0) return;
+  binds.push(channelId);
+  await env.DB.prepare(
+    `UPDATE channels SET ${updates.join(', ')} WHERE channel_id = ?`
+  ).bind(...binds).run();
 }
 
 // ---------------------------------------------------------------------------
@@ -655,16 +683,17 @@ async function fetchVideoDetails(videoIds, env) {
           item.snippet?.thumbnails?.medium?.url ||
           `https://i.ytimg.com/vi/${item.id}/maxresdefault.jpg`
         );
+        const description  = String(item.snippet?.description ?? '').slice(0, 5000);
         // liveBroadcastContent でライブ判定 (カテゴリはプレイリスト判定優先のため live のみ上書き)
         const lbc = item.snippet?.liveBroadcastContent ?? 'none';
         if (lbc === 'live' || lbc === 'upcoming') {
           await env.DB.prepare(
-            "UPDATE videos SET title = ?, thumbnail_url = ?, published_at = ?, view_count = ?, duration = ?, category = 'live' WHERE video_id = ?"
-          ).bind(title, thumbnailUrl, publishedAt, viewCount, duration, item.id).run();
+            "UPDATE videos SET title = ?, thumbnail_url = ?, published_at = ?, view_count = ?, duration = ?, description = ?, category = 'live' WHERE video_id = ?"
+          ).bind(title, thumbnailUrl, publishedAt, viewCount, duration, description, item.id).run();
         } else {
           await env.DB.prepare(
-            'UPDATE videos SET title = ?, thumbnail_url = ?, published_at = ?, view_count = ?, duration = ? WHERE video_id = ?'
-          ).bind(title, thumbnailUrl, publishedAt, viewCount, duration, item.id).run();
+            'UPDATE videos SET title = ?, thumbnail_url = ?, published_at = ?, view_count = ?, duration = ?, description = ? WHERE video_id = ?'
+          ).bind(title, thumbnailUrl, publishedAt, viewCount, duration, description, item.id).run();
         }
       }
     } catch { /* API障害時はスキップ */ }

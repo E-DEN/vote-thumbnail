@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS channels (
   handle        TEXT,                           -- @handle (@付きのまま保存)
   title         TEXT    NOT NULL DEFAULT '',
   icon_url      TEXT    NOT NULL DEFAULT '',
+  banner_url    TEXT    NOT NULL DEFAULT '',    -- チャンネルバナー画像URL
   created_at    TEXT    NOT NULL DEFAULT (datetime('now')),
   last_checked  TEXT,                           -- 最後にYouTube APIで更新した日時
   last_accessed TEXT,                           -- 最後にユーザーがアクセスした日時 (inactive判定用)
@@ -28,6 +29,7 @@ CREATE TABLE IF NOT EXISTS videos (
   category      TEXT    NOT NULL DEFAULT 'videos', -- 'videos' | 'shorts' | 'live'
   duration      INTEGER NOT NULL DEFAULT 0,         -- 秒
   view_count    INTEGER NOT NULL DEFAULT 0,
+  description   TEXT,                           -- 概要欄 (NULL=未取得, ''=説明なし)
   published_at  TEXT,
   -- Glicko-2 (videos テーブルが正。votes からの再計算は順序依存のため不可)
   rating        REAL    NOT NULL DEFAULT 1500,

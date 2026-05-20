@@ -36,6 +36,8 @@ button {
 }
 button:focus:not(:focus-visible) { outline: none; }
 img { -webkit-user-drag: none; user-drag: none; }
+svg { -webkit-user-drag: none; user-drag: none; pointer-events: none; }
+/* pointer-events: none は svg 自体へのクリックを親要素に委譲するため */
 
 /* --- ベース --- */
 html, body {
@@ -45,6 +47,8 @@ html, body {
   color: var(--text);
   font-family: 'Hiragino Kaku Gothic ProN', 'Meiryo', 'Segoe UI', Arial, sans-serif;
   -webkit-text-size-adjust: 100%;
+  touch-action: manipulation;    /* ダブルタップズーム防止 */
+  overscroll-behavior: none;     /* スワイプバック・バウンス防止 */
 }
 
 /* =====================
@@ -55,7 +59,7 @@ html, body {
   top: 0;
   left: 0;
   right: 0;
-  height: calc(54px + env(safe-area-inset-top));
+  height: calc(46px + env(safe-area-inset-top));
   padding-top: env(safe-area-inset-top);
   padding-left: 14px;
   padding-right: 14px;
@@ -76,11 +80,12 @@ html, body {
   background: none;
   border: none;
   color: var(--text);
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 600;
-  padding: 6px 8px;
+  padding: 4px 8px;
   border-radius: 6px;
-  max-width: calc(100% - 52px);
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   transition: background 0.15s;
 }
@@ -108,35 +113,22 @@ html, body {
 .m-header-icon-btn i { width: 18px; height: 18px; }
 
 /* =====================
-   カテゴリサブバー
+   カテゴリボタン（ヘッダー内右側）
 ===================== */
-.m-cat-bar {
-  position: fixed;
-  top: calc(54px + env(safe-area-inset-top));
-  left: 0;
-  right: 0;
-  height: 44px;
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
-  z-index: 90;
+.m-header-cats {
   display: flex;
   align-items: center;
-  justify-content: flex-start;
-  gap: 4px;
-  padding: 0 10px;
+  gap: 2px;
+  flex-shrink: 0;
 }
-.m-cat-bar[hidden] { display: none; }
-
-/* =====================
-   カテゴリボタン（アイコンのみ）
-===================== */
+.m-header-cats[hidden] { display: none; }
 .m-cat-btn {
-  width: 38px;
-  height: 38px;
+  width: 32px;
+  height: 32px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 8px;
+  border-radius: 6px;
   color: var(--text-muted);
   border: 1px solid transparent;
   transition: color 0.15s, background 0.15s, border-color 0.15s;
@@ -147,21 +139,18 @@ html, body {
   border-color: color-mix(in srgb, var(--accent) 30%, transparent);
 }
 .m-cat-btn:active:not(.active) { background: var(--surface2); }
-.m-cat-btn svg { width: 20px; height: 20px; pointer-events: none; }
+.m-cat-btn svg { width: 17px; height: 17px; pointer-events: none; }
 
 /* =====================
    メインコンテンツ領域
 ===================== */
 .m-content {
   position: fixed;
-  top: calc(54px + env(safe-area-inset-top));
+  top: calc(46px + env(safe-area-inset-top));
   bottom: calc(56px + env(safe-area-inset-bottom));
   left: 0;
   right: 0;
   overflow: hidden;
-}
-.m-content.has-catbar {
-  top: calc(98px + env(safe-area-inset-top));
 }
 
 /* =====================
@@ -224,9 +213,12 @@ html, body {
 .m-ch-panel.open { transform: translateX(0); }
 
 .m-ch-panel-header {
-  padding: 16px 16px 12px;
+  padding: 14px 16px 10px;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 .m-ch-panel-title {
   font-size: 13px;
@@ -616,6 +608,7 @@ html, body {
   isolation: isolate;
   cursor: crosshair;
   user-select: none;
+  touch-action: none;  /* ピンチ・パン・ダブルタップすべて無効。タップはJSで制御 */
 }
 .m-rs-img-wrap img {
   display: block;
@@ -636,6 +629,47 @@ html, body {
   pointer-events: none;
   text-align: center;
   padding: 12px;
+}
+
+/* シークバー（動画下端オーバーレイ・YouTube Mobile スタイル） */
+.m-rs-seek {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 16px 0 0;
+  z-index: 10;
+  cursor: pointer;
+}
+.m-rs-seek[hidden] { display: none; }
+.m-rs-seek .m-rs-progress-track {
+  border-radius: 0;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.25);
+}
+.m-rs-seek .m-rs-progress-fill {
+  border-radius: 0;
+}
+.m-rs-seek .m-rs-progress-thumb {
+  width: 10px;
+  height: 10px;
+}
+
+/* リアクション画面: 動画エリア固定 + 以下スクロール */
+#mScreenReaction.active {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* パネル＋プレイリストのスクロールボディ */
+.m-rs-scroll-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;           /* 垂直スクロールのみ。横スワイプ（戻る操作）禁止 */
+  overscroll-behavior-y: contain;
 }
 
 /* コントロールパネル */
@@ -702,15 +736,21 @@ html, body {
   color: #fff;
   border-color: var(--accent);
 }
+.m-rs-settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 12px 6px;
+  gap: 12px;
+}
 .m-rs-swatches {
   display: flex;
   align-items: center;
-  gap: 5px;
-  margin-left: auto;
+  gap: 8px;
 }
 .m-rs-swatch {
-  width: 14px;
-  height: 14px;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
   border: 2px solid transparent;
   cursor: pointer;
@@ -719,56 +759,30 @@ html, body {
 }
 .m-rs-swatch.active {
   border-color: var(--text);
-  transform: scale(1.25);
+  transform: scale(1.2);
 }
-
-/* 最大ピン数スライダー行 */
-.m-rs-slider-row {
+.m-rs-maxpins {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 3px 12px 6px;
+  gap: 6px;
+  flex-shrink: 0;
 }
-.m-rs-slider-label {
+.m-rs-maxpins-label {
   font-size: 10px;
   color: var(--text-muted);
   white-space: nowrap;
-  flex-shrink: 0;
 }
-.m-rs-slider {
-  flex: 1;
-  -webkit-appearance: none;
-  height: 4px;
-  border-radius: 2px;
-  background: var(--border);
-  outline: none;
-  cursor: pointer;
-  background: linear-gradient(to right, var(--accent) var(--fill, 40%), var(--border) var(--fill, 40%));
-}
-.m-rs-slider::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: var(--accent);
-  cursor: pointer;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.3);
-}
-.m-rs-slider::-moz-range-thumb {
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: var(--accent);
-  border: none;
-  cursor: pointer;
-}
-.m-rs-slider-val {
-  font-size: 11px;
-  font-weight: 700;
+.m-rs-select {
+  font-size: 13px;
+  font-weight: 600;
   color: var(--text);
-  min-width: 20px;
-  text-align: right;
-  flex-shrink: 0;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 3px 6px;
+  min-width: 52px;
+  text-align: center;
+  cursor: pointer;
 }
 
 /* トランスポート行 */
@@ -839,11 +853,8 @@ html, body {
 
 /* プレイリストセクション */
 .m-rs-playlist-section {
-  flex: 1;
-  min-height: 0;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
 }
 .m-rs-playlist-header {
   flex-shrink: 0;
@@ -912,9 +923,7 @@ html, body {
 .m-rs-sort-dir.asc svg { transform: scaleY(-1); }
 
 .m-rs-playlist {
-  flex: 1;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
+  /* スクロールは .m-rs-scroll-body が担当するため㎤指定不要 */
 }
 .m-rs-playlist-item {
   display: flex;
@@ -1117,7 +1126,7 @@ html, body {
 .m-settings-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 300;
+  z-index: 500;
   background: rgba(0,0,0,0.55);
   display: flex;
   align-items: flex-end;
@@ -1131,6 +1140,8 @@ html, body {
   display: flex;
   flex-direction: column;
   padding-bottom: env(safe-area-inset-bottom, 0px);
+  position: relative;
+  overflow: hidden;
 }
 .m-settings-hdr {
   display: flex;
@@ -1341,3 +1352,351 @@ html, body {
   color: var(--accent);
   flex-shrink: 0;
 }
+
+/* 設定ドリルダウン */
+#mSettingsMain {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+  min-height: 0;
+}
+.m-set-section-lbl {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  padding: 0 2px;
+  margin-bottom: 6px;
+  margin-top: 4px;
+}
+.m-set-seg {
+  display: flex;
+  background: var(--surface2);
+  border-radius: 10px;
+  padding: 3px;
+  margin-bottom: 14px;
+}
+.m-set-seg-btn {
+  flex: 1;
+  padding: 7px 4px;
+  font-size: 13px;
+  font-weight: 600;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.15s, color 0.15s;
+}
+.m-set-seg-btn.active {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.18);
+}
+.m-set-item {
+  display: flex;
+  align-items: center;
+  padding: 13px 14px;
+  background: var(--surface2);
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  cursor: pointer;
+  gap: 12px;
+  margin-bottom: 6px;
+  -webkit-tap-highlight-color: transparent;
+  transition: opacity 0.12s;
+}
+.m-set-item:active { opacity: 0.65; }
+.m-set-item-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.m-set-item-icon svg {
+  width: 16px;
+  height: 16px;
+}
+.m-set-icon-green {
+  background: rgba(61,214,140,0.12);
+  color: #3dd68c;
+}
+.m-set-icon-yel {
+  background: rgba(245,158,11,0.12);
+  color: #f59e0b;
+}
+.m-set-item-text { flex: 1; }
+.m-set-item-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+.m-set-item-sub {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+.m-set-item-chev {
+  color: var(--text-muted);
+}
+.m-set-item-chev svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* サブページスライドイン */
+.m-set-sub-page {
+  position: absolute;
+  inset: 0;
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  transform: translateX(100%);
+  transition: transform 0.22s cubic-bezier(0.32, 0, 0.2, 1);
+  z-index: 10;
+  border-radius: inherit;
+}
+.m-set-sub-page.open {
+  transform: translateX(0);
+}
+.m-set-sub-back {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.m-set-sub-back:active { background: var(--border); }
+
+/* 動画概要シート（YouTubeスタイル） */
+.m-desc-wrap[hidden] { display: none !important; }
+.m-desc-wrap {
+  position: fixed;
+  inset: 0;
+  z-index: 600;
+  pointer-events: none;
+}
+.m-desc-sheet {
+  position: absolute;
+  top: var(--desc-anchor, 0px);
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--surface);
+  border-radius: 16px 16px 0 0;
+  display: flex;
+  flex-direction: column;
+  pointer-events: all;
+  transform: translateY(100%);
+  transition: transform 0.28s cubic-bezier(0.32, 0, 0.2, 1);
+  overflow: hidden;
+}
+.m-desc-wrap.open .m-desc-sheet {
+  transform: translateY(0);
+}
+.m-desc-handle-bar {
+  flex-shrink: 0;
+  padding: 10px 0 6px;
+  display: flex;
+  justify-content: center;
+  touch-action: none;
+  cursor: grab;
+}
+.m-desc-handle {
+  width: 36px;
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+}
+.m-desc-hdr {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px 12px;
+}
+.m-desc-hdr-lbl {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+}
+.m-desc-hdr-close {
+  width: 36px;
+  height: 36px;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border-radius: 50%;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.1s;
+}
+.m-desc-hdr-close:active { background: var(--surface2); }
+.m-desc-hdr-close svg { width: 22px; height: 22px; }
+.m-desc-body {
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0 16px;
+  padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+}
+.m-desc-title {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.45;
+  color: var(--text);
+  margin-bottom: 14px;
+}
+.m-desc-stats {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.m-desc-stat-block {
+  flex: 1;
+  background: var(--surface2);
+  border-radius: 8px;
+  padding: 10px 8px;
+  text-align: center;
+}
+.m-desc-stat-val {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.2;
+}
+.m-desc-stat-lbl {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 3px;
+}
+.m-desc-text-wrap {
+  margin-bottom: 16px;
+  background: var(--surface2);
+  border-radius: 10px;
+  padding: 12px;
+}
+.m-desc-text {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text);
+  white-space: pre-line;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.m-desc-text.expanded {
+  display: block;
+  overflow: visible;
+}
+.m-desc-text[data-empty="1"] {
+  color: var(--text-muted);
+  font-style: italic;
+}
+.m-desc-more-btn {
+  display: block;
+  margin-top: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  background: none;
+  border: none;
+  padding: 2px 0;
+  cursor: pointer;
+  font-family: inherit;
+  -webkit-tap-highlight-color: transparent;
+}
+.m-desc-ch-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.m-desc-ch-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.m-desc-sep {
+  height: 1px;
+  background: var(--border);
+  margin: 8px 0;
+}
+.m-desc-action-item {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 13px 4px;
+  width: 100%;
+  font-size: 14px;
+  color: var(--text);
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.1s;
+}
+.m-desc-action-item:active { background: var(--surface2); border-radius: 8px; }
+.m-desc-action-item svg {
+  width: 20px;
+  height: 20px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+.m-desc-details { padding: 4px 0 8px; }
+.m-desc-detail-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 0;
+  font-size: 13px;
+  border-top: 1px solid var(--border);
+}
+.m-desc-detail-row svg {
+  width: 18px;
+  height: 18px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+.m-desc-detail-lbl { color: var(--text-muted); flex: 1; }
+.m-desc-detail-val { color: var(--text); font-weight: 500; }
+
+/* プレイリスト行の「...」ボタン */
+.m-rs-playlist-more {
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border-radius: 50%;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.1s;
+}
+.m-rs-playlist-more:active { background: var(--surface2); }
+.m-rs-playlist-more svg { width: 16px; height: 16px; pointer-events: none; }

@@ -7,9 +7,12 @@ export default {
   async scheduled(_event, env) {
     const batchSize = parseInt(env.CRON_BATCH_SIZE ?? '10');
     const { results } = await env.DB.prepare(
-      `SELECT channel_id FROM channels WHERE inactive = 0 AND (last_checked IS NULL OR last_checked < datetime('now', '-1 hour')) ORDER BY last_checked ASC LIMIT ${batchSize}`
+      `SELECT channel_id, banner_url FROM channels WHERE inactive = 0 AND (last_checked IS NULL OR last_checked < datetime('now', '-1 hour')) ORDER BY last_checked ASC LIMIT ${batchSize}`
     ).all();
     for (const ch of results) {
+      if (!ch.banner_url) {
+        await fetchChannelDetails(ch.channel_id, env).catch(() => {});
+      }
       const { newVideoIds } = await fetchAndSaveRss(ch.channel_id, env).catch(() => ({ newVideoIds: [] }));
       if (newVideoIds.length > 0) {
         await detectShortsCategories(newVideoIds, env).catch(() => {});
@@ -235,6 +238,7 @@ async function fetchVideoDetails(videoIds, env) {
         const viewCount    = parseInt(item.statistics?.viewCount ?? 0);
         const duration     = parseISODuration(item.contentDetails?.duration);
         const title        = String(item.snippet?.title ?? '').slice(0, 500);
+        const description  = String(item.snippet?.description ?? '').slice(0, 5000);
         const publishedAt  = item.snippet?.publishedAt ?? null;
         const thumbnailUrl = (
           item.snippet?.thumbnails?.maxres?.url ||
@@ -247,12 +251,12 @@ async function fetchVideoDetails(videoIds, env) {
         const isLiveStream = lbc === 'live' || lbc === 'upcoming' || !!item.liveStreamingDetails?.actualStartTime;
         if (isLiveStream) {
           await env.DB.prepare(
-            "UPDATE videos SET title = ?, thumbnail_url = ?, published_at = ?, view_count = ?, duration = ?, category = 'live' WHERE video_id = ?"
-          ).bind(title, thumbnailUrl, publishedAt, viewCount, duration, item.id).run();
+            "UPDATE videos SET title = ?, thumbnail_url = ?, description = ?, published_at = ?, view_count = ?, duration = ?, category = 'live' WHERE video_id = ?"
+          ).bind(title, thumbnailUrl, description, publishedAt, viewCount, duration, item.id).run();
         } else {
           await env.DB.prepare(
-            'UPDATE videos SET title = ?, thumbnail_url = ?, published_at = ?, view_count = ?, duration = ? WHERE video_id = ?'
-          ).bind(title, thumbnailUrl, publishedAt, viewCount, duration, item.id).run();
+            'UPDATE videos SET title = ?, thumbnail_url = ?, description = ?, published_at = ?, view_count = ?, duration = ? WHERE video_id = ?'
+          ).bind(title, thumbnailUrl, description, publishedAt, viewCount, duration, item.id).run();
         }
       }
     } catch { /* API障害時はスキップ */ }
@@ -260,3 +264,30 @@ async function fetchVideoDetails(videoIds, env) {
   return { ok: true };
 }
 
+// ---------------------------------------------------------------------------
+// YouTube Data API v3 でチャンネルバナーを取得して DB に保存
+// banner_url が空のチャンネルに対してのみ呼ぶことを想定
+// ---------------------------------------------------------------------------
+async function fetchChannelDetails(channelId, env) {
+  if (!env.YOUTUBE_API_KEY) return;
+  try {
+    const url = `https://www.googleapis.com/youtube/v3/channels?part=brandingSettings%2Csnippet&id=${channelId}&key=${env.YOUTUBE_API_KEY}`;
+    const res = await fetch(url);
+    if (!res.ok) return;
+    const data = await res.json();
+    const item = data.items?.[0];
+    if (!item) return;
+    const bannerUrl = item.brandingSettings?.image?.bannerExternalUrl ?? '';
+    // handle が未登録の場合は snippet.customUrl (@handle) で補完
+    const handle    = item.snippet?.customUrl ?? '';
+    const updates   = [];
+    const binds     = [];
+    if (bannerUrl) { updates.push('banner_url = ?'); binds.push(bannerUrl); }
+    if (handle)    { updates.push('handle = ?');     binds.push(handle);    }
+    if (updates.length === 0) return;
+    binds.push(channelId);
+    await env.DB.prepare(
+      `UPDATE channels SET ${updates.join(', ')} WHERE channel_id = ?`
+    ).bind(...binds).run();
+  } catch { /* サイレント失敗 */ }
+}

@@ -37,6 +37,7 @@ export function apiVideoToFrontend(v) {
     viewCount:   v.view_count  ?? 0,
     publishedAt: v.published_at ?? '',
     duration:    v.duration    ?? 0,
+    description: v.description ?? null,
   };
 }
 
