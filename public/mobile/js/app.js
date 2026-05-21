@@ -5,6 +5,8 @@ import { loadRating, applyVoteLocal, syncVoteToServer, getVotePair, setVotePair,
 import { loadChannels, saveChannels, loadVideosForChannel, saveVideosForChannel, fetchChannelVideos, filteredVideos } from '../../js/storage.js';
 import { formatViews, formatRelTime, formatViewsShort } from '../../js/format.js';
 
+const LS_LIST_SORT_DIR = 'thumb-sort-dir';
+
 // メタ表示用 SVGアイコン
 const _M_SVG_EYE  = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
 const _M_SVG_CLK  = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>';
@@ -295,7 +297,18 @@ function renderNoCat(containerId) {
 }
 
 // --- Tab1: 一覧 ---
+function _updateListSortUI() {
+  const sort = localStorage.getItem(LS_SORT) || 'views';
+  const dir  = localStorage.getItem(LS_LIST_SORT_DIR) || 'desc';
+  const dirBtn = document.getElementById('mListSortDir');
+  if (dirBtn) dirBtn.classList.toggle('asc', dir === 'asc');
+  document.querySelectorAll('#mListSortBar .m-rs-sort-chip').forEach(el => {
+    el.classList.toggle('active', el.dataset.sort === sort);
+  });
+}
+
 function renderList() {
+  _updateListSortUI();
   const grid = document.getElementById('mListGrid');
   const sentinel = document.getElementById('mListSentinel');
   grid.innerHTML = '';
@@ -320,6 +333,7 @@ function renderList() {
 
 function _buildListPool() {
   const sort = localStorage.getItem(LS_SORT) || 'views';
+  const dir  = localStorage.getItem(LS_LIST_SORT_DIR) || 'desc';
   const pool = filteredVideos().slice();
   if (sort === 'date') {
     pool.sort((a, b) => (b.publishedAt || '') < (a.publishedAt || '') ? -1 : 1);
@@ -329,6 +343,7 @@ function _buildListPool() {
     // views (デフォルト)
     pool.sort((a, b) => (b.viewCount || 0) - (a.viewCount || 0));
   }
+  if (dir === 'asc') pool.reverse();
   return pool;
 }
 
@@ -363,10 +378,14 @@ function _appendListPage() {
     const metaParts = [];
     if (v.viewCount) metaParts.push('<span class="m-meta-item">' + _M_SVG_EYE + formatViewsShort(v.viewCount) + '</span>');
     if (v.publishedAt) metaParts.push('<span class="m-meta-item">' + _M_SVG_CLK + formatRelTime(v.publishedAt) + '</span>');
+    metaParts.push('<span class="m-meta-item">' + _M_SVG_STAR + Math.round(getRating(v.id)) + '</span>');
+    if (_mRsMyPins[v.id]) {
+      metaParts.push('<span class="m-meta-item m-meta-pinned">' + _M_SVG_PIN + '<span class="m-meta-pin-dot" style="background:' + (_mRsPinColor || '#ec4899') + '"></span></span>');
+    }
     meta.innerHTML = metaParts.join('');
 
     info.appendChild(title);
-    if (metaParts.length) info.appendChild(meta);
+    info.appendChild(meta);
     item.appendChild(thumb);
     item.appendChild(info);
 
@@ -980,10 +999,13 @@ async function mRsOpenMode(videoId) {
     if (hm) { hm.style.visibility = 'visible'; hm.style.opacity = '1'; }
     mRsRenderHeatmap();
   }
-  // トランスポートONなら必ず再生開始（ピン表示の有無に関わらず）
-  if (_mRsTransportVisible) {
-    _mRsStartPlayback();
-  } else if (_mRsPinsVisible) {
+  // 初期表示は再生なし。ピンアニメーションのみ開始（ユーザーが再生ボタンを押したときに開始）
+  _mRsCurrentTime  = 0;
+  _mRsDuration     = 0;
+  _mRsEmittedCount = 0;
+  _mRsPlacedPins   = [];
+  _mRsUpdateProgressUI();
+  if (_mRsPinsVisible) {
     mRsStartLoop();
   }
 }
@@ -1262,8 +1284,6 @@ function _mRsBuildSortedPool() {
       ? getRating(a.id) - getRating(b.id)
       : getRating(b.id) - getRating(a.id)
     );
-  } else {
-    pool.sort(() => Math.random() - 0.5);
   }
   return pool;
 }
@@ -1271,10 +1291,7 @@ function _mRsBuildSortedPool() {
 function _mRsUpdateSortUI() {
   const dirBtn = document.getElementById('mRsSortDir');
   if (dirBtn) dirBtn.classList.toggle('asc', _mRsSortDir === 'asc');
-  const labels = { views: '再生数順', date: '投稿日順', rating: '得票率順', random: 'ランダム' };
-  const labelEl = document.getElementById('mRsSortLabel');
-  if (labelEl) labelEl.textContent = labels[_mRsSortOrder] || '再生数順';
-  document.querySelectorAll('.m-rs-sort-item').forEach(el => {
+  document.querySelectorAll('.m-rs-sort-chip').forEach(el => {
     el.classList.toggle('active', el.dataset.sort === _mRsSortOrder);
   });
 }
@@ -1305,10 +1322,10 @@ function mRsRenderPlaylist() {
     const meta = document.createElement('div');
     meta.className = 'm-rs-playlist-meta';
     const parts = [];
-    const _rating = Math.round(getRating(v.id));
-    parts.push('<span class="m-meta-item">' + _M_SVG_STAR + _rating + '</span>');
     if (v.viewCount)   parts.push('<span class="m-meta-item">' + _M_SVG_EYE + formatViewsShort(v.viewCount) + '</span>');
     if (v.publishedAt) parts.push('<span class="m-meta-item">' + _M_SVG_CLK + formatRelTime(v.publishedAt) + '</span>');
+    const _rating = Math.round(getRating(v.id));
+    parts.push('<span class="m-meta-item">' + _M_SVG_STAR + _rating + '</span>');
     if (_mRsMyPins[v.id]) {
       const _pinColor = _mRsPinColor || '#ec4899';
       parts.push('<span class="m-meta-item m-meta-pinned">' + _M_SVG_PIN + '<span class="m-meta-pin-dot" style="background:' + _pinColor + '"></span></span>');
@@ -1575,6 +1592,30 @@ document.addEventListener('DOMContentLoaded', function() {
     btn.addEventListener('click', () => switchTab(btn.dataset.tab));
   });
 
+  // イベントリスナー: 一覧画面ソート
+  (function() {
+    const bar    = document.getElementById('mListSortBar');
+    const dirBtn = document.getElementById('mListSortDir');
+    if (!bar) return;
+    bar.addEventListener('click', e => {
+      const chip = e.target.closest('.m-rs-sort-chip');
+      if (chip) {
+        localStorage.setItem(LS_SORT, chip.dataset.sort);
+        _updateListSortUI();
+        renderList();
+      }
+    });
+    if (dirBtn) {
+      dirBtn.addEventListener('click', () => {
+        const dir = localStorage.getItem(LS_LIST_SORT_DIR) || 'desc';
+        localStorage.setItem(LS_LIST_SORT_DIR, dir === 'desc' ? 'asc' : 'desc');
+        _updateListSortUI();
+        renderList();
+      });
+    }
+    _updateListSortUI();
+  })();
+
   // イベントリスナー: リアクション画面タップ → 再生トグル またはピン差し
   document.getElementById('mRsImgWrap').addEventListener('click', e => {
     if (!_mRsCurrentVideoId) return;
@@ -1710,6 +1751,8 @@ document.addEventListener('DOMContentLoaded', function() {
         _mRsUpdatePlayBtnUI();
         if (savedTime > 0 && savedTime < _mRsDuration) {
           _mRsSeekTo(savedTime);
+        } else if (_mRsPinsVisible) {
+          mRsStartLoop(); // ピンをリストア（時間0または終端の場合はループアニメーションで復元）
         }
       } else {
         // トランスポートOFF: RAFを止めてピンONなら通常ループに戻す
@@ -1898,35 +1941,18 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   });
 
-  // パネル高さを CSS 変数 --rs-panel-h に同期（フローティングソートバーの top 計算に使用）
+  // イベントリスナー: ソートセクション（設定パネル内）
   (function() {
-    const toolbar = document.getElementById('mRsToolbar');
-    if (!toolbar || typeof ResizeObserver === 'undefined') return;
-    const ro = new ResizeObserver(() => {
-      document.documentElement.style.setProperty('--rs-panel-h', toolbar.offsetHeight + 'px');
-    });
-    ro.observe(toolbar);
-  })();
-
-  // イベントリスナー: ソートポップアップ（フローティングバー）
-  (function() {
-    const key   = document.getElementById('mRsSortKey');
-    const popup = document.getElementById('mRsSortPopup');
-    if (!key || !popup) return;
-    key.addEventListener('click', e => {
-      e.stopPropagation();
-      popup.classList.toggle('open');
-    });
-    popup.addEventListener('click', e => {
-      const item = e.target.closest('.m-rs-sort-item');
-      if (!item) return;
-      _mRsSortOrder = item.dataset.sort;
+    const section = document.getElementById('mRsSortSection');
+    if (!section) return;
+    section.addEventListener('click', e => {
+      const chip = e.target.closest('.m-rs-sort-chip');
+      if (!chip) return;
+      _mRsSortOrder = chip.dataset.sort;
       localStorage.setItem(LS_RS_SORT, _mRsSortOrder);
       _mRsUpdateSortUI();
       mRsRenderPlaylist();
-      popup.classList.remove('open');
     });
-    document.addEventListener('click', () => popup.classList.remove('open'));
   })();
   document.getElementById('mRsSortDir').addEventListener('click', () => {
     _mRsSortDir = _mRsSortDir === 'desc' ? 'asc' : 'desc';

@@ -734,12 +734,6 @@ function _buildSortedPool() {
       var cmp = getRating(b.id) - getRating(a.id);
       return asc ? -cmp : cmp;
     });
-  } else {
-    // ランダム: Fisher–Yates
-    for (var i = pool.length - 1; i > 0; i--) {
-      var j = Math.floor(Math.random() * (i + 1));
-      var tmp = pool[i]; pool[i] = pool[j]; pool[j] = tmp;
-    }
   }
   return pool;
 }
@@ -3342,7 +3336,6 @@ function init() {
     views:  { label: '再生数順', hasDir: true },
     date:   { label: '投稿日順', hasDir: true },
     rating: { label: '得票率順', hasDir: true },
-    random: { label: 'ランダム', hasDir: false },
   };
   function _updateSortUI() {
     var info = SORT_INFO[_listSortOrder] || SORT_INFO.views;

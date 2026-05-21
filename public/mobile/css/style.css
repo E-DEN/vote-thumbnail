@@ -380,6 +380,31 @@ html, body {
 /* =====================
    Tab1: 一覧
 ===================== */
+#mScreenList {
+  overflow: hidden;
+}
+.m-list-area {
+  position: relative;
+  height: 100%;
+  overflow: hidden;
+}
+.m-list-scroll-body {
+  height: 100%;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+/* 一覧画面ソートバー（スティッキー） */
+.m-list-sort-bar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
 .m-list-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -652,7 +677,7 @@ html, body {
 .m-rs-seek[hidden] { display: none; }
 .m-rs-seek.faded { opacity: 0; pointer-events: none; }
 .m-rs-seek-info {
-  height: 44px;
+  height: 24px;
   display: flex;
   align-items: center;
   justify-content: flex-start;
@@ -665,11 +690,7 @@ html, body {
   font-variant-numeric: tabular-nums;
   user-select: none;
   display: inline-block;
-  background: rgba(0, 0, 0, 0.28);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  border-radius: 6px;
-  padding: 2px 7px;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9), 0 0 10px rgba(0, 0, 0, 0.6);
   visibility: hidden;
 }
 .m-rs-seek-time.visible {
@@ -759,12 +780,11 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: opacity 0.18s ease;
   pointer-events: none;
 }
-.m-rs-pause-icon { opacity: 0; }
-.m-rs-overlay-play-btn.playing .m-rs-play-icon { opacity: 0; }
-.m-rs-overlay-play-btn.playing .m-rs-pause-icon { opacity: 1; }
+.m-rs-pause-icon { display: none; }
+.m-rs-overlay-play-btn.playing .m-rs-play-icon { display: none; }
+.m-rs-overlay-play-btn.playing .m-rs-pause-icon { display: flex; }
 
 /* リアクション画面: 動画エリア固定 + 以下スクロール */
 #mScreenReaction.active {
@@ -827,14 +847,36 @@ html, body {
   gap: 6px;
 }
 
-/* モードボタン + スウォッチ行 */
+/* モードボタン + ソート行 */
 .m-rs-controls-row {
   display: flex;
   align-items: center;
   gap: 4px;
   padding: 5px 10px;
   flex-wrap: nowrap;
+  justify-content: space-between;
 }
+.m-rs-mode-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.m-rs-sort-section {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--border);
+}
+.m-rs-sort-chips {
+  display: flex;
+  gap: 4px;
+  flex: 1;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.m-rs-sort-chips::-webkit-scrollbar { display: none; }
 .m-rs-mode-btn {
   display: flex;
   align-items: center;
@@ -857,9 +899,8 @@ html, body {
   color: #fff;
   border-color: var(--accent);
 }
-/* 設定ボタン（モードボタン行の右端） */
+/* 設定ボタン */
 .m-rs-settings-btn {
-  margin-left: auto;
   width: 30px;
   height: 30px;
   display: flex;
@@ -877,16 +918,36 @@ html, body {
 }
 .m-rs-settings-btn:active { background: var(--surface2); }
 
-/* 設定パネル（アコーディオン） */
+.m-rs-sort-chip {
+  padding: 3px 10px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid var(--border);
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+.m-rs-sort-chip.active { color: var(--accent); border-color: var(--accent); }
+.m-rs-sort-chip:active { background: var(--surface2); }
+
+/* 設定パネル（アコーディオン）*/
 .m-rs-settings-panel {
-  overflow: hidden;
-  max-height: 0;
+  display: grid;
+  grid-template-rows: 0fr;
   opacity: 0;
-  transition: max-height 0.28s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.22s ease;
+  transition: grid-template-rows 0.18s ease, opacity 0.15s ease;
 }
 .m-rs-settings-panel.open {
-  max-height: 300px;
+  grid-template-rows: 1fr;
   opacity: 1;
+}
+.m-rs-settings-inner {
+  overflow: hidden;
+  min-height: 0;
 }
 .m-rs-setting-item {
   display: flex;
@@ -996,30 +1057,6 @@ html, body {
   transform: translateX(16px);
 }
 
-/* トランスポート行 */
-.m-rs-transport {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 10px 7px;
-}
-.m-rs-transport[hidden] { display: none; }
-.m-rs-tbtn {
-  width: 28px;
-  height: 28px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: transparent;
-  color: var(--text-muted);
-  flex-shrink: 0;
-  cursor: pointer;
-  transition: color 0.12s, background 0.12s;
-}
-.m-rs-tbtn svg { width: 14px; height: 14px; pointer-events: none; }
-.m-rs-tbtn:active { background: var(--surface2); color: var(--text); }
 .m-rs-progress-wrap {
   flex: 1;
   min-width: 0;
@@ -1069,23 +1106,7 @@ html, body {
   flex: 1;
   min-height: 0;
 }
-/* ソートバー（リスト上にフローティング。PC版 #listViewBar と同じ構造） */
-.m-rs-playlist-header {
-  position: absolute;
-  right: 8px;
-  top: calc(var(--rs-panel-h, 60px) + 6px);
-  z-index: 4;
-  height: 30px;
-  display: flex;
-  align-items: center;
-  padding: 0 4px;
-  background: var(--view-bar-bg);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  border: 1px solid var(--border);
-  border-radius: 9px;
-  box-shadow: var(--view-bar-shadow);
-}
+
 .m-rs-sort-wrap {
   position: relative;
   display: flex;
@@ -1139,8 +1160,7 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid var(--border);
-  border-radius: 5px;
+  border: none;
   background: transparent;
   color: var(--text-muted);
   cursor: pointer;
@@ -1150,8 +1170,7 @@ html, body {
 .m-rs-sort-dir.asc svg { transform: scaleY(-1); }
 
 .m-rs-playlist {
-  /* フローティングバー分の余白（バー top(6px) + 高さ(30px) + 下余白(8px) = 44px） */
-  padding-top: 44px;
+  padding-top: 0;
 }
 .m-rs-playlist-item {
   display: flex;
@@ -1186,7 +1205,7 @@ html, body {
   font-size: 12px;
   line-height: 1.4;
   display: -webkit-box;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 1;
   -webkit-box-orient: vertical;
   overflow: hidden;
   color: var(--text);
