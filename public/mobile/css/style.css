@@ -435,16 +435,18 @@ html, body {
   position: relative;
   height: 100%;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 .m-list-scroll-body {
-  height: 100%;
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
 }
-/* 一覧画面ソートバー（スティッキー） */
+/* 一覧画面ソートバー */
 .m-list-sort-bar {
-  position: sticky;
-  top: 0;
+  flex-shrink: 0;
   z-index: 10;
   display: flex;
   align-items: center;
@@ -1397,6 +1399,10 @@ html, body {
 @keyframes reactionsPinFloat {
   0%, 100% { transform: translate(-50%, -100%); }
   50%       { transform: translate(-50%, calc(-100% - 5px)); }
+}
+.rs-seeking .reactions-pin {
+  animation: none !important;
+  transform: translate(-50%, -100%) !important;
 }
 @keyframes reactionsPinColorCycle {
   0%, 100% { fill: var(--pin-c0, #ec4899); }

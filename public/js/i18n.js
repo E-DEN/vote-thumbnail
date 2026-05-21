@@ -162,9 +162,9 @@ registerLang('ja', '日本語', {
   'theater-close':  'プレイリストを表示',
   'fullscreen-title': 'フルスクリーン',
   // ソート
-  'sort-views':  '再生数順',
-  'sort-date':   '投稿日順',
-  'sort-rating': '得票率順',
+  'sort-views':  '再生数',
+  'sort-date':   '投稿日',
+  'sort-rating': '得票率',
   'sort-random': 'ランダム',
   // 表示フォーマット
   'views-100m': '{n}億回視聴',

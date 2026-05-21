@@ -19,6 +19,20 @@ const _M_SVG_FULLSCREEN      = '<svg viewBox="0 0 24 24" fill="currentColor" wid
 const _M_SVG_FULLSCREEN_EXIT = '<svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z"/></svg>';
 const _M_SVG_PIN  = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z"/><circle cx="12" cy="10" r="3"/></svg>';
 
+// --- メタ構築（共通ヘルパー：PC版の _buildVideoMeta / _buildPinDot に相当）---
+function _mBuildMeta(v) {
+  const items = [];
+  if (v.viewCount)   items.push('<span class="m-meta-item">' + _M_SVG_EYE + formatViewsShort(v.viewCount) + '</span>');
+  if (v.publishedAt) items.push('<span class="m-meta-item">' + _M_SVG_CLK + formatRelTime(v.publishedAt) + '</span>');
+  items.push('<span class="m-meta-item">' + _M_SVG_STAR + Math.round(getRating(v.id)) + '</span>');
+  return items.join('');
+}
+function _mBuildPinDot(v) {
+  if (!_mRsMyPins[v.id]) return '';
+  return '<span class="m-meta-item m-meta-pinned">' + _M_SVG_PIN
+    + '<span class="m-meta-pin-dot" style="background:' + (_mRsPinColor || '#ec4899') + '"></span></span>';
+}
+
 // オブジェクトエイリアス（参照が同一なので変更は state に反映される）
 const ratingData = state.ratingData;
 const channels   = state.channels;
@@ -107,6 +121,7 @@ async function selectChannel(key) {
   });
 
   // アクティブなタブを再描画
+  await loadMyPins();
   renderCurrentTab();
 
   // サーバーからチャンネルメタを更新（バックグラウンド）
@@ -383,11 +398,11 @@ function renderNoCat(containerId) {
 function _updateListSortUI() {
   const sort = localStorage.getItem(LS_SORT) || 'rating';
   const dir  = localStorage.getItem(LS_LIST_SORT_DIR) || 'desc';
-  const dirBtn = document.getElementById('mListSortDir');
-  if (dirBtn) dirBtn.classList.toggle('asc', dir === 'asc');
   document.querySelectorAll('#mListSortBar .m-rs-sort-chip').forEach(el => {
     el.classList.toggle('active', el.dataset.sort === sort);
   });
+  const dirBtn = document.getElementById('mListSortDir');
+  if (dirBtn) dirBtn.classList.toggle('asc', dir === 'asc');
 }
 
 function renderList() {
@@ -464,14 +479,7 @@ function _appendListPage() {
 
     const meta = document.createElement('div');
     meta.className = 'm-list-meta';
-    const metaParts = [];
-    if (v.viewCount) metaParts.push('<span class="m-meta-item">' + _M_SVG_EYE + formatViewsShort(v.viewCount) + '</span>');
-    if (v.publishedAt) metaParts.push('<span class="m-meta-item">' + _M_SVG_CLK + formatRelTime(v.publishedAt) + '</span>');
-    metaParts.push('<span class="m-meta-item">' + _M_SVG_STAR + Math.round(getRating(v.id)) + '</span>');
-    if (_mRsMyPins[v.id]) {
-      metaParts.push('<span class="m-meta-item m-meta-pinned">' + _M_SVG_PIN + '<span class="m-meta-pin-dot" style="background:' + (_mRsPinColor || '#ec4899') + '"></span></span>');
-    }
-    meta.innerHTML = metaParts.join('');
+    meta.innerHTML = _mBuildMeta(v) + _mBuildPinDot(v);
 
     info.appendChild(title);
     info.appendChild(meta);
@@ -642,9 +650,8 @@ function renderRanking() {
     const score = document.createElement('div');
     score.className = 'm-rank-score';
     const scoreParts = ['<span class="m-meta-item">' + _M_SVG_STAR + Math.round(rating) + '</span>'];
-    if (battles > 0) scoreParts.push(wins + '勝 / ' + battles + '戦 (' + wr + '%)');
-    if (v.viewCount) scoreParts.push('<span class="m-meta-item">' + _M_SVG_EYE + formatViewsShort(v.viewCount) + '</span>');
-    score.innerHTML = scoreParts.join('');
+    if (battles > 0) scoreParts.push('<span>' + wins + '勝 / ' + battles + '戦 (' + wr + '%)</span>');
+    score.innerHTML = scoreParts.join('') + _mBuildPinDot(v);
 
     const barBg = document.createElement('div');
     barBg.className = 'm-rank-bar-bg';
@@ -687,6 +694,21 @@ let _mRsMyPins         = {};
 let _mRsPinColor       = localStorage.getItem('reactions-pin-color') || '#ec4899';
 let _mRsMyPinOnDrop    = null;
 let _mRsMyPinAnimRaf   = 0;
+
+// 自分のピン一括取得（PC版 loadMyPins と同等）
+async function loadMyPins() {
+  try {
+    const resp = await fetch('/api/pins/my?session=' + encodeURIComponent(_mRsSessionId));
+    if (!resp.ok) return;
+    const data = await resp.json();
+    (data.pins || []).forEach(p => {
+      if (!_mRsMyPins[p.video_id]) {
+        _mRsMyPins[p.video_id] = { x: p.x, y: p.y };
+      }
+    });
+  } catch {}
+}
+
 // ピンドラッグ状態
 let _mRsPinDragging  = false;
 let _mRsPinDragId    = null;
@@ -1088,13 +1110,25 @@ async function mRsOpenMode(videoId) {
     if (hm) { hm.style.visibility = 'visible'; hm.style.opacity = '1'; }
     mRsRenderHeatmap();
   }
-  // 初期表示は再生なし。ピンアニメーションのみ開始（ユーザーが再生ボタンを押したときに開始）
+  // サムネイルのロードを待ってからピンを開始（黒画面にピンが降るのを防ぐ）
+  const imgEl = document.getElementById('mRsImg');
+  if (imgEl && !imgEl.complete) {
+    await new Promise(resolve => {
+      const done = () => resolve();
+      imgEl.addEventListener('load',  done, { once: true });
+      imgEl.addEventListener('error', done, { once: true });
+      setTimeout(resolve, 2000);
+    });
+  }
+  if (_mRsCurrentVideoId !== videoId) return; // ロード待ち中に動画が切り替わっていたら無視
   _mRsCurrentTime  = 0;
   _mRsDuration     = 0;
   _mRsEmittedCount = 0;
   _mRsPlacedPins   = [];
   _mRsUpdateProgressUI();
-  if (_mRsPinsVisible) {
+  if (_mRsTransportVisible) {
+    _mRsStartPlayback();
+  } else if (_mRsPinsVisible) {
     mRsStartLoop();
   }
 }
@@ -1257,13 +1291,6 @@ function _mRsTickFn(ts) {
     _mRsRafId     = null;
     var btn = document.getElementById('mRsPlayBtn');
     if (btn) btn.classList.remove('playing');
-    // 再生終了後3秒でシークバーをフェードアウト
-    if (_mRsSeekFadeTimer) clearTimeout(_mRsSeekFadeTimer);
-    _mRsSeekFadeTimer = setTimeout(function() {
-      var seekEl = document.getElementById('mRsSeek');
-      if (seekEl && !seekEl.hidden) seekEl.classList.add('faded');
-      _mRsSeekFadeTimer = null;
-    }, 3000);
   }
 }
 
@@ -1301,6 +1328,9 @@ function _mRsSeekTo(time) {
 function _mRsStartPlayback() {
   _mRsActive = false;
   if (_mRsRafId) { cancelAnimationFrame(_mRsRafId); _mRsRafId = null; }
+  if (_mRsSeekFadeTimer) { clearTimeout(_mRsSeekFadeTimer); _mRsSeekFadeTimer = null; }
+  var seekEl = document.getElementById('mRsSeek');
+  if (seekEl) { seekEl.classList.remove('faded'); seekEl.hidden = !_mRsTransportVisible; }
   _mRsPlaying = false;
   var pinsLayer   = document.getElementById('mRsPinsLayer');
   var myPin       = document.getElementById('mRsMyPin');
@@ -1312,19 +1342,19 @@ function _mRsStartPlayback() {
   _mRsPlacedPins   = mRsBuildPlacedPins(30);
   var saved = _mRsMyPins[_mRsCurrentVideoId];
   if (!_mRsPlacedPins.length) {
-    _mRsMyPinEmitAt = -1;
     if (saved && _mRsPinsVisible && _mRsMaxPins > 0) {
-      mRsShowMyPin(saved.x, saved.y, true);
-      _mRsMyPinEmitted = true;
+      _mRsMyPinEmitAt  = 0;
+      _mRsDuration     = Math.min(2.5, Math.max(1.0, _mRsMyPinEmitAt + 0.5));
+      _mRsCurrentTime  = 0;
+      _mRsEmittedCount = 0;
+      _mRsPlaying      = true;
+      _mRsLastRafTs    = null;
+      _mRsUpdatePlayBtnUI();
+      _mRsUpdateProgressUI();
+      _mRsRafId = requestAnimationFrame(_mRsTickFn);
+    } else {
+      _mRsMyPinEmitAt = -1;
     }
-    // ピンがなくてもタイマーを動かしシークを更新する
-    _mRsDuration     = 4;
-    _mRsCurrentTime  = 0;
-    _mRsEmittedCount = 0;
-    _mRsPlaying      = true;
-    _mRsLastRafTs    = null;
-    _mRsUpdateProgressUI();
-    _mRsRafId = requestAnimationFrame(_mRsTickFn);
     return;
   }
   var streams = [0, 80, 160, 240, 320];
@@ -1349,7 +1379,8 @@ function _mRsStartPlayback() {
     p._floatDur = (2.4 + Math.random() * 0.8).toFixed(2);
   });
   var lastEmit = _mRsPlacedPins[_mRsPlacedPins.length - 1].emitAt;
-  _mRsDuration     = Math.max(1.0, lastEmit + 0.5);
+  if (_mRsMyPinEmitAt >= 0) lastEmit = Math.max(lastEmit, _mRsMyPinEmitAt);
+  _mRsDuration     = Math.min(2.5, Math.max(1.0, lastEmit + 0.5));
   _mRsEmittedCount = 0;
   _mRsCurrentTime  = 0;
   _mRsPlaying      = true;
@@ -1385,11 +1416,11 @@ function _mRsBuildSortedPool() {
 }
 
 function _mRsUpdateSortUI() {
-  const dirBtn = document.getElementById('mRsSortDir');
-  if (dirBtn) dirBtn.classList.toggle('asc', _mRsSortDir === 'asc');
   document.querySelectorAll('.m-rs-sort-chip').forEach(el => {
     el.classList.toggle('active', el.dataset.sort === _mRsSortOrder);
   });
+  const dirBtn = document.getElementById('mRsSortDir');
+  if (dirBtn) dirBtn.classList.toggle('asc', _mRsSortDir === 'asc');
 }
 
 // プレイリストを描画
@@ -1417,16 +1448,7 @@ function mRsRenderPlaylist() {
     title.textContent = v.title;
     const meta = document.createElement('div');
     meta.className = 'm-rs-playlist-meta';
-    const parts = [];
-    if (v.viewCount)   parts.push('<span class="m-meta-item">' + _M_SVG_EYE + formatViewsShort(v.viewCount) + '</span>');
-    if (v.publishedAt) parts.push('<span class="m-meta-item">' + _M_SVG_CLK + formatRelTime(v.publishedAt) + '</span>');
-    const _rating = Math.round(getRating(v.id));
-    parts.push('<span class="m-meta-item">' + _M_SVG_STAR + _rating + '</span>');
-    if (_mRsMyPins[v.id]) {
-      const _pinColor = _mRsPinColor || '#ec4899';
-      parts.push('<span class="m-meta-item m-meta-pinned">' + _M_SVG_PIN + '<span class="m-meta-pin-dot" style="background:' + _pinColor + '"></span></span>');
-    }
-    meta.innerHTML = parts.join('');
+    meta.innerHTML = _mBuildMeta(v) + _mBuildPinDot(v);
     info.appendChild(title);
     info.appendChild(meta);
     item.appendChild(thumb);
@@ -1724,8 +1746,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // イベントリスナー: 一覧画面ソート
   (function() {
-    const bar    = document.getElementById('mListSortBar');
-    const dirBtn = document.getElementById('mListSortDir');
+    const bar = document.getElementById('mListSortBar');
     if (!bar) return;
     bar.addEventListener('click', e => {
       const chip = e.target.closest('.m-rs-sort-chip');
@@ -1735,6 +1756,7 @@ document.addEventListener('DOMContentLoaded', function() {
         renderList();
       }
     });
+    const dirBtn = document.getElementById('mListSortDir');
     if (dirBtn) {
       dirBtn.addEventListener('click', () => {
         const dir = localStorage.getItem(LS_LIST_SORT_DIR) || 'desc';
@@ -1908,8 +1930,12 @@ document.addEventListener('DOMContentLoaded', function() {
       localStorage.setItem('reactions-pin-color', color);
       mRsApplyPalette();
       if (_mRsHeatmapVisible) mRsRenderHeatmap();
-      // プレイリストのピンドットの色だけインライン更新（全再描画なし）
       document.querySelectorAll('.m-meta-pin-dot').forEach(el => { el.style.background = color; });
+      // ピン表示中は再描画して色を反映
+      if (_mRsPinsVisible && _mRsCurrentVideoId) {
+        if (_mRsTransportVisible) _mRsSeekTo(_mRsCurrentTime);
+        else mRsStartLoop();
+      }
     });
   });
 
@@ -1927,9 +1953,11 @@ document.addEventListener('DOMContentLoaded', function() {
       e.stopPropagation();
       const btn = e.target.closest('.m-rs-seg-btn');
       if (!btn) return;
+      const newVal = parseInt(btn.dataset.value, 10);
+      if (newVal === _mRsMaxPins) return;
       seg.querySelectorAll('.m-rs-seg-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
-      _mRsMaxPins = parseInt(btn.dataset.value, 10);
+      _mRsMaxPins = newVal;
       localStorage.setItem(LS_RS_MAX_PINS, _mRsMaxPins);
       if (_mRsPinsVisible && _mRsCurrentVideoId) {
         if (_mRsTransportVisible) _mRsSeekTo(_mRsCurrentTime);
@@ -2034,6 +2062,8 @@ document.addEventListener('DOMContentLoaded', function() {
       _dragging = true;
       _lastSeekX = e.clientX;
       track.classList.add('dragging');
+      var _pl = document.getElementById('mRsPinsLayer');
+      if (_pl) _pl.classList.add('rs-seeking');
       seekDiv.setPointerCapture(e.pointerId);
       _seekFull(e.clientX);  // タップ時は即時フル更新
       _mRsShowOverlay();
@@ -2041,17 +2071,24 @@ document.addEventListener('DOMContentLoaded', function() {
       e.stopPropagation();
     });
     seekDiv.addEventListener('pointermove', e => {
-      if (_dragging) { _lastSeekX = e.clientX; _seekVisual(e.clientX); }
+      if (_dragging) { _lastSeekX = e.clientX; _seekFull(e.clientX); }
     });
     seekDiv.addEventListener('pointerup', () => {
       if (_dragging) {
         _dragging = false;
         track.classList.remove('dragging');
-        _seekFull(_lastSeekX);  // ドラッグ終了時にピン等を確定描画
+        var pl = document.getElementById('mRsPinsLayer');
+        if (pl) pl.classList.remove('rs-seeking');
+        _seekFull(_lastSeekX);
         _mRsShowOverlay();
       }
     });
-    seekDiv.addEventListener('pointercancel', () => { _dragging = false; track.classList.remove('dragging'); });
+    seekDiv.addEventListener('pointercancel', () => {
+      _dragging = false;
+      track.classList.remove('dragging');
+      var pl = document.getElementById('mRsPinsLayer');
+      if (pl) pl.classList.remove('rs-seeking');
+    });
   })();
 
   // イベントリスナー: トランスポートオーバーレイボタン
@@ -2112,13 +2149,16 @@ document.addEventListener('DOMContentLoaded', function() {
       _mRsUpdateSortUI();
       mRsRenderPlaylist();
     });
+    const dirBtn = document.getElementById('mRsSortDir');
+    if (dirBtn) {
+      dirBtn.addEventListener('click', () => {
+        _mRsSortDir = _mRsSortDir === 'desc' ? 'asc' : 'desc';
+        localStorage.setItem(LS_RS_SORT_DIR, _mRsSortDir);
+        _mRsUpdateSortUI();
+        mRsRenderPlaylist();
+      });
+    }
   })();
-  document.getElementById('mRsSortDir').addEventListener('click', () => {
-    _mRsSortDir = _mRsSortDir === 'desc' ? 'asc' : 'desc';
-    localStorage.setItem(LS_RS_SORT_DIR, _mRsSortDir);
-    _mRsUpdateSortUI();
-    mRsRenderPlaylist();
-  });
 
   // イベントリスナー: 設定ボタン
   document.getElementById('mSettingsBtn').addEventListener('click', openSettings);

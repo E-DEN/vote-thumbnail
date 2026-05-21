@@ -660,6 +660,8 @@ var _listMode = localStorage.getItem('thumb-list-mode') || 'grid';
 var _shortsObserver = null;
 var _listSortOrder = localStorage.getItem(LS_SORT) || 'rating';  // 'date' | 'views' | 'rating' | 'random'
 var _sortDir = localStorage.getItem('thumb-sort-dir') || 'desc'; // 'asc' | 'desc'
+var _SVG_SORT_DESC = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 16 4 4 4-4"/><path d="M7 20V4"/><path d="M11 4h10"/><path d="M11 8h7"/><path d="M11 12h4"/></svg>';
+var _SVG_SORT_ASC  = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/><path d="M11 12h4"/><path d="M11 16h7"/><path d="M11 20h10"/></svg>';
 var _listPage = 0;                // 読み込み済みページ数
 var _LIST_PAGE_SIZE = 50;
 var _listSortedPool = [];         // ソート済み全件キャッシュ
@@ -3328,21 +3330,18 @@ function init() {
   });
   // ソートスプリットボタン初期化
   var _sortLabel  = document.getElementById('sortSplitLabel');
-  var _sortDirBtn = document.getElementById('sortSplitDir');
-  var _SVG_SORT_DESC = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 16 4 4 4-4"/><path d="M7 20V4"/><path d="M11 4h10"/><path d="M11 8h7"/><path d="M11 12h4"/></svg>';
-  var _SVG_SORT_ASC  = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/><path d="M11 12h4"/><path d="M11 16h7"/><path d="M11 20h10"/></svg>';
   var _sortPopup  = document.getElementById('sortPopup');
   var SORT_INFO = {
-    views:  { label: '再生数順', hasDir: true },
-    date:   { label: '投稿日順', hasDir: true },
-    rating: { label: '得票率順', hasDir: true },
+    views:  { label: '再生数', hasDir: true },
+    date:   { label: '投稿日', hasDir: true },
+    rating: { label: '得票率', hasDir: true },
   };
   function _updateSortUI() {
     var info = SORT_INFO[_listSortOrder] || SORT_INFO.views;
     if (_sortLabel)  _sortLabel.textContent = info.label;
+    var _sortDirBtn = document.getElementById('sortSplitDir');
     if (_sortDirBtn) {
-      _sortDirBtn.style.visibility = info.hasDir ? '' : 'hidden';
-      _sortDirBtn.innerHTML = (_sortDir === 'asc') ? _SVG_SORT_ASC : _SVG_SORT_DESC;
+      _sortDirBtn.innerHTML = _sortDir === 'asc' ? _SVG_SORT_ASC : _SVG_SORT_DESC;
       _sortDirBtn.classList.toggle('asc', _sortDir === 'asc');
     }
     if (_sortPopup) {
@@ -3350,13 +3349,12 @@ function init() {
         el.classList.toggle('active', el.dataset.sort === _listSortOrder);
       });
     }
-    var _rsLabel  = document.getElementById('rsSortLabel');
-    var _rsDirBtn = document.getElementById('rsSortDir');
-    var _rsPopup  = document.getElementById('rsSortPopup');
+    var _rsLabel   = document.getElementById('rsSortLabel');
+    var _rsPopup   = document.getElementById('rsSortPopup');
+    var _rsDirBtn  = document.getElementById('rsSortDir');
     if (_rsLabel) _rsLabel.textContent = info.label;
     if (_rsDirBtn) {
-      _rsDirBtn.style.visibility = info.hasDir ? '' : 'hidden';
-      _rsDirBtn.innerHTML = (_sortDir === 'asc') ? _SVG_SORT_ASC : _SVG_SORT_DESC;
+      _rsDirBtn.innerHTML = _sortDir === 'asc' ? _SVG_SORT_ASC : _SVG_SORT_DESC;
       _rsDirBtn.classList.toggle('asc', _sortDir === 'asc');
     }
     if (_rsPopup) {
@@ -3369,6 +3367,15 @@ function init() {
     renderCurrentView();
   }
   _updateSortUI();
+  var _sortDirBtnEl = document.getElementById('sortSplitDir');
+  if (_sortDirBtnEl) {
+    _sortDirBtnEl.addEventListener('click', function() {
+      _sortDir = _sortDir === 'desc' ? 'asc' : 'desc';
+      localStorage.setItem('thumb-sort-dir', _sortDir);
+      _updateSortUI();
+      _triggerSortRender();
+    });
+  }
   if (document.getElementById('sortSplitKey')) {
     document.getElementById('sortSplitKey').addEventListener('click', function(e) {
       e.stopPropagation();
@@ -3388,15 +3395,6 @@ function init() {
       _triggerSortRender();
     });
   }
-  if (_sortDirBtn) {
-    _sortDirBtn.addEventListener('click', function() {
-      if (!(SORT_INFO[_listSortOrder] || {}).hasDir) return;
-      _sortDir = (_sortDir === 'asc') ? 'desc' : 'asc';
-      localStorage.setItem('thumb-sort-dir', _sortDir);
-      _updateSortUI();
-      _triggerSortRender();
-    });
-  }
   document.addEventListener('click', function() {
     if (_sortPopup) _sortPopup.classList.remove('open');
     var _rsPopupClose = document.getElementById('rsSortPopup');
@@ -3412,7 +3410,6 @@ function init() {
 
   // reactions プレイリスト ソート
   var _rsSortKey = document.getElementById('rsSortKey');
-  var _rsSortDir = document.getElementById('rsSortDir');
   var _rsSortPopup = document.getElementById('rsSortPopup');
   if (_rsSortKey) {
     _rsSortKey.addEventListener('click', function(e) {
@@ -3433,16 +3430,15 @@ function init() {
       _triggerSortRender();
     });
   }
-  if (_rsSortDir) {
-    _rsSortDir.addEventListener('click', function() {
-      if (!(SORT_INFO[_listSortOrder] || {}).hasDir) return;
-      _sortDir = (_sortDir === 'asc') ? 'desc' : 'asc';
+  var _rsSortDirEl = document.getElementById('rsSortDir');
+  if (_rsSortDirEl) {
+    _rsSortDirEl.addEventListener('click', function() {
+      _sortDir = _sortDir === 'desc' ? 'asc' : 'desc';
       localStorage.setItem('thumb-sort-dir', _sortDir);
       _updateSortUI();
       _triggerSortRender();
     });
   }
-
   // 一覧モード切り替えボタンの初期状態を反映
   var _galBtn  = document.getElementById('listModeGalleryBtn');
   var _gridBtn = document.getElementById('listModeGridBtn');
@@ -4490,12 +4486,18 @@ document.getElementById('catFilter').addEventListener('click', e => {
     var myPinShadow = document.getElementById('reactionsMyPinShadow');
     if (myPin) myPin.hidden = true;
     if (myPinShadow) myPinShadow.hidden = true;
-    // コミュニティピンなし: 自分ピンのみ即時表示して終了
+    // コミュニティピンなし: 自分ピンがあればシークを走らせる、なければ停止
     if (!_placedPins.length) {
       if (saved && _reactionsPinsVisible && REACTIONS_MAX_PINS > 0) {
-        _myPinEmitAt = 0;
-        showMyReactionsPin(saved.x, saved.y, true);
-        _myPinEmitted = true;
+        _myPinEmitAt      = 0;
+        _duration         = Math.min(2.5, Math.max(1.0, _myPinEmitAt + 0.5));
+        _currentTime      = 0;
+        _emittedCount     = 0;
+        _playing          = true;
+        _lastRafTs        = null;
+        playBtn.innerHTML = _SVG_PAUSE;
+        _updateProgressUI();
+        _rafId = requestAnimationFrame(_tick);
       } else {
         _myPinEmitAt = -1;
       }
@@ -4525,9 +4527,10 @@ document.getElementById('catFilter').addEventListener('click', e => {
       p._scale    = baseScale + (Math.random() - 0.5) * 0.4;
       p._floatDur = (2.4 + Math.random() * 0.8).toFixed(2);
     });
-    // duration をピン最後の emitAt に合わせる（最低1秒）
+    // duration をピン最後の emitAt に合わせる（最低1秒・上限 2.5秒）
     var lastEmit = _placedPins.length > 0 ? _placedPins[_placedPins.length - 1].emitAt : 0;
-    _duration = Math.max(1.0, lastEmit + 0.5);
+    if (_myPinEmitAt >= 0) lastEmit = Math.max(lastEmit, _myPinEmitAt);
+    _duration = Math.min(2.5, Math.max(1.0, lastEmit + 0.5));
     _emittedCount = 0;
     _currentTime  = 0;
     _playing      = true;
