@@ -658,7 +658,7 @@ function _buildPinDot(v) {
 // --- 一覧 ---
 var _listMode = localStorage.getItem('thumb-list-mode') || 'grid';
 var _shortsObserver = null;
-var _listSortOrder = localStorage.getItem(LS_SORT) || 'views';  // 'date' | 'views' | 'rating' | 'random'
+var _listSortOrder = localStorage.getItem(LS_SORT) || 'rating';  // 'date' | 'views' | 'rating' | 'random'
 var _sortDir = localStorage.getItem('thumb-sort-dir') || 'desc'; // 'asc' | 'desc'
 var _listPage = 0;                // 読み込み済みページ数
 var _LIST_PAGE_SIZE = 50;

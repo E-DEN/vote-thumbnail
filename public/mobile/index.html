@@ -37,6 +37,13 @@
     </div>
   </div>
 
+  <!-- チャンネル設定メニュー -->
+  <div id="mChCardMenu" class="m-ch-card-menu" hidden>
+    <button class="m-ch-card-menu-item" id="mChMenuRefresh">動画を再取得</button>
+    <div class="m-ch-card-menu-sep"></div>
+    <button class="m-ch-card-menu-item m-ch-menu-danger" id="mChMenuDelete">削除</button>
+  </div>
+
   <!-- ヘッダー -->
   <header class="m-header" id="mHeader">
     <button class="m-ch-panel-btn" id="mChPanelBtn">
@@ -85,6 +92,26 @@
     <!-- Tab2: 投票（縦並び A/B） -->
     <div class="m-screen" id="mScreenVote">
       <div id="mVoteWrap" class="m-vote-wrap"></div>
+      <div class="m-vote-options-bar">
+        <button class="m-vote-options-btn" id="mVoteOptionsPanelBtn" aria-label="表示設定">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="15" height="15">
+            <line x1="21" y1="4" x2="14" y2="4"/><line x1="10" y1="4" x2="3" y2="4"/>
+            <line x1="21" y1="12" x2="12" y2="12"/><line x1="8" y1="12" x2="3" y2="12"/>
+            <line x1="21" y1="20" x2="16" y2="20"/><line x1="12" y1="20" x2="3" y2="20"/>
+            <circle cx="12" cy="4" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="14" cy="20" r="2"/>
+          </svg>
+        </button>
+      </div>
+      <div class="m-vote-options-panel" id="mVoteOptionsPanel">
+        <div class="m-vote-opts-inner">
+          <div class="m-vote-opts-row">
+            <span>タイトルを表示</span>
+            <button class="m-rs-toggle" id="mVoteTitleToggle" role="switch" aria-checked="false">
+              <span class="m-rs-toggle-thumb"></span>
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Tab3: ランキング（1列リスト） -->
