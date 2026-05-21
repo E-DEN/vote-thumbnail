@@ -285,15 +285,21 @@ function renderCurrentTab() {
   else if (currentTab === 'reaction') renderReaction();
 }
 
+const _EMPTY_ICON = '<svg class="m-empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/><path d="M22 12h-6l-2 3H10l-2-3H2"/></svg>';
+
+function _emptyHtml(cls, text) {
+  return '<div class="' + cls + '">' + _EMPTY_ICON + '<p class="m-empty-text">' + text + '</p></div>';
+}
+
 // チャンネル未選択・動画なし共通メッセージ
 function renderNoChannel(containerId) {
   const el = document.getElementById(containerId);
-  el.innerHTML = '<div class="m-empty-msg">チャンネルを選択してください</div>';
+  el.innerHTML = _emptyHtml('m-empty-msg', 'チャンネルを選択してください');
 }
 
 function renderNoCat(containerId) {
   const el = document.getElementById(containerId);
-  el.innerHTML = '<div class="m-empty-msg">このカテゴリには動画がありません</div>';
+  el.innerHTML = _emptyHtml('m-empty-msg', 'このカテゴリには動画がありません');
 }
 
 // --- Tab1: 一覧 ---
@@ -398,7 +404,7 @@ function _appendListPage() {
 function renderVote() {
   const wrap = document.getElementById('mVoteWrap');
   if (!state.currentChannelKey) {
-    wrap.innerHTML = '<div class="m-vote-empty">チャンネルを選択してください</div>';
+    wrap.innerHTML = _emptyHtml('m-vote-empty', 'チャンネルを選択してください');
     return;
   }
 
@@ -416,8 +422,8 @@ function renderVote() {
   if (!pair) {
     const pool = filteredVideos();
     wrap.innerHTML = pool.length >= 2
-      ? '<div class="m-vote-empty">全組み合わせの評価が確定しました</div>'
-      : '<div class="m-vote-empty">このカテゴリには動画が2本以上必要です</div>';
+      ? _emptyHtml('m-vote-empty', '全組み合わせの評価が確定しました')
+      : _emptyHtml('m-vote-empty', 'このカテゴリには動画が2本以上必要です');
     return;
   }
 

@@ -180,11 +180,26 @@ html, body {
 
 /* 空状態メッセージ */
 .m-empty-msg {
-  padding: 60px 24px;
-  text-align: center;
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  min-height: calc(100svh - 200px);
+  padding: 24px;
   color: var(--text-muted);
-  font-size: 14px;
-  line-height: 1.7;
+}
+.m-empty-icon {
+  width: 44px;
+  height: 44px;
+  opacity: 0.35;
+}
+.m-empty-text {
+  font-size: 13px;
+  text-align: center;
+  margin: 0;
+  line-height: 1.6;
 }
 
 /* =====================
@@ -469,10 +484,14 @@ html, body {
   padding: 10px 12px;
 }
 .m-vote-empty {
-  padding: 60px 24px;
-  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  min-height: calc(100svh - 200px);
+  padding: 24px;
   color: var(--text-muted);
-  font-size: 14px;
 }
 .m-vote-card {
   cursor: pointer;
