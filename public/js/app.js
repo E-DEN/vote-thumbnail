@@ -915,7 +915,7 @@ function _appendGridPage() {
     grid.appendChild(card);
   });
 }
-const RANK_PAGE = 50;
+const RANK_PAGE = 100;
 let rankShowCount = RANK_PAGE;
 
 function renderRankingItems(sorted, maxRating, minRating, range, from, to) {

@@ -96,8 +96,26 @@
           <span class="reactions-my-pin-label" data-i18n="reactions-you">あなた</span>
         </div>
         <div class="m-rs-placeholder" id="mRsPlaceholder"></div>
+        <!-- トランスポートオーバーレイ（ブラー背景・フェードイン/アウト） -->
+        <div class="m-rs-overlay" id="mRsOverlay">
+          <div class="m-rs-overlay-center">
+            <button class="m-rs-overlay-btn" id="mRsPrevBtn" aria-label="前の動画">
+              <svg viewBox="0 0 24 24" fill="currentColor" width="30" height="30"><path d="M6 6h2v12H6zm3.5 6 8.5 6V6z"/></svg>
+            </button>
+            <button class="m-rs-overlay-btn m-rs-overlay-play-btn" id="mRsPlayBtn" aria-label="再生/一時停止">
+              <span class="m-rs-play-icon"><svg viewBox="0 0 24 24" fill="currentColor" width="38" height="38"><path d="M8 5v14l11-7z"/></svg></span>
+              <span class="m-rs-pause-icon"><svg viewBox="0 0 24 24" fill="currentColor" width="38" height="38"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg></span>
+            </button>
+            <button class="m-rs-overlay-btn" id="mRsNextBtn" aria-label="次の動画">
+              <svg viewBox="0 0 24 24" fill="currentColor" width="30" height="30"><path d="M6 18l8.5-6L6 6v12zM16 6h2v12h-2z"/></svg>
+            </button>
+          </div>
+        </div>
         <!-- シークバー（動画下端オーバーレイ・YouTube Mobile スタイル） -->
         <div class="m-rs-seek" id="mRsSeek" hidden>
+          <div class="m-rs-seek-info">
+            <span class="m-rs-seek-time" id="mRsSeekTime">0:00 / 0:00</span>
+          </div>
           <div class="m-rs-progress-track" id="mRsProgressTrack">
             <div class="m-rs-progress-fill" id="mRsProgressFill"></div>
             <div class="m-rs-progress-thumb" id="mRsProgressThumb"></div>
@@ -105,8 +123,8 @@
         </div>
       </div>
 
-      <!-- パネル＋プレイリスト（動画以下のスクロール領域） -->
-      <div class="m-rs-scroll-body">
+      <!-- パネル＋プレイリスト（パネルとソートは常時表示、リストのみスクロール） -->
+      <div class="m-rs-list-area">
 
       <!-- コントロールパネル（タイトル・メタ・モードボタン・スウォッチ・スライダー・トランスポート） -->
       <div class="m-rs-panel" id="mRsToolbar" hidden>
@@ -115,7 +133,7 @@
           <a class="m-rs-video-title" id="mRsVideoTitle" href="#" target="_blank" rel="noopener noreferrer"></a>
           <div class="m-rs-video-meta" id="mRsVideoMeta"></div>
         </div>
-        <!-- モードボタン -->
+        <!-- モードボタン + 設定ボタン -->
         <div class="m-rs-controls-row">
           <button class="m-rs-mode-btn active" id="mRsPinsBtn">
             <svg viewBox="0 0 24 24" fill="currentColor" width="13" height="13"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
@@ -129,65 +147,78 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13"><polygon points="5 3 19 12 5 21 5 3"/></svg>
             <span data-i18n="reactions-transport">再生</span>
           </button>
-        </div>
-        <!-- 色・最大ピン数設定行 -->
-        <div class="m-rs-settings-row">
-          <div class="m-rs-swatches">
-            <button class="m-rs-swatch active" data-color="#ec4899" style="background:#ec4899"></button>
-            <button class="m-rs-swatch" data-color="#00b0f4" style="background:#00b0f4"></button>
-            <button class="m-rs-swatch" data-color="#57f287" style="background:#57f287"></button>
-            <button class="m-rs-swatch" data-color="#f59e0b" style="background:#f59e0b"></button>
-            <button class="m-rs-swatch" data-color="#a855f7" style="background:#a855f7"></button>
-          </div>
-          <div class="m-rs-maxpins">
-            <span class="m-rs-maxpins-label" data-i18n="reactions-max-pins">最大ピン数</span>
-            <select id="mRsPinCountSelect" class="m-rs-select">
-              <option value="0">0</option>
-              <option value="1">1</option>
-              <option value="5">5</option>
-              <option value="10" selected>10</option>
-              <option value="15">15</option>
-              <option value="20">20</option>
-              <option value="25">25</option>
-              <option value="30">30</option>
-            </select>
-          </div>
-        </div>
-        <!-- トランスポート（再生・停止ボタンのみ。シークバーは動画下端） -->
-        <div class="m-rs-transport" id="mRsTransport">
-          <button class="m-rs-tbtn" id="mRsPlayBtn">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          <button class="m-rs-settings-btn" id="mRsSettingsPanelBtn" aria-label="表示設定">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="15" height="15">
+              <line x1="21" y1="4" x2="14" y2="4"/><line x1="10" y1="4" x2="3" y2="4"/>
+              <line x1="21" y1="12" x2="12" y2="12"/><line x1="8" y1="12" x2="3" y2="12"/>
+              <line x1="21" y1="20" x2="16" y2="20"/><line x1="12" y1="20" x2="3" y2="20"/>
+              <circle cx="12" cy="4" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="14" cy="20" r="2"/>
+            </svg>
           </button>
-          <button class="m-rs-tbtn" id="mRsStopBtn">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
-          </button>
-          <span class="m-rs-time" id="mRsTimeLabel">0:00 / 0:00</span>
         </div>
+        <!-- 表示設定パネル（折りたたみ） -->
+        <div class="m-rs-settings-panel" id="mRsSettingsPanel">
+          <div class="m-rs-setting-item">
+            <span class="m-rs-setting-label">ピンカラー</span>
+            <div class="m-rs-setting-control m-rs-swatches">
+              <button class="m-rs-swatch active" data-color="#ec4899" style="background:#ec4899"></button>
+              <button class="m-rs-swatch" data-color="#00b0f4" style="background:#00b0f4"></button>
+              <button class="m-rs-swatch" data-color="#57f287" style="background:#57f287"></button>
+              <button class="m-rs-swatch" data-color="#f59e0b" style="background:#f59e0b"></button>
+              <button class="m-rs-swatch" data-color="#a855f7" style="background:#a855f7"></button>
+            </div>
+          </div>
+          <div class="m-rs-setting-item">
+            <span class="m-rs-setting-label" data-i18n="reactions-max-pins">最大ピン数</span>
+            <div class="m-rs-setting-control">
+              <div class="m-rs-segment" id="mRsPinCountSegment">
+                <button class="m-rs-seg-btn" data-value="1">1</button>
+                <button class="m-rs-seg-btn" data-value="5">5</button>
+                <button class="m-rs-seg-btn active" data-value="10">10</button>
+                <button class="m-rs-seg-btn" data-value="20">20</button>
+                <button class="m-rs-seg-btn" data-value="30">30</button>
+              </div>
+            </div>
+          </div>
+          <div class="m-rs-setting-item">
+            <span class="m-rs-setting-label">時間表示</span>
+            <div class="m-rs-setting-control">
+              <button class="m-rs-toggle" id="mRsTimeToggle" aria-checked="false">
+                <span class="m-rs-toggle-thumb"></span>
+              </button>
+            </div>
+          </div>
+        </div>
+        <!-- トランスポート（シークバーは動画下端、時刻はシークバー内に表示） -->
+        <div class="m-rs-transport" id="mRsTransport" hidden></div>
       </div>
 
-      <!-- プレイリスト（ソートヘッダー + 一覧） -->
-      <div class="m-rs-playlist-section">
-        <div class="m-rs-playlist-header">
-          <div class="m-rs-sort-wrap" id="mRsSortWrap">
+      <!-- ソートバー（リスト上にフローティング） -->
+      <div class="m-rs-playlist-header">
+        <div class="m-rs-sort-wrap" id="mRsSortWrap">
+          <div class="m-rs-sort-key-wrap">
             <button class="m-rs-sort-key" id="mRsSortKey">
-              <span id="mRsSortLabel" data-i18n="sort-views">再生数順</span>
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+              <span id="mRsSortLabel">再生数順</span>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
             </button>
             <div class="m-rs-sort-popup" id="mRsSortPopup">
-              <div class="m-rs-sort-item" data-sort="views" data-i18n="sort-views">再生数順</div>
-              <div class="m-rs-sort-item" data-sort="date" data-i18n="sort-date">投稿日順</div>
-              <div class="m-rs-sort-item" data-sort="rating" data-i18n="sort-rating">得票率順</div>
-              <div class="m-rs-sort-item" data-sort="random" data-i18n="sort-random">ランダム</div>
+              <div class="m-rs-sort-item active" data-sort="views">再生数順</div>
+              <div class="m-rs-sort-item" data-sort="date">投稿日順</div>
+              <div class="m-rs-sort-item" data-sort="rating">得票率順</div>
+              <div class="m-rs-sort-item" data-sort="random">ランダム</div>
             </div>
-            <button class="m-rs-sort-dir" id="mRsSortDir">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 16 4 4 4-4"/><path d="M7 20V4"/><path d="M11 4h10"/><path d="M11 8h7"/><path d="M11 12h4"/></svg>
-            </button>
           </div>
+          <button class="m-rs-sort-dir" id="mRsSortDir">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 16 4 4 4-4"/><path d="M7 20V4"/><path d="M11 4h10"/><path d="M11 8h7"/><path d="M11 12h4"/></svg>
+          </button>
         </div>
-        <div id="mRsPlaylist" class="m-rs-playlist"></div>
       </div>
 
-      </div><!-- / m-rs-scroll-body -->
+      <!-- プレイリスト（スクロール） -->
+      <div class="m-rs-scroll-body">
+        <div id="mRsPlaylist" class="m-rs-playlist"></div>
+      </div>
+      </div><!-- / m-rs-list-area -->
     </div>
 
   </main>

@@ -1,27 +1,33 @@
 ﻿/* --- CSS 変数（PC 版と共通パレット） --- */
 :root[data-theme="dark"] {
-  --bg:         #1e1f22;
-  --surface:    #2b2d31;
-  --surface2:   #35373c;
-  --accent:     #00b0f4;
-  --ok:         #23a55a;
-  --err:        #f23f43;
-  --text:       #dbdee1;
-  --text-muted: #80848e;
-  --border:     #3f4147;
-  --shadow:     rgba(0,0,0,0.55);
+  --bg:            #1e1f22;
+  --surface:       #2b2d31;
+  --surface2:      #35373c;
+  --surface3:      #4e5058;
+  --accent:        #00b0f4;
+  --ok:            #23a55a;
+  --err:           #f23f43;
+  --text:          #dbdee1;
+  --text-muted:    #80848e;
+  --border:        #3f4147;
+  --shadow:        rgba(0,0,0,0.55);
+  --view-bar-bg:   rgba(40,42,47,0.92);
+  --view-bar-shadow: 0 0 0 1px rgba(255,255,255,0.06), 0 8px 18px rgba(0,0,0,0.75);
 }
 :root[data-theme="light"] {
-  --bg:         #f2f3f5;
-  --surface:    #ffffff;
-  --surface2:   #e3e5e8;
-  --accent:     #0096cf;
-  --ok:         #2d7d46;
-  --err:        #c0392b;
-  --text:       #2e3338;
-  --text-muted: #5c6370;
-  --border:     #d4d7dc;
-  --shadow:     rgba(0,0,0,0.08);
+  --bg:            #f2f3f5;
+  --surface:       #ffffff;
+  --surface2:      #e3e5e8;
+  --surface3:      #c4c9d0;
+  --accent:        #0096cf;
+  --ok:            #2d7d46;
+  --err:           #c0392b;
+  --text:          #2e3338;
+  --text-muted:    #5c6370;
+  --border:        #d4d7dc;
+  --shadow:        rgba(0,0,0,0.08);
+  --view-bar-bg:   rgba(210,212,216,0.95);
+  --view-bar-shadow: 0 0 0 1px rgba(0,0,0,0.10), 0 8px 18px rgba(0,0,0,0.40);
 }
 
 /* --- リセット --- */
@@ -605,6 +611,7 @@ html, body {
   aspect-ratio: 16 / 9;
   background: var(--surface2);
   flex-shrink: 0;
+  z-index: 1;
   isolation: isolate;
   cursor: crosshair;
   user-select: none;
@@ -637,12 +644,56 @@ html, body {
   bottom: 0;
   left: 0;
   right: 0;
-  padding: 16px 0 0;
-  z-index: 10;
+  z-index: 20;  /* オーバーレイ(15)より上 */
   cursor: pointer;
+  touch-action: none;  /* iOS: ヒット要素に直接指定しないと preventDefault() が無視される */
+  transition: opacity 0.5s ease;
 }
 .m-rs-seek[hidden] { display: none; }
+.m-rs-seek.faded { opacity: 0; pointer-events: none; }
+.m-rs-seek-info {
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 0 24px 0 14px;
+  pointer-events: none;
+}
+.m-rs-seek-time {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.92);
+  font-variant-numeric: tabular-nums;
+  user-select: none;
+  display: inline-block;
+  background: rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-radius: 6px;
+  padding: 2px 7px;
+  visibility: hidden;
+}
+.m-rs-seek-time.visible {
+  visibility: visible;
+}
+.m-rs-fs-btn {
+  pointer-events: auto;
+  background: rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: none;
+  padding: 6px;
+  color: rgba(255, 255, 255, 0.92);
+  cursor: pointer;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+.m-rs-fs-btn:active { background: rgba(0, 0, 0, 0.15); }
 .m-rs-seek .m-rs-progress-track {
+  margin: 0 24px 8px 24px;  /* 左24px: iOS左端バックジェスチャーゾーン(~20px)を回避、左右均等 */
   border-radius: 0;
   height: 3px;
   background: rgba(255, 255, 255, 0.25);
@@ -651,9 +702,69 @@ html, body {
   border-radius: 0;
 }
 .m-rs-seek .m-rs-progress-thumb {
-  width: 10px;
-  height: 10px;
+  width: 12px;
+  height: 12px;
 }
+.m-rs-seek .m-rs-progress-track.dragging .m-rs-progress-thumb {
+  transform: translate(-50%, -50%) scale(1.5);
+}
+
+/* トランスポートオーバーレイ（ブラー背景・フェードイン/アウト） */
+.m-rs-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 15;
+  display: flex;
+  flex-direction: column;
+  pointer-events: none;
+}
+.m-rs-overlay.visible {
+  pointer-events: auto;
+}
+.m-rs-overlay-center {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+}
+.m-rs-overlay-btn {
+  background: rgba(0, 0, 0, 0.15);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: none;
+  padding: 10px;
+  color: #fff;
+  cursor: pointer;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: background 0.1s, opacity 0.5s ease;  /* フェードアウト */
+}
+.m-rs-overlay.visible .m-rs-overlay-btn {
+  opacity: 1;
+  transition: background 0.1s, opacity 0.22s ease;  /* フェードイン */
+}
+.m-rs-overlay-btn svg { pointer-events: none; }
+.m-rs-overlay-btn:active { background: rgba(0, 0, 0, 0.12); }
+.m-rs-overlay-play-btn { padding: 14px; display: grid; place-items: center; }
+.m-rs-play-icon,
+.m-rs-pause-icon {
+  grid-area: 1 / 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.18s ease;
+  pointer-events: none;
+}
+.m-rs-pause-icon { opacity: 0; }
+.m-rs-overlay-play-btn.playing .m-rs-play-icon { opacity: 0; }
+.m-rs-overlay-play-btn.playing .m-rs-pause-icon { opacity: 1; }
 
 /* リアクション画面: 動画エリア固定 + 以下スクロール */
 #mScreenReaction.active {
@@ -662,13 +773,23 @@ html, body {
   overflow: hidden;
 }
 
-/* パネル＋プレイリストのスクロールボディ */
+/* パネル＋ソート＋リストの縦積みコンテナ */
+.m-rs-list-area {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  position: relative;
+}
+
+/* プレイリストのスクロールボディ（リストのみ） */
 .m-rs-scroll-body {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
-  touch-action: pan-y;           /* 垂直スクロールのみ。横スワイプ（戻る操作）禁止 */
+  touch-action: pan-y;
   overscroll-behavior-y: contain;
 }
 
@@ -736,13 +857,59 @@ html, body {
   color: #fff;
   border-color: var(--accent);
 }
-.m-rs-settings-row {
+/* 設定ボタン（モードボタン行の右端） */
+.m-rs-settings-btn {
+  margin-left: auto;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  color: var(--text-muted);
+  transition: background 0.15s, color 0.15s, transform 0.3s ease;
+  flex-shrink: 0;
+}
+.m-rs-settings-btn.open {
+  color: var(--text);
+  background: var(--surface2);
+  transform: rotate(45deg);
+}
+.m-rs-settings-btn:active { background: var(--surface2); }
+
+/* 設定パネル（アコーディオン） */
+.m-rs-settings-panel {
+  overflow: hidden;
+  max-height: 0;
+  opacity: 0;
+  transition: max-height 0.28s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.22s ease;
+}
+.m-rs-settings-panel.open {
+  max-height: 300px;
+  opacity: 1;
+}
+.m-rs-setting-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 5px 12px 6px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--border);
   gap: 12px;
 }
+.m-rs-setting-label {
+  font-size: 12px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+  line-height: 1;
+}
+.m-rs-setting-control {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex: 0 0 auto;
+}
+
+/* スウォッチ */
 .m-rs-swatches {
   display: flex;
   align-items: center;
@@ -761,28 +928,72 @@ html, body {
   border-color: var(--text);
   transform: scale(1.2);
 }
-.m-rs-maxpins {
+
+/* セグメントコントロール（最大ピン数） */
+.m-rs-segment {
   display: flex;
   align-items: center;
-  gap: 6px;
+  background: var(--surface2);
+  border-radius: 8px;
+  padding: 2px;
+  gap: 2px;
+  width: 142px; /* スウォッチ行と同幅: 5×22px + 4×8px */
   flex-shrink: 0;
 }
-.m-rs-maxpins-label {
-  font-size: 10px;
-  color: var(--text-muted);
-  white-space: nowrap;
-}
-.m-rs-select {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text);
-  background: var(--surface2);
-  border: 1px solid var(--border);
+.m-rs-seg-btn {
+  padding: 3px 0;
   border-radius: 6px;
-  padding: 3px 6px;
-  min-width: 52px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: none;
+  transition: background 0.12s, color 0.12s;
+  line-height: 1.4;
+  flex: 1;
   text-align: center;
-  cursor: pointer;
+  min-width: 0;
+}
+.m-rs-seg-btn.active {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+}
+.m-rs-seg-btn:active { opacity: 0.7; }
+
+/* トグルスイッチ（時間表示） */
+.m-rs-toggle {
+  width: 36px;
+  height: 20px;
+  min-height: 20px;
+  border-radius: 10px;
+  background: var(--surface3);
+  position: relative;
+  transition: background 0.22s ease, box-shadow 0.22s ease;
+  flex-shrink: 0;
+  padding: 0;
+  display: block;
+  line-height: 0;
+  box-shadow: 0 0 0 1.5px var(--text-muted); /* OFF時の輪郭 */
+  align-self: center;
+}
+.m-rs-toggle.on {
+  background: var(--accent);
+  box-shadow: none;
+}
+.m-rs-toggle-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  transition: transform 0.22s ease;
+  pointer-events: none;
+}
+.m-rs-toggle.on .m-rs-toggle-thumb {
+  transform: translateX(16px);
 }
 
 /* トランスポート行 */
@@ -851,55 +1062,71 @@ html, body {
   font-variant-numeric: tabular-nums;
 }
 
-/* プレイリストセクション */
+/* プレイリストセクション（廃止済み・互換用） */
 .m-rs-playlist-section {
   display: flex;
   flex-direction: column;
+  flex: 1;
+  min-height: 0;
 }
+/* ソートバー（リスト上にフローティング。PC版 #listViewBar と同じ構造） */
 .m-rs-playlist-header {
-  flex-shrink: 0;
+  position: absolute;
+  right: 8px;
+  top: calc(var(--rs-panel-h, 60px) + 6px);
+  z-index: 4;
+  height: 30px;
   display: flex;
   align-items: center;
-  padding: 5px 10px;
-  border-bottom: 1px solid var(--border);
-  background: var(--surface);
+  padding: 0 4px;
+  background: var(--view-bar-bg);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  box-shadow: var(--view-bar-shadow);
 }
 .m-rs-sort-wrap {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 0;
 }
-.m-rs-sort-key {
+.m-rs-sort-key-wrap {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 3px;
-  padding: 3px 6px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
+}
+.m-rs-sort-key {
+  height: 30px;
+  padding: 0 8px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
   background: transparent;
-  color: var(--text-muted);
-  font-size: 11px;
+  color: var(--text);
+  font-size: 12px;
   font-family: inherit;
   cursor: pointer;
+  white-space: nowrap;
 }
-.m-rs-sort-key svg { flex-shrink: 0; }
+.m-rs-sort-key svg { flex-shrink: 0; color: var(--text-muted); }
 .m-rs-sort-popup {
   display: none;
   position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
+  top: calc(100% + 5px);
+  right: 0;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 8px;
+  padding: 3px 0;
+  min-width: 100px;
   box-shadow: 0 4px 16px var(--shadow);
   z-index: 200;
-  min-width: 110px;
-  overflow: hidden;
 }
 .m-rs-sort-popup.open { display: block; }
 .m-rs-sort-item {
-  padding: 9px 12px;
+  padding: 8px 12px;
   font-size: 12px;
   color: var(--text);
   cursor: pointer;
@@ -913,7 +1140,7 @@ html, body {
   align-items: center;
   justify-content: center;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 5px;
   background: transparent;
   color: var(--text-muted);
   cursor: pointer;
@@ -923,7 +1150,8 @@ html, body {
 .m-rs-sort-dir.asc svg { transform: scaleY(-1); }
 
 .m-rs-playlist {
-  /* スクロールは .m-rs-scroll-body が担当するため㎤指定不要 */
+  /* フローティングバー分の余白（バー top(6px) + 高さ(30px) + 下余白(8px) = 44px） */
+  padding-top: 44px;
 }
 .m-rs-playlist-item {
   display: flex;
@@ -966,6 +1194,29 @@ html, body {
 .m-rs-playlist-meta {
   font-size: 10px;
   color: var(--text-muted);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.m-meta-pinned { color: inherit; }
+.m-meta-pin-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+  vertical-align: middle;
+  margin-left: 1px;
+}
+
+/* 画像の長押しメニュー・ドラッグを禁止 */
+#mRsImg,
+.m-rs-playlist-thumb,
+.m-rank-thumb {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 /* ピン共通 (PC版 style.css と同一定義) */
@@ -1700,3 +1951,5 @@ html, body {
 }
 .m-rs-playlist-more:active { background: var(--surface2); }
 .m-rs-playlist-more svg { width: 16px; height: 16px; pointer-events: none; }
+
+
