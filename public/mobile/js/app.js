@@ -970,10 +970,12 @@ function mRsRenderHeatmap() {
     const underlay = document.createElement('div');
     underlay.style.cssText = 'position:absolute;inset:0;background:rgba(0,0,0,0.70);pointer-events:none;';
     canvas = document.createElement('canvas');
-    canvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;filter:blur(18px);';
+    canvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;';
     layer.appendChild(underlay);
     layer.appendChild(canvas);
   }
+  // blur をキャンバスサイズに比例させる（絶対値だとモバイルで相対的に広がりすぎる）
+  canvas.style.filter = 'blur(' + Math.round(Math.min(w, h) * 0.052) + 'px)';
   if (!_mRsPins.length) {
     canvas.width = w; canvas.height = h;
     canvas.getContext('2d').clearRect(0, 0, w, h);
@@ -1009,7 +1011,8 @@ function mRsStartLoop() {
   const pinsLayer = document.getElementById('mRsPinsLayer');
   if (!pinsLayer) return;
   pinsLayer.innerHTML = '';
-  const placed = mRsBuildPlacedPins();
+  const commLimit = _mRsCommLimit(_mRsMaxPins);
+  const placed = mRsBuildPlacedPins(commLimit > 0 ? commLimit : 0);
   if (!placed.length) {
     const saved = _mRsMyPins[_mRsCurrentVideoId];
     if (saved && _mRsPinsVisible) mRsShowMyPin(saved.x, saved.y, false);
@@ -1302,8 +1305,11 @@ function _mRsToggleFullscreen() {
   }
 }
 
-// max=1 は自分ピン専用: コミュニティピンは表示しない
-function _mRsCommLimit(max) { return max === 1 ? 0 : max; }
+// max=1: 自分ピンがある動画ではコミュニティピンを出さない。自分ピンがなければ 1 件表示
+function _mRsCommLimit(max) {
+  if (max !== 1) return max;
+  return _mRsMyPins[_mRsCurrentVideoId] ? 0 : 1;
+}
 
 function _mRsEmitUpTo(time) {
   var pinsLayer = document.getElementById('mRsPinsLayer');

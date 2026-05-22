@@ -2803,7 +2803,8 @@ function startReactionsLoop() {
   var pinsLayer = document.getElementById('reactionsPinsLayer');
   if (!pinsLayer) return;
   pinsLayer.innerHTML = '';
-  var placed = buildPlacedPins();
+  var commLimit = _communityLimit(REACTIONS_MAX_PINS);
+  var placed = buildPlacedPins(commLimit > 0 ? commLimit : 0);
   // コミュニティピンなし: 自分ピンのみ即時表示して終了
   if (!placed.length) {
     var saved = _reactionsMyPins[_reactionsCurrentVideoId];
@@ -4417,8 +4418,11 @@ document.getElementById('catFilter').addEventListener('click', e => {
     progressThumb.style.left = pct + '%';
     timeLabel.textContent = _fmtTime(_currentTime) + ' / ' + _fmtTime(_duration);
   }
-  // max=1 は自分ピン専用: コミュニティピンは表示しない
-  function _communityLimit(max) { return max === 1 ? 0 : max; }
+  // max=1: 自分ピンがある動画ではコミュニティピンを出さない。自分ピンがなければ 1 件表示
+  function _communityLimit(max) {
+    if (max !== 1) return max;
+    return _reactionsMyPins[_reactionsCurrentVideoId] ? 0 : 1;
+  }
 
   function _emitPinsUpTo(time) {
     var pinsLayer = document.getElementById('reactionsPinsLayer');
