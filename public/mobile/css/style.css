@@ -55,6 +55,8 @@ html, body {
   -webkit-text-size-adjust: 100%;
   touch-action: manipulation;    /* ダブルタップズーム防止 */
   overscroll-behavior: none;     /* スワイプバック・バウンス防止 */
+  user-select: none;             /* テキスト選択・ドラッグ禁止 */
+  -webkit-user-select: none;
 }
 
 /* =====================
@@ -1984,6 +1986,8 @@ html, body {
 .m-desc-hdr-close:active { background: var(--surface2); }
 .m-desc-hdr-close svg { width: 22px; height: 22px; }
 .m-desc-body {
+  user-select: text;
+  -webkit-user-select: text;
   flex: 1;
   overflow-y: auto;
   overscroll-behavior: contain;
