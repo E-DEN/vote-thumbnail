@@ -853,6 +853,50 @@ function mRsComputeClusters(pins) {
   return clusters;
 }
 
+// 件数が少ない場合にダミーピンで補完（表示確認用）
+function _mRsFillDummyPins(pins) {
+  const TARGET = 30;
+  if (pins.length >= TARGET) return;
+  function gauss(mean, sd) {
+    let u, v;
+    do { u = Math.random(); } while (u === 0);
+    do { v = Math.random(); } while (v === 0);
+    const n = Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+    return Math.max(0.01, Math.min(0.99, mean + n * sd));
+  }
+  function samplePin(hotspots) {
+    if (Math.random() < 0.08) return { x: Math.random(), y: Math.random() };
+    const total = hotspots.reduce((s, h) => s + h.w, 0);
+    let r = Math.random() * total;
+    for (const h of hotspots) {
+      r -= h.w;
+      if (r <= 0) return { x: gauss(h.x, h.sx), y: gauss(h.y, h.sy) };
+    }
+    const h = hotspots[hotspots.length - 1];
+    return { x: gauss(h.x, h.sx), y: gauss(h.y, h.sy) };
+  }
+  let hotspots;
+  if (pins.length >= 3) {
+    const clusters = mRsComputeClusters(pins);
+    hotspots = clusters.map(cl => ({
+      x: cl.pin.x, y: cl.pin.y,
+      sx: 0.06, sy: 0.06,
+      w: cl.count,
+    }));
+  } else {
+    const nc = 3 + Math.floor(Math.random() * 3);
+    hotspots = Array.from({ length: nc }, () => ({
+      x:  0.1 + Math.random() * 0.8,
+      y:  0.1 + Math.random() * 0.8,
+      sx: 0.05 + Math.random() * 0.05,
+      sy: 0.05 + Math.random() * 0.05,
+      w:  1 + Math.random() * 3,
+    }));
+  }
+  const needed = TARGET - pins.length;
+  for (let i = 0; i < needed; i++) pins.push(samplePin(hotspots));
+}
+
 // 表示するピン一覧を構築（密集度重みで最大 count 本を選択）
 function mRsBuildPlacedPins(count) {
   if (count == null) count = _mRsMaxPins;
@@ -908,7 +952,7 @@ function mRsMakePinEl(x, y, density, skipDropAnim, pinProps) {
     h = h.replace('#', '');
     return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
   }
-  const cLight = hexToRgb(palette[0]);
+  const cLight = hexToRgb(palette[1]);
   const cDark  = hexToRgb(palette[2]);
   const t      = Math.max(0, (d - 0.1) / 0.9);
   const pr     = Math.round(cLight[0] + (cDark[0] - cLight[0]) * t);
@@ -1147,6 +1191,7 @@ async function mRsOpenMode(videoId) {
     if (resp.ok) {
       const data = await resp.json();
       _mRsPins = data.pins || [];
+      if (/^(localhost|127\.|192\.168\.)/.test(location.hostname)) _mRsFillDummyPins(_mRsPins);
       _mRsKde  = mRsComputeKde(_mRsPins);
       if (data.my_pin && !_mRsMyPins[videoId]) {
         _mRsMyPins[videoId] = { x: data.my_pin.x, y: data.my_pin.y };
