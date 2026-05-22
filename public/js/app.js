@@ -1467,7 +1467,17 @@ function buildChannelItem(ch) {
     try {
       const res = await fetch('/api/channels/' + key + '/refresh', { method: 'POST', headers: getRssOnly() ? { 'X-RSS-Only': '1' } : apiKeyHeaders() });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) { showToast(data.error || t('err-refresh-failed'), true); _refreshStatusEl.textContent = ''; return; }
+      if (!res.ok) {
+        showToast(data.error || t('err-refresh-failed'), true);
+        _refreshStatusEl.textContent = '';
+        // 失敗してもDBに既存動画があれば反映する
+        const fallback = await fetchChannelVideos(key).catch(() => null);
+        if (fallback && fallback.length > 0 && key === state.currentChannelKey) {
+          state.allVideos = fallback;
+          renderCurrentView();
+        }
+        return;
+      }
       if (data.apiKeyError) { markApiKeyError(); showToast(t('err-apikey-invalid-details'), true); }
       const toastMsg = getRssOnly()
         ? t('refresh-done-rss').replace('{changed}', (data.added ?? 0) + (data.updated ?? 0))

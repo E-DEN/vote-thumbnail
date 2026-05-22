@@ -255,6 +255,13 @@ async function _refreshMobileChannel(key) {
     if (!res.ok) {
       showToast(data.error || '取得に失敗しました', true);
       statusEl.textContent = '';
+      // 失敗してもDBに既存動画があれば反映する
+      const fallback = await fetchChannelVideos(key).catch(() => null);
+      if (fallback && fallback.length > 0) {
+        state.allVideos = fallback;
+        saveVideosForChannel(key, state.allVideos);
+        renderCurrentTab();
+      }
       return;
     }
     showToast('全件取得完了（' + (data.total ?? '?') + '件）');
