@@ -157,7 +157,7 @@ function renderChannelPanel() {
     msg.className = 'm-empty-msg';
     msg.style.padding = '24px 16px';
     msg.style.fontSize = '12px';
-    msg.textContent = 'チャンネルが未登録です。下の入力欄から追加してください。';
+    msg.textContent = t('no-channels-registered');
     list.appendChild(msg);
     return;
   }
@@ -193,7 +193,7 @@ function renderChannelPanel() {
     // 設定ボタン（⋮）
     const menuBtn = document.createElement('button');
     menuBtn.className = 'm-ch-card-menu-btn';
-    menuBtn.setAttribute('aria-label', '設定');
+    menuBtn.setAttribute('aria-label', t('settings-btn-title'));
     menuBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>';
     menuBtn.addEventListener('click', e => {
       e.stopPropagation();
@@ -262,13 +262,13 @@ async function _refreshMobileChannel(key) {
   const ch = channels[key];
   if (!ch) return;
   const statusEl = document.getElementById('mChAddStatus');
-  statusEl.textContent = '取得中...';
+  statusEl.textContent = t('fetching');
   openChannelPanel();
   try {
     const res = await fetch('/api/channels/' + key + '/refresh', { method: 'POST' });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      showToast(data.error || '取得に失敗しました', true);
+      showToast(data.error || t('fetch-failed'), true);
       statusEl.textContent = '';
       // 失敗してもDBに既存動画があれば反映する
       const fallback = await fetchChannelVideos(key).catch(() => null);
@@ -279,13 +279,13 @@ async function _refreshMobileChannel(key) {
       }
       return;
     }
-    showToast('全件取得完了（' + (data.total ?? '?') + '件）');
+    showToast(t('refresh-done-api', {total: data.total ?? '?'}));
     statusEl.textContent = '';
     state.allVideos = await fetchChannelVideos(key);
     saveVideosForChannel(key, state.allVideos);
     renderCurrentTab();
   } catch (e) {
-    showToast('接続エラー', true);
+    showToast(t('connection-error'), true);
     statusEl.textContent = '';
   }
 }
@@ -299,8 +299,8 @@ function _deleteMobileChannel(key) {
   if (wasActive) {
     state.currentChannelKey = null;
     state.allVideos = [];
-    document.getElementById('mChNameDisplay').textContent = 'チャンネルを選択';
-    renderAll();
+    document.getElementById('mChNameDisplay').textContent = t('m-select-channel');
+    renderCurrentTab();
   }
 }
 
@@ -311,7 +311,7 @@ async function addChannel(input) {
   try { raw = decodeURIComponent(input); } catch { raw = input; }
   const ch = channelKeyFromInput(raw);
   if (!ch) {
-    statusEl.textContent = '無効な入力です';
+    statusEl.textContent = t('invalid-input');
     return;
   }
   // 既登録チェック（ハンドルの場合）
@@ -324,7 +324,7 @@ async function addChannel(input) {
     }
   }
 
-  statusEl.textContent = '取得中...';
+  statusEl.textContent = t('fetching');
   try {
     const body = ch.type === 'handle' ? { handle: ch.value } : { handle: ch.value };
     const res = await fetch('/api/channels', {
@@ -334,7 +334,7 @@ async function addChannel(input) {
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      statusEl.textContent = data.error || '追加に失敗しました';
+      statusEl.textContent = data.error || t('add-failed');
       return;
     }
     const serverCh = data.channel;
@@ -359,7 +359,7 @@ async function addChannel(input) {
     await selectChannel(key);
     setTimeout(closeChannelPanel, 400);
   } catch (e) {
-    statusEl.textContent = '接続エラー: ' + e.message;
+    statusEl.textContent = t('connection-error') + ': ' + e.message;
   }
 }
 
@@ -405,15 +405,36 @@ function _emptyHtml(cls, text) {
   return '<div class="' + cls + '">' + _EMPTY_ICON + '<p class="m-empty-text">' + text + '</p></div>';
 }
 
+function _descToHtml(text) {
+  const escaped = text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+  return escaped.replace(/https?:\/\/[^\s<>"]+/g, raw => {
+    let href = raw;
+    let display = raw;
+    // YouTube リダイレクト URL の場合、q= パラメータの実 URL を使う
+    if (raw.includes('youtube.com/redirect')) {
+      try {
+        const qs = raw.replace(/&amp;/g, '&').split('?')[1] || '';
+        const dest = new URLSearchParams(qs).get('q');
+        if (dest) { href = dest; display = dest; }
+      } catch (_) { /* fallthrough */ }
+    }
+    return `<a href="${href}" target="_blank" rel="noopener noreferrer">${display}</a>`;
+  });
+}
+
 // チャンネル未選択・動画なし共通メッセージ
 function renderNoChannel(containerId) {
   const el = document.getElementById(containerId);
-  el.innerHTML = _emptyHtml('m-empty-msg', 'チャンネルを選択してください');
+  el.innerHTML = _emptyHtml('m-empty-msg', t('select-channel-prompt'));
 }
 
 function renderNoCat(containerId) {
   const el = document.getElementById(containerId);
-  el.innerHTML = _emptyHtml('m-empty-msg', 'このカテゴリには動画がありません');
+  el.innerHTML = _emptyHtml('m-empty-msg', t('no-videos-in-cat'));
 }
 
 // --- Tab1: 一覧 ---
@@ -516,10 +537,13 @@ function _appendListPage() {
 // --- Tab2: 投票 ---
 function renderVote() {
   const wrap = document.getElementById('mVoteWrap');
+  const optBtn = document.getElementById('mVoteOptionsPanelBtn');
   if (!state.currentChannelKey) {
-    wrap.innerHTML = _emptyHtml('m-vote-empty', 'チャンネルを選択してください');
+    wrap.innerHTML = _emptyHtml('m-vote-empty', t('select-channel-prompt'));
+    if (optBtn) optBtn.hidden = true;
     return;
   }
+  if (optBtn) optBtn.hidden = false;
 
   // 保存済みペアを復元（現在のプールに含まれるか検証）
   let pair = getVotePair();
@@ -535,8 +559,8 @@ function renderVote() {
   if (!pair) {
     const pool = filteredVideos();
     wrap.innerHTML = pool.length >= 2
-      ? _emptyHtml('m-vote-empty', '全組み合わせの評価が確定しました')
-      : _emptyHtml('m-vote-empty', 'このカテゴリには動画が2本以上必要です');
+      ? _emptyHtml('m-vote-empty', t('vote-all-done'))
+      : _emptyHtml('m-vote-empty', t('vote-need-more'));
     return;
   }
 
@@ -672,7 +696,7 @@ function renderRanking() {
     const score = document.createElement('div');
     score.className = 'm-rank-score';
     const scoreParts = ['<span class="m-meta-item">' + _M_SVG_STAR + Math.round(rating) + '</span>'];
-    if (battles > 0) scoreParts.push('<span>' + wins + '勝 / ' + battles + '戦 (' + wr + '%)</span>');
+    if (battles > 0) scoreParts.push('<span>' + t('wins-fmt', {w: wins, b: battles}) + ' (' + wr + '%)</span>');
     score.innerHTML = scoreParts.join('') + _mBuildPinDot(v);
 
     const barBg = document.createElement('div');
@@ -738,9 +762,9 @@ let _mRsPinDragId    = null;
 // 最大ピン数
 const LS_RS_MAX_PINS = 'thumb-rs-max-pins';
 let _mRsMaxPins = parseInt(localStorage.getItem(LS_RS_MAX_PINS) || '10', 10);
-// 時間表示設定
-const LS_RS_SHOW_TIME = 'thumb-rs-show-time';
-let _mRsShowSeekTime = localStorage.getItem(LS_RS_SHOW_TIME) === 'true';
+// ピン透過度
+const LS_RS_PIN_OPACITY = 'thumb-rs-pin-opacity';
+let _mRsPinOpacity = parseFloat(localStorage.getItem(LS_RS_PIN_OPACITY) || '1');
 
 // プレイリストソート状態
 const LS_RS_SORT     = 'thumb-rs-sort';
@@ -1166,7 +1190,7 @@ function renderReaction() {
   if (!state.currentChannelKey) {
     const placeholder = document.getElementById('mRsPlaceholder');
     const toolbar     = document.getElementById('mRsToolbar');
-    if (placeholder) { placeholder.hidden = false; placeholder.textContent = 'チャンネルを選択してください'; }
+    if (placeholder) { placeholder.hidden = false; placeholder.textContent = t('select-channel-prompt'); }
     if (toolbar) toolbar.hidden = true;
     const seekElNoC = document.getElementById('mRsSeek');
     if (seekElNoC) seekElNoC.hidden = true;
@@ -1179,7 +1203,7 @@ function renderReaction() {
   const pool = _mRsBuildSortedPool();
   if (pool.length === 0) {
     const placeholder = document.getElementById('mRsPlaceholder');
-    if (placeholder) { placeholder.hidden = false; placeholder.textContent = 'このカテゴリには動画がありません'; }
+    if (placeholder) { placeholder.hidden = false; placeholder.textContent = t('no-videos-in-cat'); }
     const toolbar = document.getElementById('mRsToolbar');
     if (toolbar) toolbar.hidden = true;
     const seekElNoV = document.getElementById('mRsSeek');
@@ -1514,8 +1538,8 @@ function mOpenVideoMenu(v) {
   if (viewsEl) viewsEl.textContent = v.viewCount ? formatViewsShort(v.viewCount) : '-';
   if (v.publishedAt) {
     const d = new Date(v.publishedAt);
-    if (dateYearEl) dateYearEl.textContent = d.getFullYear() + '年';
-    if (dateMDEl)   dateMDEl.textContent   = (d.getMonth() + 1) + '月' + d.getDate() + '日';
+    if (dateYearEl) dateYearEl.textContent = t('date-year-fmt', {y: d.getFullYear()});
+    if (dateMDEl)   dateMDEl.textContent   = t('date-md-fmt', {m: d.getMonth() + 1, d: d.getDate()});
   } else {
     if (dateYearEl) dateYearEl.textContent = '-';
     if (dateMDEl)   dateMDEl.textContent   = '';
@@ -1531,15 +1555,15 @@ function mOpenVideoMenu(v) {
       descEl.hidden = true;
       if (moreBtn) moreBtn.hidden = true;
     } else if (v.description === '') {
-      descEl.textContent = 'この動画には説明が追加されていません。';
+      descEl.textContent = t('no-description');
       descEl.dataset.empty = '1';
       descEl.hidden = false;
       if (moreBtn) moreBtn.hidden = true;
     } else {
       descEl.removeAttribute('data-empty');
-      descEl.textContent = v.description;
+      descEl.innerHTML = _descToHtml(v.description);
       descEl.hidden = false;
-      if (moreBtn) { moreBtn.textContent = 'もっと見る'; moreBtn.hidden = false; }
+      if (moreBtn) { moreBtn.textContent = t('show-more'); moreBtn.hidden = false; }
     }
   }
 
@@ -1562,12 +1586,13 @@ function mOpenVideoMenu(v) {
     wrap.style.setProperty('--desc-anchor', imgWrap.getBoundingClientRect().bottom + 'px');
   }
 
-  // スクロール位置リセット
-  const body = document.getElementById('mDescBody');
-  if (body) body.scrollTop = 0;
-
   wrap.hidden = false;
-  requestAnimationFrame(() => wrap.classList.add('open'));
+  // hidden 解除後にスクロール位置をリセット（display:none 中は scrollTop が反映されないブラウザ対策）
+  const body = document.getElementById('mDescBody');
+  requestAnimationFrame(() => {
+    if (body) body.scrollTop = 0;
+    wrap.classList.add('open');
+  });
 }
 
 function mCloseVideoMenu() {
@@ -2025,21 +2050,19 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('mRsSettingsPanelBtn').classList.toggle('open', open);
   });
 
-  // イベントリスナー: 時間表示トグル
+  // イベントリスナー: ピン透過度スライダー
   (function() {
-    var toggle = document.getElementById('mRsTimeToggle');
-    if (!toggle) return;
-    toggle.classList.toggle('on', _mRsShowSeekTime);
-    toggle.setAttribute('aria-checked', String(_mRsShowSeekTime));
-    toggle.addEventListener('click', e => {
-      e.stopPropagation();
-      _mRsShowSeekTime = !_mRsShowSeekTime;
-      localStorage.setItem(LS_RS_SHOW_TIME, _mRsShowSeekTime);
-      toggle.classList.toggle('on', _mRsShowSeekTime);
-      toggle.setAttribute('aria-checked', String(_mRsShowSeekTime));
-      var timeEl = document.getElementById('mRsSeekTime');
-      if (timeEl) timeEl.classList.toggle('visible', _mRsShowSeekTime);
+    const slider = document.getElementById('mRsPinOpacitySlider');
+    if (!slider) return;
+    slider.value = Math.round(_mRsPinOpacity * 100);
+    slider.addEventListener('input', e => {
+      _mRsPinOpacity = parseInt(e.target.value, 10) / 100;
+      localStorage.setItem(LS_RS_PIN_OPACITY, _mRsPinOpacity);
+      const layer = document.getElementById('mRsPinsLayer');
+      if (layer) layer.style.opacity = String(_mRsPinOpacity);
+      slider.style.setProperty('--fill', e.target.value + '%');
     });
+    slider.style.setProperty('--fill', Math.round(_mRsPinOpacity * 100) + '%');
   })();
 
   // イベントリスナー: プログレスバー（タッチ・マウス共通）
@@ -2201,7 +2224,7 @@ document.addEventListener('DOMContentLoaded', function() {
     _mVmenuDescExpanded = !_mVmenuDescExpanded;
     const descEl = document.getElementById('mVmenuDesc');
     if (descEl) descEl.classList.toggle('expanded', _mVmenuDescExpanded);
-    this.textContent = _mVmenuDescExpanded ? '閉じる' : 'もっと見る';
+    this.textContent = _mVmenuDescExpanded ? t('modal-close') : t('show-more');
   });
 
   // 動画概要シート: スワイプで閉じる
@@ -2253,9 +2276,9 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!_mVmenuVideo) return;
     const url = 'https://www.youtube.com/watch?v=' + _mVmenuVideo.id;
     navigator.clipboard.writeText(url).then(() => {
-      showToast('URLをコピーしました');
+      showToast(t('copy-success'));
     }).catch(() => {
-      showToast('コピーに失敗しました', true);
+      showToast(t('copy-failed'), true);
     });
     mCloseVideoMenu();
   });
@@ -2418,8 +2441,8 @@ document.addEventListener('DOMContentLoaded', function() {
       btn.classList.toggle('active', parseInt(btn.dataset.value, 10) === _mRsMaxPins);
     });
   })();
-  var _initSeekTimeEl = document.getElementById('mRsSeekTime');
-  if (_initSeekTimeEl) _initSeekTimeEl.classList.toggle('visible', _mRsShowSeekTime);
+  const layer = document.getElementById('mRsPinsLayer');
+  if (layer) layer.style.opacity = String(_mRsPinOpacity);
   _mRsUpdateSortUI();
   // トランスポート行とシークバーの初期表示
   const transport = document.getElementById('mRsTransport');

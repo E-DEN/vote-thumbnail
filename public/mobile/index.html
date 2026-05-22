@@ -20,7 +20,7 @@
   <div id="mChPanel" class="m-ch-panel">
     <div class="m-ch-panel-header">
       <span class="m-ch-panel-title" data-i18n="m-ch-panel-title">チャンネル</span>
-      <button class="m-header-icon-btn" id="mSettingsBtn" aria-label="設定">
+      <button class="m-header-icon-btn" id="mSettingsBtn" data-i18n-aria="settings-btn-title" aria-label="設定">
         <i data-lucide="settings"></i>
       </button>
     </div>
@@ -28,8 +28,8 @@
     <div class="m-ch-panel-footer">
       <div class="m-ch-add-wrap">
         <input type="text" id="mChAddInput" class="m-ch-add-input"
-          placeholder="@handle またはURL" autocomplete="off">
-        <button id="mChAddBtn" class="m-ch-add-btn" aria-label="追加">
+          data-i18n-ph="ch-add-placeholder" autocomplete="off">
+        <button id="mChAddBtn" class="m-ch-add-btn" data-i18n-aria="add-aria" aria-label="追加">
           <i data-lucide="plus"></i>
         </button>
       </div>
@@ -39,9 +39,9 @@
 
   <!-- チャンネル設定メニュー -->
   <div id="mChCardMenu" class="m-ch-card-menu" hidden>
-    <button class="m-ch-card-menu-item" id="mChMenuRefresh">動画を再取得</button>
+    <button class="m-ch-card-menu-item" id="mChMenuRefresh" data-i18n="refresh-videos">動画を再取得</button>
     <div class="m-ch-card-menu-sep"></div>
-    <button class="m-ch-card-menu-item m-ch-menu-danger" id="mChMenuDelete">削除</button>
+    <button class="m-ch-card-menu-item m-ch-menu-danger" id="mChMenuDelete" data-i18n="delete-label">削除</button>
   </div>
 
   <!-- ヘッダー -->
@@ -54,13 +54,13 @@
     </button>
     <!-- カテゴリボタン（一覧・投票・ランキング表示時のみ表示） -->
     <div class="m-header-cats" id="mCatBar" hidden>
-      <button class="m-cat-btn active" data-cat="videos" aria-label="動画">
+      <button class="m-cat-btn active" data-cat="videos" data-i18n-aria="cat-videos" aria-label="動画">
         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
       </button>
-      <button class="m-cat-btn" data-cat="shorts" aria-label="ショート">
+      <button class="m-cat-btn" data-cat="shorts" data-i18n-aria="cat-shorts" aria-label="ショート">
         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
       </button>
-      <button class="m-cat-btn" data-cat="live" aria-label="ライブ">
+      <button class="m-cat-btn" data-cat="live" data-i18n-aria="cat-live" aria-label="ライブ">
         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="2"/><path d="M16.24 7.76a6 6 0 0 1 0 8.49m-8.48-.01a6 6 0 0 1 0-8.49m11.31-2.82a10 10 0 0 1 0 14.14m-14.14 0a10 10 0 0 1 0-14.14"/></svg>
       </button>
     </div>
@@ -74,9 +74,9 @@
       <div class="m-list-area">
         <div class="m-list-sort-bar" id="mListSortBar">
           <div class="m-rs-sort-chips">
-            <button class="m-rs-sort-chip active" data-sort="views">再生数</button>
-            <button class="m-rs-sort-chip" data-sort="date">投稿日</button>
-            <button class="m-rs-sort-chip" data-sort="rating">得票率</button>
+            <button class="m-rs-sort-chip active" data-sort="views" data-i18n="sort-views">再生数</button>
+            <button class="m-rs-sort-chip" data-sort="date" data-i18n="sort-date">投稿日</button>
+            <button class="m-rs-sort-chip" data-sort="rating" data-i18n="sort-rating">得票率</button>
           </div>
           <button class="m-rs-sort-dir" id="mListSortDir">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 16 4 4 4-4"/><path d="M7 20V4"/><path d="M11 4h10"/><path d="M11 8h7"/><path d="M11 12h4"/></svg>
@@ -93,7 +93,7 @@
     <div class="m-screen" id="mScreenVote">
       <div id="mVoteWrap" class="m-vote-wrap"></div>
       <div class="m-vote-options-bar">
-        <button class="m-vote-options-btn" id="mVoteOptionsPanelBtn" aria-label="表示設定">
+        <button class="m-vote-options-btn" id="mVoteOptionsPanelBtn" data-i18n-aria="display-settings" aria-label="表示設定">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="15" height="15">
             <line x1="21" y1="4" x2="14" y2="4"/><line x1="10" y1="4" x2="3" y2="4"/>
             <line x1="21" y1="12" x2="12" y2="12"/><line x1="8" y1="12" x2="3" y2="12"/>
@@ -105,7 +105,7 @@
       <div class="m-vote-options-panel" id="mVoteOptionsPanel">
         <div class="m-vote-opts-inner">
           <div class="m-vote-opts-row">
-            <span>タイトルを表示</span>
+            <span data-i18n="vote-show-title">タイトルを表示</span>
             <button class="m-rs-toggle" id="mVoteTitleToggle" role="switch" aria-checked="false">
               <span class="m-rs-toggle-thumb"></span>
             </button>
@@ -140,14 +140,14 @@
         <!-- トランスポートオーバーレイ（ブラー背景・フェードイン/アウト） -->
         <div class="m-rs-overlay" id="mRsOverlay">
           <div class="m-rs-overlay-center">
-            <button class="m-rs-overlay-btn" id="mRsPrevBtn" aria-label="前の動画">
+        <button class="m-rs-overlay-btn" id="mRsPrevBtn" data-i18n-aria="prev-video" aria-label="前の動画">
               <svg viewBox="0 0 24 24" fill="currentColor" width="30" height="30"><path d="M6 6h2v12H6zm3.5 6 8.5 6V6z"/></svg>
             </button>
-            <button class="m-rs-overlay-btn m-rs-overlay-play-btn" id="mRsPlayBtn" aria-label="再生/一時停止">
+            <button class="m-rs-overlay-btn m-rs-overlay-play-btn" id="mRsPlayBtn" data-i18n-aria="play-title" aria-label="再生/一時停止">
               <span class="m-rs-play-icon"><svg viewBox="0 0 24 24" fill="currentColor" width="38" height="38"><path d="M8 5v14l11-7z"/></svg></span>
               <span class="m-rs-pause-icon"><svg viewBox="0 0 24 24" fill="currentColor" width="38" height="38"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg></span>
             </button>
-            <button class="m-rs-overlay-btn" id="mRsNextBtn" aria-label="次の動画">
+            <button class="m-rs-overlay-btn" id="mRsNextBtn" data-i18n-aria="next-video" aria-label="次の動画">
               <svg viewBox="0 0 24 24" fill="currentColor" width="30" height="30"><path d="M6 18l8.5-6L6 6v12zM16 6h2v12h-2z"/></svg>
             </button>
           </div>
@@ -190,7 +190,7 @@
               <span data-i18n="reactions-transport">再生</span>
             </button>
           </div>
-          <button class="m-rs-settings-btn" id="mRsSettingsPanelBtn" aria-label="表示設定">
+          <button class="m-rs-settings-btn" id="mRsSettingsPanelBtn" data-i18n-aria="display-settings" aria-label="表示設定">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="15" height="15">
               <line x1="21" y1="4" x2="14" y2="4"/><line x1="10" y1="4" x2="3" y2="4"/>
               <line x1="21" y1="12" x2="12" y2="12"/><line x1="8" y1="12" x2="3" y2="12"/>
@@ -205,22 +205,28 @@
           <!-- ソートセクション -->
           <div class="m-rs-sort-section" id="mRsSortSection">
             <div class="m-rs-sort-chips">
-              <button class="m-rs-sort-chip active" data-sort="views">再生数</button>
-              <button class="m-rs-sort-chip" data-sort="date">投稿日</button>
-              <button class="m-rs-sort-chip" data-sort="rating">得票率</button>
+              <button class="m-rs-sort-chip active" data-sort="views" data-i18n="sort-views">再生数</button>
+              <button class="m-rs-sort-chip" data-sort="date" data-i18n="sort-date">投稿日</button>
+              <button class="m-rs-sort-chip" data-sort="rating" data-i18n="sort-rating">得票率</button>
             </div>
             <button class="m-rs-sort-dir" id="mRsSortDir">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 16 4 4 4-4"/><path d="M7 20V4"/><path d="M11 4h10"/><path d="M11 8h7"/><path d="M11 12h4"/></svg>
             </button>
           </div>
           <div class="m-rs-setting-item">
-            <span class="m-rs-setting-label">ピンカラー</span>
+            <span class="m-rs-setting-label" data-i18n="reactions-pin-color">ピン色</span>
             <div class="m-rs-setting-control m-rs-swatches">
               <button class="m-rs-swatch active" data-color="#ec4899" style="background:#ec4899"></button>
               <button class="m-rs-swatch" data-color="#00b0f4" style="background:#00b0f4"></button>
               <button class="m-rs-swatch" data-color="#57f287" style="background:#57f287"></button>
               <button class="m-rs-swatch" data-color="#f59e0b" style="background:#f59e0b"></button>
               <button class="m-rs-swatch" data-color="#a855f7" style="background:#a855f7"></button>
+            </div>
+          </div>
+          <div class="m-rs-setting-item">
+            <span class="m-rs-setting-label" data-i18n="reactions-pin-opacity">ピン透過度</span>
+            <div class="m-rs-setting-control">
+              <input type="range" id="mRsPinOpacitySlider" class="m-rs-setting-slider" min="10" max="100" value="100">
             </div>
           </div>
           <div class="m-rs-setting-item">
@@ -235,14 +241,7 @@
               </div>
             </div>
           </div>
-          <div class="m-rs-setting-item">
-            <span class="m-rs-setting-label">時間表示</span>
-            <div class="m-rs-setting-control">
-              <button class="m-rs-toggle" id="mRsTimeToggle" aria-checked="false">
-                <span class="m-rs-toggle-thumb"></span>
-              </button>
-            </div>
-          </div>
+
           </div><!-- /m-rs-settings-inner -->
         </div>
       </div>
@@ -287,7 +286,7 @@
       <div id="mSettingsMain">
         <div class="m-settings-hdr">
           <span class="m-settings-title" id="mSettingsTitle" data-i18n="settings-title">設定</span>
-          <button class="m-settings-close" id="mSettingsClose" aria-label="閉じる">
+          <button class="m-settings-close" id="mSettingsClose" data-i18n-aria="modal-close" aria-label="閉じる">
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>
         </div>
@@ -333,7 +332,7 @@
       <!-- サブページ -->
       <div id="mSettingsSub" class="m-set-sub-page">
         <div class="m-settings-hdr">
-          <button class="m-set-sub-back" id="mSetSubBack" aria-label="戻る">
+          <button class="m-set-sub-back" id="mSetSubBack" data-i18n-aria="back-btn" aria-label="戻る">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
           </button>
           <span class="m-settings-title" id="mSetSubTitle"></span>
@@ -393,8 +392,8 @@
       </div>
       <!-- ヘッダー（常時表示） -->
       <div class="m-desc-hdr">
-        <span class="m-desc-hdr-lbl">概要</span>
-        <button class="m-desc-hdr-close" id="mVmenuClose" aria-label="閉じる">
+        <span class="m-desc-hdr-lbl" data-i18n="overview-label">概要</span>
+        <button class="m-desc-hdr-close" id="mVmenuClose" data-i18n-aria="modal-close" aria-label="閉じる">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
       </div>
@@ -406,11 +405,11 @@
         <div class="m-desc-stats">
           <div class="m-desc-stat-block">
             <div class="m-desc-stat-val" id="mVmenuRating"></div>
-            <div class="m-desc-stat-lbl">レーティング</div>
+            <div class="m-desc-stat-lbl" data-i18n="rating-label">レーティング</div>
           </div>
           <div class="m-desc-stat-block">
             <div class="m-desc-stat-val" id="mVmenuViews"></div>
-            <div class="m-desc-stat-lbl">視聴</div>
+            <div class="m-desc-stat-lbl" data-i18n="views-stat-label">視聴</div>
           </div>
           <div class="m-desc-stat-block">
             <div class="m-desc-stat-val" id="mVmenuDateYear"></div>
@@ -420,7 +419,7 @@
         <!-- 概要欄 -->
         <div class="m-desc-text-wrap">
           <div class="m-desc-text" id="mVmenuDesc"></div>
-          <button class="m-desc-more-btn" id="mVmenuMore" hidden>もっと見る</button>
+          <button class="m-desc-more-btn" id="mVmenuMore" hidden data-i18n="show-more">もっと見る</button>
         </div>
         <!-- チャンネル行 -->
         <div class="m-desc-ch-row">
@@ -430,31 +429,31 @@
         <!-- アクション -->
         <button class="m-desc-action-item" id="mVmenuOpenYt">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-          <span>YouTubeで開く</span>
+          <span data-i18n="open-youtube">YouTubeで開く</span>
         </button>
         <button class="m-desc-action-item" id="mVmenuCopyUrl">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
-          <span>URLをコピー</span>
+          <span data-i18n="copy-url">URLをコピー</span>
         </button>
         <button class="m-desc-action-item" id="mVmenuOpenChannel">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 10l4.553-2.069A1 1 0 0 1 21 8.82v6.362a1 1 0 0 1-1.447.889L15 14M3 8a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8z"/></svg>
-          <span>チャンネルを開く</span>
+          <span data-i18n="open-channel">チャンネルを開く</span>
         </button>
         <!-- 動画の詳細 -->
         <div class="m-desc-details">
           <div class="m-desc-detail-row">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-            <span class="m-desc-detail-lbl">日付</span>
+            <span class="m-desc-detail-lbl" data-i18n="date-label">日付</span>
             <span class="m-desc-detail-val" id="mVmenuDetailDateVal"></span>
           </div>
           <div class="m-desc-detail-row">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-            <span class="m-desc-detail-lbl">視聴回数</span>
+            <span class="m-desc-detail-lbl" data-i18n="views-label">視聴回数</span>
             <span class="m-desc-detail-val" id="mVmenuDetailViewsVal"></span>
           </div>
           <div class="m-desc-detail-row">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-            <span class="m-desc-detail-lbl">レーティング</span>
+            <span class="m-desc-detail-lbl" data-i18n="rating-label">レーティング</span>
             <span class="m-desc-detail-val" id="mVmenuDetailRatingVal"></span>
           </div>
         </div>

@@ -3225,15 +3225,20 @@ async function addChannelFromSidebarInput() {
   const videoIdMatch = !handleMatch && raw.match(
     /(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|shorts\/|live\/|embed\/|v\/))([A-Za-z0-9_-]{11})/
   );
+  // @なし・URLなし → 単純文字列をハンドルとして扱う
+  const plainHandle = !handleMatch && !videoIdMatch && /^[^\s/?#&]+$/.test(raw)
+    ? '@' + raw : null;
 
-  if (!handleMatch && !videoIdMatch) {
+  if (!handleMatch && !videoIdMatch && !plainHandle) {
     statusEl.textContent = t('invalid-url');
     return;
   }
 
   const postBody = handleMatch
     ? { handle: '@' + handleMatch[1] }
-    : { videoId: videoIdMatch[1] };
+    : plainHandle
+      ? { handle: plainHandle }
+      : { videoId: videoIdMatch[1] };
 
   // 既登録チェック: 存在すればリフレッシュボタンと同じ挙動にする
   if (postBody.handle) {

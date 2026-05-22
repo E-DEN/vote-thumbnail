@@ -608,6 +608,7 @@ html, body {
   justify-content: flex-end;
   padding: 4px 8px 2px;
 }
+.m-vote-options-btn[hidden] { display: none; }
 .m-vote-options-btn {
   width: 30px;
   height: 30px;
@@ -1086,6 +1087,50 @@ html, body {
   gap: 7px;
   flex: 0 0 auto;
 }
+.m-rs-setting-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 138px;
+  height: 20px;
+  background: transparent;
+  cursor: pointer;
+  outline: none;
+  border: none;
+  --fill: 100%;
+}
+.m-rs-setting-slider::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(to right, var(--accent) var(--fill), var(--border) var(--fill));
+}
+.m-rs-setting-slider::-moz-range-track {
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(to right, var(--accent) var(--fill), var(--border) var(--fill));
+}
+.m-rs-setting-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 0 0 2px var(--surface);
+  margin-top: -4px;
+  transition: transform 0.1s;
+}
+.m-rs-setting-slider::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 0 0 2px var(--surface);
+}
+.m-rs-setting-slider::-webkit-slider-thumb:hover { transform: scale(1.2); }
+.m-rs-setting-slider::-moz-range-thumb:hover { transform: scale(1.2); }
 
 /* スウォッチ */
 .m-rs-swatches {
@@ -1994,6 +2039,14 @@ html, body {
 .m-desc-text.expanded {
   display: block;
   overflow: visible;
+}
+.m-desc-text a {
+  color: var(--accent);
+  text-decoration: none;
+  word-break: break-all;
+}
+.m-desc-text a:active {
+  text-decoration: underline;
 }
 .m-desc-text[data-empty="1"] {
   color: var(--text-muted);
