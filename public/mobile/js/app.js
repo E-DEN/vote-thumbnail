@@ -220,6 +220,21 @@ function closeChannelPanel() {
   document.getElementById('mChOverlay').classList.remove('open');
 }
 
+// サイドバーをスワイプで閉じる
+(function() {
+  const panel = document.getElementById('mChPanel');
+  let _swipeStartX = 0, _swipeStartY = 0;
+  panel.addEventListener('touchstart', e => {
+    _swipeStartX = e.touches[0].clientX;
+    _swipeStartY = e.touches[0].clientY;
+  }, { passive: true });
+  panel.addEventListener('touchend', e => {
+    const dx = e.changedTouches[0].clientX - _swipeStartX;
+    const dy = e.changedTouches[0].clientY - _swipeStartY;
+    if (dx < -50 && Math.abs(dy) < Math.abs(dx)) closeChannelPanel();
+  }, { passive: true });
+})();
+
 // --- チャンネルカードメニュー ---
 let _chMenuTarget = null;
 
