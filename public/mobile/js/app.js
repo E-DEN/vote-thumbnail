@@ -2170,7 +2170,12 @@ document.addEventListener('DOMContentLoaded', function() {
       _mRsLastRafTs = null;
       _mRsUpdatePlayBtnUI();
     }
-    _mRsShowOverlay();
+    // 再生開始時はピンが見えるようオーバーレイを即時非表示、一時停止時は長めに表示
+    if (_mRsPlaying) {
+      _mRsHideOverlay();
+    } else {
+      _mRsShowOverlay();
+    }
   });
   document.getElementById('mRsNextBtn').addEventListener('click', e => {
     e.stopPropagation();
