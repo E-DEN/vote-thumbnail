@@ -787,219 +787,42 @@ let _mRsMyPinEmitAt  = -1;
 let _mRsMyPinEmitted = false;
 
 const PIN_SNAPS_M = [0, 1, 5, 10, 15, 20, 25, 30];
-const M_RS_DROP_HEIGHT  = 55;
-const M_RS_DROP_SPEED   = 1.5;
-const M_RS_FADE_IN_FRAC = 0.05;
-const M_RS_PIN_PALETTES = {
-  '#ec4899': ['#ec4899', '#f472b6', '#db2777'],
-  '#00b0f4': ['#00b0f4', '#38bdf8', '#0284c7'],
-  '#57f287': ['#57f287', '#4ade80', '#16a34a'],
-  '#f59e0b': ['#f59e0b', '#fbbf24', '#d97706'],
-  '#a855f7': ['#a855f7', '#c084fc', '#9333ea'],
-};
+// PIN_PALETTES / PIN_DROP_HEIGHT / PIN_DROP_SPEED / PIN_FADE_IN_FRAC は
+// reactions-utils.js でグローバル定義済み
 
 function mRsApplyPalette() {
   const wrap = document.getElementById('mRsImgWrap');
   if (!wrap) return;
-  const palette = M_RS_PIN_PALETTES[_mRsPinColor] || M_RS_PIN_PALETTES['#ec4899'];
+  const palette = PIN_PALETTES[_mRsPinColor] || PIN_PALETTES['#ec4899'];
   wrap.style.setProperty('--pin-c0', palette[0]);
   wrap.style.setProperty('--pin-c1', palette[1]);
   wrap.style.setProperty('--pin-c2', palette[2]);
 }
 
-// KDE 重み計算（bandwidth=0.07）
+// KDE 重み計算 → reactions-utils.js の pinComputeKde に委譲
 function mRsComputeKde(pins) {
-  const n = pins.length;
-  if (n < 2) return null;
-  const bw2 = 0.07 * 0.07;
-  const noiseFloor = 0.15;
-  const w = new Array(n).fill(0);
-  for (let i = 0; i < n; i++) {
-    for (let j = 0; j < n; j++) {
-      if (i === j) continue;
-      const dx = pins[i].x - pins[j].x, dy = pins[i].y - pins[j].y;
-      w[i] += Math.exp(-(dx * dx + dy * dy) / (2 * bw2));
-    }
-  }
-  const max = Math.max(...w) || 1;
-  return w.map(v => noiseFloor + (1 - noiseFloor) * (v / max));
+  return pinComputeKde(pins);
 }
 
-// グリッドクラスタリング（表示ピン密度計算に使用）
+// グリッドクラスタリング → reactions-utils.js の pinComputeClusters に委譲
 function mRsComputeClusters(pins) {
-  const GRID = 10;
-  const cellPins = {};
-  for (const p of pins) {
-    const cx = Math.min(GRID - 1, Math.floor(p.x * GRID));
-    const cy = Math.min(GRID - 1, Math.floor(p.y * GRID));
-    const key = cx + ',' + cy;
-    if (!cellPins[key]) cellPins[key] = [];
-    cellPins[key].push(p);
-  }
-  const clusters = [];
-  for (const cell of Object.values(cellPins)) {
-    let sumX = 0, sumY = 0;
-    for (const p of cell) { sumX += p.x; sumY += p.y; }
-    const centX = sumX / cell.length, centY = sumY / cell.length;
-    let best = cell[0], bestDist = Infinity;
-    for (const p of cell) {
-      const dx = p.x - centX, dy = p.y - centY;
-      const d = dx * dx + dy * dy;
-      if (d < bestDist) { bestDist = d; best = p; }
-    }
-    clusters.push({ pin: best, pins: cell, count: cell.length });
-  }
-  clusters.sort((a, b) => b.count - a.count);
-  return clusters;
+  return pinComputeClusters(pins);
 }
 
-// 件数が少ない場合にダミーピンで補完（表示確認用）
+// ダミーピン補完 → reactions-utils.js の pinFillDummy に委譲
 function _mRsFillDummyPins(pins) {
-  const TARGET = 30;
-  if (pins.length >= TARGET) return;
-  function gauss(mean, sd) {
-    let u, v;
-    do { u = Math.random(); } while (u === 0);
-    do { v = Math.random(); } while (v === 0);
-    const n = Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
-    return Math.max(0.01, Math.min(0.99, mean + n * sd));
-  }
-  function samplePin(hotspots) {
-    if (Math.random() < 0.08) return { x: Math.random(), y: Math.random() };
-    const total = hotspots.reduce((s, h) => s + h.w, 0);
-    let r = Math.random() * total;
-    for (const h of hotspots) {
-      r -= h.w;
-      if (r <= 0) return { x: gauss(h.x, h.sx), y: gauss(h.y, h.sy) };
-    }
-    const h = hotspots[hotspots.length - 1];
-    return { x: gauss(h.x, h.sx), y: gauss(h.y, h.sy) };
-  }
-  let hotspots;
-  if (pins.length >= 3) {
-    const clusters = mRsComputeClusters(pins);
-    hotspots = clusters.map(cl => ({
-      x: cl.pin.x, y: cl.pin.y,
-      sx: 0.06, sy: 0.06,
-      w: cl.count,
-    }));
-  } else {
-    const nc = 3 + Math.floor(Math.random() * 3);
-    hotspots = Array.from({ length: nc }, () => ({
-      x:  0.1 + Math.random() * 0.8,
-      y:  0.1 + Math.random() * 0.8,
-      sx: 0.05 + Math.random() * 0.05,
-      sy: 0.05 + Math.random() * 0.05,
-      w:  1 + Math.random() * 3,
-    }));
-  }
-  const needed = TARGET - pins.length;
-  for (let i = 0; i < needed; i++) pins.push(samplePin(hotspots));
+  pinFillDummy(pins, 30);
 }
 
-// 表示するピン一覧を構築（密集度重みで最大 count 本を選択）
+// 表示ピン一覧を構築 → reactions-utils.js の pinBuildPlaced に委譲
 function mRsBuildPlacedPins(count) {
   if (count == null) count = _mRsMaxPins;
-  const pins = _mRsPins.slice();
-  if (!pins.length) return [];
-  const clusters = mRsComputeClusters(pins);
-  const maxCount = clusters.length > 0 ? clusters[0].count : 1;
-  const GRID = 10;
-  const cellWeight = {};
-  for (const cl of clusters) {
-    const cx = Math.min(GRID - 1, Math.floor(cl.pin.x * GRID));
-    const cy = Math.min(GRID - 1, Math.floor(cl.pin.y * GRID));
-    cellWeight[cx + ',' + cy] = cl.count / maxCount;
-  }
-  const weighted = pins.map(p => {
-    const cx = Math.min(GRID - 1, Math.floor(p.x * GRID));
-    const cy = Math.min(GRID - 1, Math.floor(p.y * GRID));
-    return { p, w: Math.sqrt(cellWeight[cx + ',' + cy] || 0.01) };
-  });
-  weighted.sort((a, b) => Math.pow(Math.random(), 1 / b.w) - Math.pow(Math.random(), 1 / a.w));
-  const placed = weighted.slice(0, count).map(item => ({ x: item.p.x, y: item.p.y, density: 0 }));
-  const BW2 = 0.09 * 0.09;
-  let maxKde = 0;
-  const kdeDensities = placed.map(pin => {
-    let kde = 0;
-    for (const p of pins) {
-      const dx = p.x - pin.x, dy = p.y - pin.y;
-      kde += Math.exp(-(dx * dx + dy * dy) / (2 * BW2));
-    }
-    if (kde > maxKde) maxKde = kde;
-    return kde;
-  });
-  if (maxKde > 0) {
-    for (let i = 0; i < placed.length; i++) placed[i].density = kdeDensities[i] / maxKde;
-  }
-  for (let i = placed.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [placed[i], placed[j]] = [placed[j], placed[i]];
-  }
-  return placed;
+  return pinBuildPlaced(_mRsPins, count);
 }
 
-// ピン DOM 要素を生成（アニメーション付き）
+// ピン DOM 要素を生成 → reactions-utils.js の pinMakeElement に委譲
 function mRsMakePinEl(x, y, density, skipDropAnim, pinProps) {
-  const d = density != null ? density : 0.5;
-  const baseScale = 0.6 + 0.8 * d;
-  const scale = (pinProps && pinProps._scale != null) ? pinProps._scale : baseScale + (Math.random() - 0.5) * 0.4;
-  const sz = Math.round(20 * scale);
-  const szH = Math.round(sz * 1.25);
-  const shadeIdx = d >= 0.67 ? 2 : d >= 0.34 ? 1 : 0;
-  const palette = M_RS_PIN_PALETTES[_mRsPinColor] || M_RS_PIN_PALETTES['#ec4899'];
-  function hexToRgb(h) {
-    h = h.replace('#', '');
-    return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
-  }
-  const cLight = hexToRgb(palette[1]);
-  const cDark  = hexToRgb(palette[2]);
-  const t      = Math.max(0, (d - 0.1) / 0.9);
-  const pr     = Math.round(cLight[0] + (cDark[0] - cLight[0]) * t);
-  const pg     = Math.round(cLight[1] + (cDark[1] - cLight[1]) * t);
-  const pb     = Math.round(cLight[2] + (cDark[2] - cLight[2]) * t);
-  const pinColor = 'rgb(' + pr + ',' + pg + ',' + pb + ')';
-  const tipGap = szH / 30;
-  const el = document.createElement('div');
-  el.className   = 'reactions-pin shade-' + shadeIdx;
-  el.dataset.x   = x;
-  el.dataset.y   = y;
-  el.dataset.density = d.toFixed(4);
-  el.style.cssText   = 'left:' + (x * 100) + '%;top:calc(' + (y * 100) + '% + ' + tipGap.toFixed(2) + 'px);--drop-h:' + M_RS_DROP_HEIGHT + 'px;';
-  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  svg.setAttribute('class', 'reactions-pin-svg');
-  svg.setAttribute('viewBox', '0 0 24 30');
-  svg.setAttribute('width', sz);
-  svg.setAttribute('height', szH);
-  svg.innerHTML =
-    '<path class="pin-balloon" style="fill:' + pinColor + '" d="M12,29 C5.5,21.5 1.5,17 1.5,11 a10.5,10.5,0,0,1,21,0 C22.5,17 18.5,21.5 12,29 Z"/>'
-    + '<g transform="translate(12 11) scale(0.38) translate(-12 -12)">'
-    + '<path class="pin-icon" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>'
-    + '</g>';
-  el.appendChild(svg);
-  const floatDur = ((pinProps && pinProps._floatDur != null) ? pinProps._floatDur : (2.4 + Math.random() * 0.8).toFixed(2)) + 's ease-in-out infinite';
-  if (skipDropAnim) {
-    el.style.transform  = 'translate(-50%, -100%)';
-    el.style.opacity    = '1';
-    el.style.animation  = 'reactionsPinFloat ' + floatDur;
-    svg.style.animation = 'none';
-    el.classList.add('rs-floating');
-  } else {
-    el.style.animation  = 'reactionsPinDrop ' + M_RS_DROP_SPEED + 's linear forwards';
-    svg.style.animation = 'reactionsPinSvgSquash ' + M_RS_DROP_SPEED + 's linear forwards';
-    el.animate(
-      [{ opacity: 0, offset: 0 }, { opacity: 1, offset: M_RS_FADE_IN_FRAC }, { opacity: 1, offset: 1 }],
-      { duration: M_RS_DROP_SPEED * 1000, fill: 'forwards', easing: 'linear' }
-    );
-    el.addEventListener('animationend', function(e) {
-      if (e.animationName === 'reactionsPinDrop') {
-        el.style.animation  = 'reactionsPinFloat ' + floatDur;
-        svg.style.animation = 'none';
-        el.classList.add('rs-floating');
-      }
-    }, { once: true });
-  }
-  return el;
+  return pinMakeElement(x, y, density, skipDropAnim, pinProps, PIN_PALETTES[_mRsPinColor] || PIN_PALETTES['#ec4899']);
 }
 
 // ヒートマップを canvas に描画
@@ -1108,7 +931,7 @@ function mRsShowMyPin(x, y, withAnim) {
   const tipGap = (45 / 30).toFixed(2);
   pin.style.left = (x * 100) + '%';
   pin.style.top  = 'calc(' + (y * 100) + '% + ' + tipGap + 'px)';
-  pin.style.setProperty('--drop-h', M_RS_DROP_HEIGHT + 'px');
+  pin.style.setProperty('--drop-h', PIN_DROP_HEIGHT + 'px');
   pin.hidden = false;
   if (shadow) {
     shadow.style.left = (x * 100) + '%';
@@ -1128,11 +951,11 @@ function mRsShowMyPin(x, y, withAnim) {
     _mRsMyPinAnimRaf = 0;
     const floatDur = (2.4 + Math.random() * 0.8).toFixed(2) + 's';
     if (withAnim) {
-      pin.style.animation = 'reactionsPinDrop ' + M_RS_DROP_SPEED + 's linear forwards';
-      svg.style.animation = 'reactionsPinSvgSquash ' + M_RS_DROP_SPEED + 's linear forwards';
+      pin.style.animation = 'reactionsPinDrop ' + PIN_DROP_SPEED + 's linear forwards';
+      svg.style.animation = 'reactionsPinSvgSquash ' + PIN_DROP_SPEED + 's linear forwards';
       pin.animate(
-        [{ opacity: 0, offset: 0 }, { opacity: 1, offset: M_RS_FADE_IN_FRAC }, { opacity: 1, offset: 1 }],
-        { duration: M_RS_DROP_SPEED * 1000, fill: 'forwards', easing: 'linear' }
+        [{ opacity: 0, offset: 0 }, { opacity: 1, offset: PIN_FADE_IN_FRAC }, { opacity: 1, offset: 1 }],
+        { duration: PIN_DROP_SPEED * 1000, fill: 'forwards', easing: 'linear' }
       );
       _mRsMyPinOnDrop = e => {
         if (e.animationName !== 'reactionsPinDrop') return;

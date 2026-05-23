@@ -93,6 +93,7 @@ let _reactionsKde   = null;     // KDE重みキャッシュ
 let _reactionsMyPins = {};      // videoId → { x, y }
 let _myPinOnDrop    = null;     // animationend リスナー参照（重複登録防止）
 let _myPinAnimRaf   = 0;        // showMyReactionsPin アニメーション再開 rAF ID
+let _reactionsLoopTimer = 0;    // openReactionsMode の遅延起動タイマーID
 let _reactionsStartPlayback = null; // Transport IIFE から注入
 let _reactionsStopPlayback  = null; // Transport IIFE から注入: RAFループを即停止
 let _reactionsResetTransport = null; // Transport IIFE から注入: トランスポートを初期状態にリセット
@@ -104,18 +105,6 @@ let _suppressHistory = false;  // history.pushState を抑制するフラグ
 const PIN_SNAPS = [0, 1, 5, 10, 15, 20, 25, 30]; // スナップ値: 1=自分ピンのみ表示
 let _reactionsPinColor  = localStorage.getItem('reactions-pin-color')  || '#ec4899';
 
-// ピンカラーパレット（各色につき3段階シェード）
-const PIN_PALETTES = {
-  '#ec4899': ['#ec4899', '#f472b6', '#db2777'],  // pink:   400→600
-  '#00b0f4': ['#00b0f4', '#38bdf8', '#0284c7'],  // sky:    400→600
-  '#57f287': ['#57f287', '#4ade80', '#16a34a'],  // green:  400→600
-  '#f59e0b': ['#f59e0b', '#fbbf24', '#d97706'],  // amber:  400→600
-  '#a855f7': ['#a855f7', '#c084fc', '#9333ea'],  // purple: 400→600
-};
-
-let DROP_HEIGHT  = 55;    // px: ピン落下高さ
-let DROP_SPEED   = 1.5;   // s: 落下アニメーション時間
-const FADE_IN_FRAC = 0.05;  // Web Animations フェードイン開始割合
 
 function applyPinPalette() {
   const wrap = document.getElementById('reactionsImgWrap');
@@ -126,29 +115,9 @@ function applyPinPalette() {
   wrap.style.setProperty('--pin-c2', palette[2]);
 }
 
-// KDE 重み計算（bandwidth=0.07）
+// KDE 重み計算 → reactions-utils.js の pinComputeKde に委譲
 function reactionsComputeKde(pins) {
-  const n = pins.length;
-  if (n < 2) return null;
-  const bw2 = 0.07 * 0.07;
-  const noiseFloor = 0.15;
-  const w = new Array(n).fill(0);
-  for (let i = 0; i < n; i++) {
-    for (let j = 0; j < n; j++) {
-      if (i === j) continue;
-      const dx = pins[i].x - pins[j].x;
-      const dy = pins[i].y - pins[j].y;
-      w[i] += Math.exp(-(dx * dx + dy * dy) / (2 * bw2));
-    }
-  }
-  const maxW = Math.max.apply(null, w) || 1;
-  const cum  = new Array(n);
-  let acc = 0;
-  for (let i = 0; i < n; i++) {
-    acc += w[i] / maxW + noiseFloor;
-    cum[i] = acc;
-  }
-  return { cum, total: acc };
+  return pinComputeKde(pins);
 }
 
 // KDE重み付きルーレットサンプリング → 実ピン座標を返す
@@ -2539,36 +2508,9 @@ async function postReaction(videoId, x, y) {
   } catch { /* サイレント失敗 */ }
 }
 
-// ピンをグリッドでクラスタリングし、各セルの代表点(重心に最も近いDB値)と件数を返す
-// → ヒートマップ描画とピン表示で同じ結果を共有するために切り出し
+// ピンをグリッドでクラスタリング → reactions-utils.js の pinComputeClusters に委譲
 function computeReactionClusters(pins) {
-  var GRID = 10;
-  var cellPins = {};
-  for (var pi = 0; pi < pins.length; pi++) {
-    var p = pins[pi];
-    var cx = Math.min(GRID - 1, Math.floor(p.x * GRID));
-    var cy = Math.min(GRID - 1, Math.floor(p.y * GRID));
-    var ckey = cx + ',' + cy;
-    if (!cellPins[ckey]) cellPins[ckey] = [];
-    cellPins[ckey].push(p);
-  }
-  var cellKeys = Object.keys(cellPins);
-  var clusters = [];
-  for (var ci = 0; ci < cellKeys.length; ci++) {
-    var cell = cellPins[cellKeys[ci]];
-    var sumX = 0, sumY = 0;
-    for (var k = 0; k < cell.length; k++) { sumX += cell[k].x; sumY += cell[k].y; }
-    var centX = sumX / cell.length, centY = sumY / cell.length;
-    var best = cell[0], bestDist = Infinity;
-    for (var k = 0; k < cell.length; k++) {
-      var dx = cell[k].x - centX, dy = cell[k].y - centY;
-      var d = dx * dx + dy * dy;
-      if (d < bestDist) { bestDist = d; best = cell[k]; }
-    }
-    clusters.push({ pin: best, pins: cell, count: cell.length, cent: { x: centX, y: centY } });
-  }
-  clusters.sort(function(a, b) { return b.count - a.count; });
-  return clusters;
+  return pinComputeClusters(pins);
 }
 
 // ヒートマップ用 offscreen canvas（ピン度数取得に常時使用）
@@ -2665,18 +2607,7 @@ function setSquashIntensity(v) {
 }
 
 function _pinColorFromDensity(d) {
-  var palette = PIN_PALETTES[_reactionsPinColor] || PIN_PALETTES['#ec4899'];
-  function hexToRgb(h) {
-    h = h.replace('#','');
-    return [parseInt(h.slice(0,2),16), parseInt(h.slice(2,4),16), parseInt(h.slice(4,6),16)];
-  }
-  var cLight = hexToRgb(palette[1]);
-  var cDark  = hexToRgb(palette[2]);
-  var t = Math.max(0, (d - 0.1) / 0.9);
-  var r = Math.round(cLight[0] + (cDark[0] - cLight[0]) * t);
-  var g = Math.round(cLight[1] + (cDark[1] - cLight[1]) * t);
-  var b = Math.round(cLight[2] + (cDark[2] - cLight[2]) * t);
-  return 'rgb(' + r + ',' + g + ',' + b + ')';
+  return pinColorFromDensity(d, PIN_PALETTES[_reactionsPinColor] || PIN_PALETTES['#ec4899']);
 }
 
 function updatePinColors() {
@@ -2692,110 +2623,11 @@ function updatePinColors() {
 }
 
 function makeReactionsPinEl(x, y, density, skipDropAnim, pinProps) {
-  // density(0〜1): 高いほど大きい・濃い色。ランダム幅は±20%
-  var d = density != null ? density : 0.5;
-  var baseScale = 0.6 + 0.8 * d;
-  const scale    = (pinProps && pinProps._scale != null) ? pinProps._scale : baseScale + (Math.random() - 0.5) * 0.4;
-  const sz       = Math.round(20 * scale);
-  const szH      = Math.round(sz * 1.25);
-  // densityでシェード頭数を連続値として決定
-  var shadeIdx = d >= 0.67 ? 2 : d >= 0.34 ? 1 : 0;
-  var pinColor = _pinColorFromDensity(d);
-  const el       = document.createElement('div');
-  el.className   = 'reactions-pin shade-' + shadeIdx;
-  el.dataset.x       = x;
-  el.dataset.y       = y;
-  el.dataset.density = d.toFixed(4);
-  // viewBox 0 0 24 30 でピン先端は y=29、translate(-50%,-100%) は底辺を座標に合わせる
-  // → 先端は底辺より szH/30 px 上にある分を top に加算して補正
-  var tipGap = szH / 30;
-  el.style.cssText = 'left:' + (x * 100) + '%;top:calc(' + (y * 100) + '% + ' + tipGap.toFixed(2) + 'px);--drop-h:' + DROP_HEIGHT + 'px;';
-  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  svg.setAttribute('class', 'reactions-pin-svg');
-  svg.setAttribute('viewBox', '0 0 24 30');
-  svg.setAttribute('width', sz);
-  svg.setAttribute('height', szH);
-  svg.innerHTML =
-    '<path class="pin-balloon" style="fill:' + pinColor + '" d="M12,29 C5.5,21.5 1.5,17 1.5,11 a10.5,10.5,0,0,1,21,0 C22.5,17 18.5,21.5 12,29 Z"/>' +
-    '<g transform="translate(12 11) scale(0.38) translate(-12 -12)">' +
-      '<path class="pin-icon" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>' +
-    '</g>';
-  el.appendChild(svg);
-  var _floatDur = ((pinProps && pinProps._floatDur != null) ? pinProps._floatDur : (2.4 + Math.random() * 0.8).toFixed(2)) + 's ease-in-out infinite';
-  if (skipDropAnim) {
-    el.style.transform  = 'translate(-50%, -100%)';
-    el.style.opacity    = '1';
-    el.style.animation  = 'reactionsPinFloat ' + _floatDur;
-    svg.style.animation = 'none';
-    el.classList.add('rs-floating');
-  } else {
-    el.style.animation  = 'reactionsPinDrop ' + DROP_SPEED + 's linear forwards';
-    svg.style.animation = 'reactionsPinSvgSquash ' + DROP_SPEED + 's linear forwards';
-    el.addEventListener('animationend', function(e) {
-      if (e.animationName === 'reactionsPinDrop') {
-        el.style.animation  = 'reactionsPinFloat ' + _floatDur;
-        svg.style.animation = 'none';
-        el.classList.add('rs-floating');
-      }
-    }, { once: true });
-    el.animate(
-      [
-        { opacity: 0, offset: 0 },
-        { opacity: 1, offset: FADE_IN_FRAC },
-        { opacity: 1, offset: 1 },
-      ],
-      { duration: DROP_SPEED * 1000, fill: 'forwards', easing: 'linear' }
-    );
-  }
-  return el;
+  return pinMakeElement(x, y, density, skipDropAnim, pinProps, PIN_PALETTES[_reactionsPinColor] || PIN_PALETTES['#ec4899']);
 }
 
 function buildPlacedPins(limit) {
-  var pins = _reactionsPins.slice();
-  if (pins.length === 0) return [];
-  var clusters = computeReactionClusters(pins);
-  var maxCount = clusters.length > 0 ? clusters[0].count : 1;
-  var GRID = 10;
-  var cellWeight = {};
-  for (var ci = 0; ci < clusters.length; ci++) {
-    var cl = clusters[ci];
-    var cx0 = Math.min(GRID - 1, Math.floor(cl.pin.x * GRID));
-    var cy0 = Math.min(GRID - 1, Math.floor(cl.pin.y * GRID));
-    cellWeight[cx0 + ',' + cy0] = cl.count / maxCount;
-  }
-  var weighted = pins.map(function(p) {
-    var cx = Math.min(GRID - 1, Math.floor(p.x * GRID));
-    var cy = Math.min(GRID - 1, Math.floor(p.y * GRID));
-    var w = cellWeight[cx + ',' + cy] || 0.01;
-    return { p: p, w: Math.sqrt(w) };
-  });
-  weighted.sort(function(a, b) {
-    return Math.pow(Math.random(), 1 / b.w) - Math.pow(Math.random(), 1 / a.w);
-  });
-  var placed = weighted.slice(0, limit != null ? limit : REACTIONS_MAX_PINS).map(function(item) {
-    return { x: item.p.x, y: item.p.y, density: 0 };
-  });
-  var BW2 = 0.09 * 0.09;
-  var maxKde = 0;
-  var kdeDensities = placed.map(function(pin) {
-    var kde = 0;
-    for (var i = 0; i < pins.length; i++) {
-      var dx = pins[i].x - pin.x, dy = pins[i].y - pin.y;
-      kde += Math.exp(-(dx * dx + dy * dy) / (2 * BW2));
-    }
-    if (kde > maxKde) maxKde = kde;
-    return kde;
-  });
-  if (maxKde > 0) {
-    for (var ai = 0; ai < placed.length; ai++) {
-      placed[ai].density = kdeDensities[ai] / maxKde;
-    }
-  }
-  for (var si = placed.length - 1; si > 0; si--) {
-    var sj = Math.floor(Math.random() * (si + 1));
-    var st = placed[si]; placed[si] = placed[sj]; placed[sj] = st;
-  }
-  return placed;
+  return pinBuildPlaced(_reactionsPins, limit != null ? limit : REACTIONS_MAX_PINS);
 }
 
 function startReactionsLoop() {
@@ -2862,7 +2694,26 @@ function stopReactionsResizeObserver() {
   }
 }
 
+function _stopMyPin() {
+  if (_reactionsLoopTimer) { clearTimeout(_reactionsLoopTimer); _reactionsLoopTimer = 0; }
+  if (_myPinAnimRaf) { cancelAnimationFrame(_myPinAnimRaf); _myPinAnimRaf = 0; }
+  var pin = document.getElementById('reactionsMyPin');
+  if (!pin) return;
+  if (_myPinOnDrop) { pin.removeEventListener('animationend', _myPinOnDrop); _myPinOnDrop = null; }
+  pin.getAnimations().forEach(function(a) { a.cancel(); });
+  var svg = document.getElementById('reactionsMyPinSvg');
+  if (svg) { svg.getAnimations().forEach(function(a) { a.cancel(); }); svg.style.animation = 'none'; }
+  pin.classList.remove('color-cycling', 'rs-floating');
+  pin.style.animation = 'none';
+  pin.style.transform = '';
+  pin.style.opacity   = '';
+  pin.hidden = true;
+  var shadow = document.getElementById('reactionsMyPinShadow');
+  if (shadow) shadow.hidden = true;
+}
+
 function showMyReactionsPin(x, y, withAnim) {
+  if (!_reactionsCurrentVideoId) return;
   // x, y は画像内の相対位置（0〜1）。wrap内のレターボックスを考慮して変換
   var wrap = document.getElementById('reactionsImgWrap');
   var img  = document.getElementById('reactionsImg');
@@ -2884,7 +2735,7 @@ function showMyReactionsPin(x, y, withAnim) {
   }
   pin.style.left = left;
   pin.style.top  = top;
-  pin.style.setProperty('--drop-h', DROP_HEIGHT + 'px');
+  pin.style.setProperty('--drop-h', PIN_DROP_HEIGHT + 'px');
   pin.hidden = false;
   // 影をクリック地点に固定
   var shadow = document.getElementById('reactionsMyPinShadow');
@@ -2917,15 +2768,15 @@ function showMyReactionsPin(x, y, withAnim) {
   _myPinAnimRaf = requestAnimationFrame(function() {
     _myPinAnimRaf = 0;
     if (withAnim) {
-      pin.style.animation = 'reactionsPinDrop ' + DROP_SPEED + 's linear forwards';
-      svg.style.animation = 'reactionsPinSvgSquash ' + DROP_SPEED + 's linear forwards';
+      pin.style.animation = 'reactionsPinDrop ' + PIN_DROP_SPEED + 's linear forwards';
+      svg.style.animation = 'reactionsPinSvgSquash ' + PIN_DROP_SPEED + 's linear forwards';
       pin.animate(
         [
           { opacity: 0, offset: 0 },
-          { opacity: 1, offset: FADE_IN_FRAC },
+          { opacity: 1, offset: PIN_FADE_IN_FRAC },
           { opacity: 1, offset: 1 },
         ],
-        { duration: DROP_SPEED * 1000, fill: 'forwards', easing: 'linear' }
+        { duration: PIN_DROP_SPEED * 1000, fill: 'forwards', easing: 'linear' }
       );
       // drop完了後にフロート + カラーサイクルへ切り替え、rs-floating 付与
       _myPinOnDrop = function(e) {
@@ -2990,7 +2841,9 @@ function openReactionsMode(videoId) {
       renderReactionsHeatmap();
     }
     // ピン表示状態に関わらず常に再生開始（非表示中も裏で降り続ける）
-    setTimeout(function() {
+    if (_reactionsLoopTimer) { clearTimeout(_reactionsLoopTimer); _reactionsLoopTimer = 0; }
+    _reactionsLoopTimer = setTimeout(function() {
+      _reactionsLoopTimer = 0;
       if (_reactionsStartPlayback) _reactionsStartPlayback(); else startReactionsLoop();
     }, 200);
   });
@@ -3000,9 +2853,7 @@ function closeReactionsMode() {
   _reactionsActive = false;
   stopReactionsResizeObserver();
   document.getElementById('reactionsPinsLayer').innerHTML = '';
-  document.getElementById('reactionsMyPin').hidden = true;
-  var shadow = document.getElementById('reactionsMyPinShadow');
-  if (shadow) shadow.hidden = true;
+  _stopMyPin();
   var imgWrap = document.getElementById('reactionsImgWrap');
   if (imgWrap) imgWrap.classList.remove('heatmap-visible');
   if (currentView === 'reaction') {
@@ -3089,6 +2940,7 @@ function renderReactionsPlaylist(selectedId) {
     if (rsToolbar)   rsToolbar.style.display   = 'none';
     if (rsVideoInfo) rsVideoInfo.style.display = 'none';
     if (placeholder) placeholder.style.display = '';
+    _stopMyPin();
     _renderEmptyCat(body);
     return;
   }
@@ -3103,6 +2955,7 @@ function renderReactionsPlaylist(selectedId) {
     if (rsToolbar)   rsToolbar.style.display   = 'none';
     if (rsVideoInfo) rsVideoInfo.style.display = 'none';
     if (placeholder) placeholder.style.display = '';
+    _stopMyPin();
   }
   pool.forEach(function(v, i) {
     var card = document.createElement('div');
@@ -4208,6 +4061,8 @@ document.getElementById('catFilter').addEventListener('click', e => {
   document.querySelectorAll('.cat-seg-btn').forEach(b => b.classList.toggle('active', b === btn));
   // 動画選択・ピンをリセット
   _reactionsCurrentVideoId = null;
+  _stopMyPin();
+  if (_reactionsStopPlayback) _reactionsStopPlayback();
   var _pinsLayerCat = document.getElementById('reactionsPinsLayer');
   if (_pinsLayerCat) _pinsLayerCat.innerHTML = '';
   var _hmLayerCat = document.getElementById('reactionsHeatmapLayer');
