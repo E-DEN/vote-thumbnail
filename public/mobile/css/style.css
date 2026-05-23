@@ -284,6 +284,24 @@ html, body {
   border-color: var(--border);
   border-left: 4px solid var(--accent);
 }
+@keyframes m-ch-spin { to { transform: rotate(360deg); } }
+.m-ch-avatar-wrap {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+}
+.m-ch-card.m-ch-refreshing .m-ch-avatar-wrap::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.45);
+  border: 2.5px solid rgba(255,255,255,0.15);
+  border-top-color: rgba(255,255,255,0.85);
+  animation: m-ch-spin 0.75s linear infinite;
+  pointer-events: none;
+}
 .m-ch-avatar {
   width: 40px;
   height: 40px;

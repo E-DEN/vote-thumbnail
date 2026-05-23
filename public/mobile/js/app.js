@@ -170,6 +170,8 @@ function renderChannelPanel() {
     card.dataset.key = key;
 
     // アバター
+    const avatarWrap = document.createElement('div');
+    avatarWrap.className = 'm-ch-avatar-wrap';
     if (ch.avatar) {
       const img = document.createElement('img');
       img.className = 'm-ch-avatar';
@@ -177,12 +179,13 @@ function renderChannelPanel() {
       img.alt = '';
       img.referrerPolicy = 'no-referrer';
       img.onerror = function() { this.style.display = 'none'; };
-      card.appendChild(img);
+      avatarWrap.appendChild(img);
     } else {
       const ph = document.createElement('div');
       ph.className = 'm-ch-avatar-placeholder';
-      card.appendChild(ph);
+      avatarWrap.appendChild(ph);
     }
+    card.appendChild(avatarWrap);
 
     // チャンネル名
     const nameEl = document.createElement('span');
@@ -264,6 +267,9 @@ async function _refreshMobileChannel(key) {
   const statusEl = document.getElementById('mChAddStatus');
   statusEl.textContent = t('fetching');
   openChannelPanel();
+  // アバターにスピナーを表示
+  const cardEl = document.querySelector('.m-ch-card[data-key="' + key + '"]');
+  if (cardEl) cardEl.classList.add('m-ch-refreshing');
   try {
     const res = await fetch('/api/channels/' + key + '/refresh', { method: 'POST' });
     const data = await res.json().catch(() => ({}));
@@ -287,6 +293,10 @@ async function _refreshMobileChannel(key) {
   } catch (e) {
     showToast(t('connection-error'), true);
     statusEl.textContent = '';
+  } finally {
+    // スピナーを除去（renderChannelPanel 再描画前に外しておく）
+    const card = document.querySelector('.m-ch-card[data-key="' + key + '"]');
+    if (card) card.classList.remove('m-ch-refreshing');
   }
 }
 
@@ -2447,5 +2457,8 @@ document.addEventListener('DOMContentLoaded', function() {
   const lastChannel = localStorage.getItem('m-last-channel');
   if (lastChannel && channels[lastChannel]) {
     selectChannel(lastChannel);
+  } else {
+    // チャンネル未選択時も初期描画を行い「チャンネルを選択してください」を表示する
+    renderCurrentTab();
   }
 });
