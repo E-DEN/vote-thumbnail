@@ -1428,6 +1428,12 @@ header {
   align-items: center;
   justify-content: center;
 }
+#reactionsPlaylistBody:has(.cat-empty-state) {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow-y: hidden;
+}
 .vote-pair {
   display: grid;
   grid-template-columns: 1fr auto 1fr;

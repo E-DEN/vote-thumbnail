@@ -959,7 +959,7 @@ function _mRsMovePinDrag(x, y) {
   pin.style.left      = (x * 100) + '%';
   pin.style.top       = 'calc(' + (y * 100) + '% + ' + tipGap + 'px)';
   pin.style.transform = 'translate(-50%, -100%)';
-  pin.style.opacity   = '1';
+  pin.style.opacity   = String(_mRsPinOpacity);
   pin.style.animation = 'none';
   svg.style.animation = 'none';
   pin.classList.remove('color-cycling', 'rs-floating');
@@ -1001,12 +1001,14 @@ function mRsShowMyPin(x, y, withAnim, onLanded, dropSpeed) {
       pin.style.animation = 'reactionsPinDrop ' + speed + 's linear forwards';
       svg.style.animation = 'reactionsPinSvgSquash ' + speed + 's linear forwards';
       pin.animate(
-        [{ opacity: 0, offset: 0 }, { opacity: 1, offset: PIN_FADE_IN_FRAC }, { opacity: 1, offset: 1 }],
+        [{ opacity: 0, offset: 0 }, { opacity: _mRsPinOpacity, offset: PIN_FADE_IN_FRAC }, { opacity: _mRsPinOpacity, offset: 1 }],
         { duration: speed * 1000, fill: 'forwards', easing: 'linear' }
       );
       _mRsMyPinOnDrop = e => {
         if (e.animationName !== 'reactionsPinDrop') return;
         _mRsMyPinOnDrop = null;
+        pin.getAnimations().forEach(a => a.cancel());
+        pin.style.opacity = String(_mRsPinOpacity);
         pin.style.animation = 'reactionsPinFloat ' + floatDur + ' ease-in-out infinite';
         svg.style.animation = '';
         pin.classList.add('color-cycling', 'rs-floating');
@@ -1015,7 +1017,7 @@ function mRsShowMyPin(x, y, withAnim, onLanded, dropSpeed) {
       pin.addEventListener('animationend', _mRsMyPinOnDrop);
     } else {
       pin.style.transform = 'translate(-50%, -100%)';
-      pin.style.opacity   = '1';
+      pin.style.opacity   = String(_mRsPinOpacity);
       pin.style.animation = 'reactionsPinFloat ' + floatDur + ' ease-in-out infinite';
       svg.style.animation = '';
       pin.classList.add('color-cycling', 'rs-floating');
@@ -2034,6 +2036,8 @@ document.addEventListener('DOMContentLoaded', function() {
       localStorage.setItem(LS_RS_PIN_OPACITY, _mRsPinOpacity);
       const layer = document.getElementById('mRsPinsLayer');
       if (layer) layer.style.opacity = String(_mRsPinOpacity);
+      const myPin = document.getElementById('mRsMyPin');
+      if (myPin && !myPin.hidden) myPin.style.opacity = String(_mRsPinOpacity);
       slider.style.setProperty('--fill', e.target.value + '%');
     });
     slider.style.setProperty('--fill', Math.round(_mRsPinOpacity * 100) + '%');
