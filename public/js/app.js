@@ -605,6 +605,41 @@ function _rebuildRatingRankMap() {
   _ratingRankMap = {};
   pool.forEach(function(v, i) { _ratingRankMap[v.id] = i + 1; });
 }
+// --- 概要欄ユーティリティ ---
+function _descToHtml(text) {
+  var escaped = text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+  return escaped.replace(/https?:\/\/[^\s<>"]+/g, function(raw) {
+    var href = raw, display = raw;
+    if (raw.includes('youtube.com/redirect')) {
+      try {
+        var qs = raw.replace(/&amp;/g, '&').split('?')[1] || '';
+        var dest = new URLSearchParams(qs).get('q');
+        if (dest) { href = dest; display = dest; }
+      } catch (_) {}
+    }
+    return '<a href="' + href + '" target="_blank" rel="noopener noreferrer">' + display + '</a>';
+  });
+}
+
+function openVideoDesc(v) {
+  var descEl = document.getElementById('rsDescText');
+  if (!descEl) return;
+  if (v.description === null || v.description === undefined || v.description === '') {
+    descEl.textContent = '';
+    return;
+  }
+  descEl.innerHTML = _descToHtml(v.description);
+}
+
+function closeVideoDesc() {
+  var descEl = document.getElementById('rsDescText');
+  if (descEl) descEl.textContent = '';
+}
+
 function _buildVideoMeta(v) {
   var items = [];
   if (v.viewCount) {
@@ -2784,11 +2819,17 @@ function showMyReactionsPin(x, y, withAnim) {
       _myPinOnDrop = function(e) {
         if (e.animationName !== 'reactionsPinDrop') return;
         _myPinOnDrop = null;
-        pin.getAnimations().forEach(function(a) { a.cancel(); });
-        pin.style.opacity = String(_reactionsPinOpacity);
+        // CSS アニメーションは style 書き換えで直接切り替え（cancel 不要）
+        // → reactionsPinDrop の fill: forwards が外れる「空白フレーム」を防ぎ
+        //   transform: none になる一瞬でピンが 45px ずれるバグを回避する
         var floatDur = (2.4 + Math.random() * 0.8).toFixed(2) + 's';
         pin.style.animation = 'reactionsPinFloat ' + floatDur + ' ease-in-out infinite';
         svg.style.animation = '';
+        // WAAPI opacity アニメーション（fill: forwards）だけ cancel して inline に固定
+        pin.getAnimations().forEach(function(a) {
+          if (!(a instanceof CSSAnimation)) { a.cancel(); }
+        });
+        pin.style.opacity = String(_reactionsPinOpacity);
         pin.classList.add('color-cycling', 'rs-floating');
       };
       pin.addEventListener('animationend', _myPinOnDrop);
@@ -2806,6 +2847,7 @@ function showMyReactionsPin(x, y, withAnim) {
 
 function openReactionsMode(videoId) {
   if (!videoId) return;
+  closeVideoDesc();
   if (_reactionsStopPlayback) _reactionsStopPlayback();
   _reactionsCurrentVideoId = videoId;
   _reactionsPins = [];
@@ -2912,6 +2954,7 @@ function openModalReactions(v) {
   titleEl.href = ytUrl;
   document.getElementById('reactionsVideoMeta').innerHTML = _buildVideoMeta(v) + _buildPinDot(v);
   if (v.id !== _reactionsCurrentVideoId) openReactionsMode(v.id);
+  openVideoDesc(v);
   showView('reaction');
 }
 
@@ -2945,9 +2988,20 @@ function renderReactionsPlaylist(selectedId) {
     if (rsVideoInfo) rsVideoInfo.style.display = 'none';
     if (placeholder) placeholder.style.display = '';
     _stopMyPin();
+    closeVideoDesc();
+    // JS 側でも直接中央揃えを設定（CSS :has() の効きが不安定なブラウザ対策）
+    body.style.display         = 'flex';
+    body.style.alignItems      = 'center';
+    body.style.justifyContent  = 'center';
+    body.style.overflowY       = 'hidden';
     _renderEmptyCat(body);
     return;
   }
+  // 動画があるときはbodyの中央揃えスタイルをリセット
+  body.style.display        = '';
+  body.style.alignItems     = '';
+  body.style.justifyContent = '';
+  body.style.overflowY      = '';
   var selectedInPool = selectedId && pool.some(function(v) { return v.id === selectedId; });
   if (selectedInPool) {
     if (rsImgWrap)   rsImgWrap.style.display   = '';
@@ -2956,10 +3010,11 @@ function renderReactionsPlaylist(selectedId) {
     if (placeholder) placeholder.style.display = 'none';
   } else {
     if (rsImgWrap)   rsImgWrap.style.display   = '';
-    if (rsToolbar)   rsToolbar.style.display   = 'none';
+    if (rsToolbar)   rsToolbar.style.display   = '';
     if (rsVideoInfo) rsVideoInfo.style.display = 'none';
     if (placeholder) placeholder.style.display = '';
     _stopMyPin();
+    closeVideoDesc();
   }
   pool.forEach(function(v, i) {
     var card = document.createElement('div');
@@ -4382,9 +4437,9 @@ document.getElementById('catFilter').addEventListener('click', e => {
     _placedPins = buildPlacedPins(30);
     // 自分ピンのemitAtをランダムに設定
     var saved = _reactionsMyPins[_reactionsCurrentVideoId];
-    _myPinEmitted = false;
     var myPin = document.getElementById('reactionsMyPin');
     var myPinShadow = document.getElementById('reactionsMyPinShadow');
+    _myPinEmitted = false;
     if (myPin) myPin.hidden = true;
     if (myPinShadow) myPinShadow.hidden = true;
     // コミュニティピンなし: 自分ピンがあればシークを走らせる、なければ停止
@@ -4442,7 +4497,29 @@ document.getElementById('catFilter').addEventListener('click', e => {
     if (imgWrap) imgWrap.classList.remove('rs-paused');
     _rafId = requestAnimationFrame(_tick);
   }
-  _reactionsStartPlayback = _startPlayback;
+  _reactionsStartPlayback = function() {
+    // openReactionsMode 経由の自動起動
+    // ピンが表示中（ドロップ中 or フロート中）なら _startPlayback() 後に復元する
+    var pinEl    = document.getElementById('reactionsMyPin');
+    var wasDrop  = pinEl && !pinEl.hidden && _myPinOnDrop !== null;
+    var wasFloat = pinEl && !pinEl.hidden && pinEl.classList.contains('rs-floating');
+
+    _startPlayback();  // pin を hide して emitted=false にする（元の実装）
+
+    var saved = _reactionsMyPins[_reactionsCurrentVideoId];
+    if ((wasDrop || wasFloat) && saved && _reactionsPinsVisible && REACTIONS_MAX_PINS > 0) {
+      if (wasFloat) {
+        // フロート中だった: 即フロートで復元（再ドロップしない）
+        showMyReactionsPin(saved.x, saved.y, false);
+      } else {
+        // ドロップ中だった: 非表示を解除してアニメーション・リスナーをそのまま継続
+        if (pinEl) pinEl.hidden = false;
+        var shadow = document.getElementById('reactionsMyPinShadow');
+        if (shadow) shadow.hidden = false;
+      }
+      _myPinEmitted = true;  // タイムライン再 emit を抑制
+    }
+  };
   _reactionsStopPlayback = function() {
     if (_rafId) { cancelAnimationFrame(_rafId); _rafId = null; }
     _playing = false;

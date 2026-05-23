@@ -1007,10 +1007,16 @@ function mRsShowMyPin(x, y, withAnim, onLanded, dropSpeed) {
       _mRsMyPinOnDrop = e => {
         if (e.animationName !== 'reactionsPinDrop') return;
         _mRsMyPinOnDrop = null;
-        pin.getAnimations().forEach(a => a.cancel());
-        pin.style.opacity = String(_mRsPinOpacity);
+        // CSS アニメーションは style 書き換えで直接切り替え（cancel 不要）
+        // → reactionsPinDrop の fill: forwards が外れる空白フレームでピンが
+        //   45px ずれるバグを回避する
         pin.style.animation = 'reactionsPinFloat ' + floatDur + ' ease-in-out infinite';
         svg.style.animation = '';
+        // WAAPI の opacity アニメーション（fill: forwards）だけ cancel して inline に固定
+        pin.getAnimations().forEach(a => {
+          if (!(a instanceof CSSAnimation)) { a.cancel(); }
+        });
+        pin.style.opacity = String(_mRsPinOpacity);
         pin.classList.add('color-cycling', 'rs-floating');
         if (onLanded) onLanded();
       };

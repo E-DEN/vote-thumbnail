@@ -3268,7 +3268,7 @@ header {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   padding: 8px;
   gap: 6px;
   overflow-y: auto;
@@ -3418,6 +3418,22 @@ header {
   width: min(100%, calc((100vh - 240px) * 16 / 9));
   padding: 4px 2px 0;
 }
+.rs-desc-text {
+  width: min(100%, calc((100vh - 240px) * 16 / 9));
+  margin-top: 6px;
+  padding: 10px 12px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--text2);
+  white-space: pre-wrap;
+  word-break: break-word;
+  border: 1px solid color-mix(in srgb, var(--border) 45%, transparent);
+  border-radius: 8px;
+  background: var(--surface);
+}
+.rs-desc-text:empty { display: none; }
+.rs-desc-text a { color: var(--accent); }
+
 .rs-video-title {
   font-size: 20px;
   font-weight: 700;
