@@ -1112,27 +1112,27 @@ html, body {
 }
 .m-rs-setting-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
-  width: 12px;
-  height: 12px;
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
   background: var(--accent);
   cursor: pointer;
   border: none;
   box-shadow: 0 0 0 2px var(--surface);
-  margin-top: -4px;
-  transition: transform 0.1s;
+  margin-top: -8px;
+  transition: opacity 0.1s;
 }
 .m-rs-setting-slider::-moz-range-thumb {
-  width: 12px;
-  height: 12px;
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
   background: var(--accent);
   cursor: pointer;
   border: none;
   box-shadow: 0 0 0 2px var(--surface);
 }
-.m-rs-setting-slider::-webkit-slider-thumb:hover { transform: scale(1.2); }
-.m-rs-setting-slider::-moz-range-thumb:hover { transform: scale(1.2); }
+.m-rs-setting-slider::-webkit-slider-thumb:active { opacity: 0.7; }
+.m-rs-setting-slider::-moz-range-thumb:active { opacity: 0.7; }
 
 /* スウォッチ */
 .m-rs-swatches {
@@ -1467,12 +1467,12 @@ html, body {
   background: rgba(0,0,0,0.18);
   filter: blur(2px);
   transform: translate(-50%, -50%);
-  z-index: 29;
+  z-index: 13;
   pointer-events: none;
 }
 .reactions-my-pin {
   position: absolute;
-  z-index: 30;
+  z-index: 14;
   pointer-events: none;
   opacity: 0;
 }

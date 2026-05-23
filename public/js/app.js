@@ -4275,8 +4275,8 @@ document.getElementById('catFilter').addEventListener('click', e => {
   }
   // max=1: 自分ピンがある動画ではコミュニティピンを出さない。自分ピンがなければ 1 件表示
   function _communityLimit(max) {
-    if (max !== 1) return max;
-    return _reactionsMyPins[_reactionsCurrentVideoId] ? 0 : 1;
+    if (max === 0) return 0;
+    return _reactionsMyPins[_reactionsCurrentVideoId] ? Math.max(0, max - 1) : max;
   }
 
   function _emitPinsUpTo(time) {
