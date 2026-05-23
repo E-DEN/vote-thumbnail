@@ -110,10 +110,10 @@ async function handleApi(request, env, url, ctx) {
       const title   = titleMatch ? titleMatch[1].replace(' - YouTube', '').trim() : channelHandle;
       const iconUrl = iconMatch  ? iconMatch[1] : '';
 
-      // channels に保存
+      // channels に保存（last_checked は NULL のまま。RSS 成功時に fetchAndSaveRss が更新する）
       await env.DB.prepare(
-        `INSERT INTO channels (channel_id, handle, title, icon_url, last_checked, last_accessed)
-         VALUES (?, ?, ?, ?, datetime('now'), datetime('now'))
+        `INSERT INTO channels (channel_id, handle, title, icon_url, last_accessed)
+         VALUES (?, ?, ?, ?, datetime('now'))
          ON CONFLICT(channel_id) DO UPDATE SET handle=excluded.handle, title=excluded.title, icon_url=excluded.icon_url, last_accessed=datetime('now')`
       ).bind(channelId, channelHandle, title, iconUrl).run();
 
