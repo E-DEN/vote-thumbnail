@@ -4,6 +4,7 @@ import { state, LS_CAT, LS_SORT, LS_CHANNELS, LS_API_KEY, LS_RSS_ONLY } from '..
 import { loadRating, applyVoteLocal, syncVoteToServer, getVotePair, setVotePair, pickPair, _playedPairs, _pairKey, getRating, getRd, getWins, getBattles } from '../../js/rating.js';
 import { loadChannels, saveChannels, loadVideosForChannel, saveVideosForChannel, fetchChannelVideos, filteredVideos } from '../../js/storage.js';
 import { formatViews, formatRelTime, formatViewsShort } from '../../js/format.js';
+import { showToast, showToastPromise, closeToast } from '../../js/toast.js';
 
 const LS_LIST_SORT_DIR = 'thumb-sort-dir';
 const LS_VOTE_SHOW_TITLE = 'thumb-vote-show-title';
@@ -46,29 +47,6 @@ let _listPage       = 0;
 const LIST_PAGE_SIZE = 40;
 let _listPool       = [];
 let _listObserver   = null;
-
-// --- トースト通知 ---
-function showToast(msg, isError) {
-  const container = document.getElementById('app-toast-container');
-  if (!container) return;
-  const toast = document.createElement('div');
-  toast.className = 'app-toast ' + (isError ? 'err' : 'ok');
-  const remove = () => { toast.classList.add('out'); setTimeout(() => toast.remove(), 320); };
-  if (isError) {
-    const span = document.createElement('span');
-    span.textContent = msg;
-    const btn = document.createElement('button');
-    btn.className = 'app-toast-close';
-    btn.textContent = '\u00d7';
-    btn.addEventListener('click', remove);
-    toast.appendChild(span);
-    toast.appendChild(btn);
-  } else {
-    toast.textContent = msg;
-    setTimeout(remove, 3000);
-  }
-  container.appendChild(toast);
-}
 
 // チャンネルキーをURL/ハンドルから解析
 function channelKeyFromInput(input) {
@@ -264,8 +242,7 @@ function _closeChMenu() {
 async function _refreshMobileChannel(key) {
   const ch = channels[key];
   if (!ch) return;
-  const statusEl = document.getElementById('mChAddStatus');
-  statusEl.textContent = t('fetching');
+  showToast(t('fetching'), 'loading');
   openChannelPanel();
   // アバターにスピナーを表示
   const cardEl = document.querySelector('.m-ch-card[data-key="' + key + '"]');
@@ -275,7 +252,6 @@ async function _refreshMobileChannel(key) {
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
       showToast(data.error || t('fetch-failed'), true);
-      statusEl.textContent = '';
       // 失敗してもDBに既存動画があれば反映する
       const fallback = await fetchChannelVideos(key).catch(() => null);
       if (fallback && fallback.length > 0) {
@@ -286,13 +262,11 @@ async function _refreshMobileChannel(key) {
       return;
     }
     showToast(t('refresh-done-api', {total: data.total ?? '?'}));
-    statusEl.textContent = '';
     state.allVideos = await fetchChannelVideos(key);
     saveVideosForChannel(key, state.allVideos);
     renderCurrentTab();
   } catch (e) {
     showToast(t('connection-error'), true);
-    statusEl.textContent = '';
   } finally {
     // スピナーを除去（renderChannelPanel 再描画前に外しておく）
     const card = document.querySelector('.m-ch-card[data-key="' + key + '"]');
@@ -316,25 +290,23 @@ function _deleteMobileChannel(key) {
 
 // チャンネル追加
 async function addChannel(input) {
-  const statusEl = document.getElementById('mChAddStatus');
   let raw = input;
   try { raw = decodeURIComponent(input); } catch { raw = input; }
   const ch = channelKeyFromInput(raw);
   if (!ch) {
-    statusEl.textContent = t('invalid-input');
+    showToast(t('invalid-input'), 'err');
     return;
   }
   // 既登録チェック（ハンドルの場合）
   if (ch.type === 'handle') {
     const existing = Object.values(channels).find(c => c.handle === ch.value);
     if (existing) {
-      statusEl.textContent = (existing.displayName || ch.value) + ' は既に追加済みです';
-      setTimeout(() => { statusEl.textContent = ''; }, 3000);
+      showToast((existing.displayName || ch.value) + ' は既に追加済みです', 'err');
       return;
     }
   }
 
-  statusEl.textContent = t('fetching');
+  showToast(t('fetching'), 'loading');
   try {
     const body = ch.type === 'handle' ? { handle: ch.value } : { handle: ch.value };
     const res = await fetch('/api/channels', {
@@ -344,15 +316,14 @@ async function addChannel(input) {
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      statusEl.textContent = data.error || t('add-failed');
+      showToast(data.error || t('add-failed'), 'err');
       return;
     }
     const serverCh = data.channel;
     const key = serverCh.channel_id;
     // 既登録チェック（サーバー応答のチャンネルID基準）
     if (channels[key]) {
-      statusEl.textContent = (channels[key].displayName || ch.value) + ' は既に追加済みです';
-      setTimeout(() => { statusEl.textContent = ''; }, 3000);
+      showToast((channels[key].displayName || ch.value) + ' は既に追加済みです', 'err');
       return;
     }
     channels[key] = {
@@ -362,14 +333,13 @@ async function addChannel(input) {
       avatar:      serverCh.icon_url,
     };
     saveChannels();
-    statusEl.textContent = (serverCh.title || ch.value) + ' を追加しました';
     renderChannelPanel();
     document.getElementById('mChAddInput').value = '';
-    setTimeout(() => { statusEl.textContent = ''; }, 3000);
     await selectChannel(key);
+    showToast((serverCh.title || ch.value) + ' を追加しました');
     setTimeout(closeChannelPanel, 400);
   } catch (e) {
-    statusEl.textContent = t('connection-error') + ': ' + e.message;
+    showToast(t('connection-error') + ': ' + e.message, 'err');
   }
 }
 
@@ -2330,17 +2300,21 @@ document.addEventListener('DOMContentLoaded', function() {
     const input = document.getElementById('mApikeyInput');
     const statusEl = document.getElementById('mApikeyStatus');
     const val = input.value.trim();
-    if (val) {
-      localStorage.setItem(LS_API_KEY, val);
-    } else {
-      localStorage.removeItem(LS_API_KEY);
+    if (!val) {
+      if (statusEl) { statusEl.textContent = typeof t === 'function' ? t('settings-apikey-err-empty') : 'APIキーを入力してください'; statusEl.style.color = 'var(--err)'; }
+      return;
     }
+    if (!/^AIzaSy[A-Za-z0-9_-]{33}$/.test(val)) {
+      if (statusEl) { statusEl.textContent = typeof t === 'function' ? t('settings-apikey-err-format') : 'APIキーの形式が正しくありません'; statusEl.style.color = 'var(--err)'; }
+      return;
+    }
+    localStorage.setItem(LS_API_KEY, val);
     const delBtn = document.getElementById('mApikeyDelete');
-    if (delBtn) delBtn.hidden = !val;
+    if (delBtn) delBtn.hidden = false;
     if (statusEl) {
       statusEl.textContent = typeof t === 'function' ? t('settings-apikey-saved') : '保存しました';
       statusEl.style.color = 'var(--ok)';
-      setTimeout(() => { statusEl.textContent = ''; }, 2000);
+      setTimeout(() => { statusEl.textContent = ''; statusEl.style.color = ''; }, 2000);
     }
   });
 
@@ -2351,11 +2325,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (input) input.value = '';
     this.hidden = true;
     const statusEl = document.getElementById('mApikeyStatus');
-    if (statusEl) {
-      statusEl.textContent = typeof t === 'function' ? t('settings-apikey-deleted') : '削除しました';
-      statusEl.style.color = 'var(--text-muted)';
-      setTimeout(() => { statusEl.textContent = ''; }, 2000);
-    }
+    if (statusEl) { statusEl.textContent = ''; statusEl.style.color = ''; }
   });
 
   // 設定モーダル: RSSのみ トグル

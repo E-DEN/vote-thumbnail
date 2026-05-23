@@ -2,6 +2,7 @@ import { state, LS_CHANNELS, LS_VIDEOS, LS_RATING, LS_CAT, LS_VOTE_PAIR, LS_SORT
 import { G2_SETTLED_RD, loadRating as loadRatingCore, applyVoteLocal, syncVoteToServer, getVotePair, setVotePair, pickPair, _playedPairs, _pairKey, getRating, getRd, getWins, getBattles } from './rating.js';
 import { loadChannels, saveChannels, loadVideosForChannel, saveVideosForChannel, fetchChannelVideos, filteredVideos } from './storage.js';
 import { formatViews, formatRelTime, formatViewsShort, formatDuration } from './format.js';
+import { showToast, showToastPromise, closeToast } from './toast.js';
 
 // ratingData と channels はオブジェクトのエイリアス（参照が同一なので変更は state に反映される）
 const ratingData = state.ratingData;
@@ -10,28 +11,6 @@ const channels   = state.channels;
 // ---
 const BASE = 'https://www.googleapis.com/youtube/v3';
 
-// --- トースト通知 ---
-function showToast(msg, isError) {
-  const container = document.getElementById('app-toast-container');
-  if (!container) return;
-  const toast = document.createElement('div');
-  toast.className = 'app-toast ' + (isError ? 'err' : 'ok');
-  const remove = function() { toast.classList.add('out'); setTimeout(function() { toast.remove(); }, 320); };
-  if (isError) {
-    const span = document.createElement('span');
-    span.textContent = msg;
-    const btn = document.createElement('button');
-    btn.className = 'app-toast-close';
-    btn.textContent = '\u00d7';
-    btn.addEventListener('click', remove);
-    toast.appendChild(span);
-    toast.appendChild(btn);
-  } else {
-    toast.textContent = msg;
-    setTimeout(remove, 3000);
-  }
-  container.appendChild(toast);
-}
 const LS_VIEW         = 'thumb-view';
 const LS_MAX_PINS     = 'thumb-max-pins';
 const LS_PINS_VISIBLE = 'thumb-pins-visible';
@@ -1458,9 +1437,7 @@ function buildChannelItem(ch) {
     item.classList.add('compact-refreshing');
     if (key !== state.currentChannelKey) await selectChannel(key);
     _startRefreshSpinner(refreshBtn);
-    const _refreshStatusEl = document.getElementById('sidebarSearchStatus');
-    _refreshStatusEl.className = 'sidebar-search-status';
-    _refreshStatusEl.textContent = t('fetching-channel');
+    showToast(t('fetching-channel'), 'loading');
     // リフレッシュ中に定期ポーリングしてギャラリーをライブ更新
     const _pollRefresh = setInterval(async () => {
       if (key !== state.currentChannelKey) return;
@@ -1475,7 +1452,6 @@ function buildChannelItem(ch) {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         showToast(data.error || t('err-refresh-failed'), true);
-        _refreshStatusEl.textContent = '';
         // 失敗してもDBに既存動画があれば反映する
         const fallback = await fetchChannelVideos(key).catch(() => null);
         if (fallback && fallback.length > 0 && key === state.currentChannelKey) {
@@ -1489,11 +1465,9 @@ function buildChannelItem(ch) {
         ? t('refresh-done-rss').replace('{changed}', (data.added ?? 0) + (data.updated ?? 0))
         : t('refresh-done-api').replace('{total}', data.total ?? '?');
       showToast(toastMsg);
-      _refreshStatusEl.textContent = (data.total ?? '') + ' 件取得完了';
-      setTimeout(() => { if (_refreshStatusEl.textContent.endsWith('件取得完了')) _refreshStatusEl.textContent = ''; }, 3000);
       state.allVideos = await fetchChannelVideos(key);
       renderCurrentView();
-    } catch (err) { showToast(t('err-refresh-failed'), true); console.error('refresh:', err); _refreshStatusEl.textContent = ''; }
+    } catch (err) { showToast(t('err-refresh-failed'), true); console.error('refresh:', err); }
     finally {
       clearInterval(_pollRefresh);
       _refreshingKeys.delete(key);
@@ -1629,8 +1603,6 @@ function buildFolderItem(folder) {
       keys.forEach(k => _refreshingKeys.add(k));
       _startRefreshSpinner(folderRefreshBtn);
       header.classList.add('compact-refreshing');
-      const _folderStatusEl = document.getElementById('sidebarSearchStatus');
-      _folderStatusEl.className = 'sidebar-search-status';
       try {
         let totalVideos = 0;
         let addedVideos = 0;
@@ -1641,11 +1613,11 @@ function buildFolderItem(folder) {
           const chRefBtn = chItem?.querySelector('.ch-action-refresh');
           if (chRefBtn) _startRefreshSpinner(chRefBtn);
           if (chItem) chItem.classList.add('compact-refreshing');
-          _folderStatusEl.textContent = (channels[key]?.displayName || channels[key]?.handle || '') + ' を更新中...';
+          showToast((channels[key]?.displayName || channels[key]?.handle || '') + ' を更新中...', 'loading');
           try {
             const res = await fetch('/api/channels/' + key + '/refresh', { method: 'POST', headers: getRssOnly() ? { 'X-RSS-Only': '1' } : apiKeyHeaders() });
             const data = await res.json().catch(() => ({}));
-            if (data.apiKeyError) { markApiKeyError(); showToast(t('err-apikey-invalid-details'), true); if (chRefBtn) _stopRefreshSpinner(chRefBtn); _refreshingKeys.delete(key); document.querySelectorAll(`.sidebar-channel-item[data-key="${key}"]`).forEach(el => el.classList.remove('compact-refreshing')); _folderStatusEl.textContent = ''; break; }
+            if (data.apiKeyError) { markApiKeyError(); showToast(t('err-apikey-invalid-details'), true); if (chRefBtn) _stopRefreshSpinner(chRefBtn); _refreshingKeys.delete(key); document.querySelectorAll(`.sidebar-channel-item[data-key="${key}"]`).forEach(el => el.classList.remove('compact-refreshing')); break; }
             if (data.total != null) totalVideos += data.total;
             if (data.added != null) addedVideos += data.added;
             if (data.updated != null) updatedVideos += data.updated;
@@ -1663,8 +1635,6 @@ function buildFolderItem(folder) {
           ? t('refresh-done-rss').replace('{changed}', addedVideos + updatedVideos)
           : t('refresh-done-api').replace('{total}', totalVideos);
         showToast(toastMsg);
-        _folderStatusEl.textContent = totalVideos + ' 件取得完了';
-        setTimeout(() => { if (_folderStatusEl.textContent.endsWith('件取得完了')) _folderStatusEl.textContent = ''; }, 3000);
       } finally {
         _stopRefreshSpinner(folderRefreshBtn);
         document.querySelector(`.sidebar-folder-header[data-folder-id="${folder.id}"]`)?.classList.remove('compact-refreshing');
@@ -3169,8 +3139,7 @@ async function addChannelFromSidebarInput() {
   }
 
   searchBtn.disabled = true;
-  statusEl.textContent = t('fetching-channel');
-  statusEl.className = 'sidebar-search-status';
+  showToast(t('fetching-channel'), 'loading');
 
   try {
     const res = await fetch('/api/channels', {
@@ -3180,7 +3149,7 @@ async function addChannelFromSidebarInput() {
     });
     const data = await res.json();
     if (!res.ok) {
-      statusEl.textContent = t('error-msg', { msg: data.error ?? res.status });
+      showToast(t('error-msg', { msg: data.error ?? res.status }), 'err');
       return;
     }
     const ch = data.channel;
@@ -3200,7 +3169,6 @@ async function addChannelFromSidebarInput() {
       saveSidebarOrder();
     }
     document.getElementById('sidebarSearchInput').value = '';
-    statusEl.textContent = '';
     // nav.innerHTML='' による全破棄を避け、既存アイテムは置き換え・新規は追加（ホバー状態保持）
     const _nav = document.getElementById('sidebarNav');
     const _newItem = buildChannelItem(channels[ch.channel_id]);
@@ -3214,23 +3182,21 @@ async function addChannelFromSidebarInput() {
     // API キーが設定されていれば全件取得を自動実行
     if (getStoredApiKey() && !getRssOnly()) {
       try {
-        const count = await importAllChannelVideos(ch.channel_id, msg => { statusEl.textContent = msg; });
+        const count = await importAllChannelVideos(ch.channel_id, msg => { showToast(msg, 'loading'); });
         state.allVideos = await fetchChannelVideos(ch.channel_id);
         renderCurrentView();
-        statusEl.textContent = count + ' 件取得完了';
-        setTimeout(() => { statusEl.textContent = ''; }, 3000);
+        showToast(count + ' 件取得完了');
       } catch (importErr) {
         if (importErr.code === 'API_KEY_INVALID') {
           markApiKeyError();
-          statusEl.textContent = t('err-apikey-invalid-details');
+          showToast(t('err-apikey-invalid-details'), 'err');
         } else {
-          statusEl.textContent = importErr.message;
+          showToast(importErr.message, 'err');
         }
-        statusEl.className = 'sidebar-search-status error';
       }
     }
   } catch (e) {
-    statusEl.textContent = t('error-msg', { msg: e.message });
+    showToast(t('error-msg', { msg: e.message }), 'err');
   } finally {
     searchBtn.disabled = false;
   }
