@@ -75,22 +75,25 @@ async function selectChannel(key) {
   const displayName = ch.displayName || ch.handle || key;
   document.getElementById('mChNameDisplay').textContent = displayName;
 
+  // キャッシュを先に反映して旧チャンネルのコンテンツを即座にクリア
+  // 新規チャンネルはキャッシュなし → [] → 空状態を表示
+  state.allVideos = loadVideosForChannel(key) || [];
+  renderCurrentTab();
+
   try {
     state.allVideos = await fetchChannelVideos(key);
     saveVideosForChannel(key, state.allVideos);
-    // 現在カテゴリに動画がなければ有効なカテゴリに切り替え
-    const counts = { videos: 0, shorts: 0, live: 0 };
-    state.allVideos.forEach(v => { if (counts[v.category] !== undefined) counts[v.category]++; });
-    if (!counts[state.currentCat]) {
-      state.currentCat = counts.live >= counts.videos && counts.live >= counts.shorts ? 'live'
-                 : counts.shorts > counts.videos ? 'shorts' : 'videos';
-      localStorage.setItem(LS_CAT, state.currentCat);
-    }
   } catch {
-    // オフライン時: ローカルキャッシュを使用
-    const cached = loadVideosForChannel(key);
-    if (cached) state.allVideos = cached;
-    else state.allVideos = [];
+    // オフライン時: キャッシュ (or []) が既に state.allVideos にセット済み
+  }
+
+  // 現在カテゴリに動画がなければ有効なカテゴリに切り替え
+  const counts = { videos: 0, shorts: 0, live: 0 };
+  state.allVideos.forEach(v => { if (counts[v.category] !== undefined) counts[v.category]++; });
+  if (!counts[state.currentCat]) {
+    state.currentCat = counts.live >= counts.videos && counts.live >= counts.shorts ? 'live'
+               : counts.shorts > counts.videos ? 'shorts' : 'videos';
+    localStorage.setItem(LS_CAT, state.currentCat);
   }
 
   // カテゴリボタンのアクティブ状態を同期
@@ -301,7 +304,7 @@ async function addChannel(input) {
   if (ch.type === 'handle') {
     const existing = Object.values(channels).find(c => c.handle === ch.value);
     if (existing) {
-      showToast((existing.displayName || ch.value) + ' は既に追加済みです', 'err');
+      showToast(t('channel-already-added', { name: existing.displayName || ch.value }), 'err');
       return;
     }
   }
@@ -323,7 +326,7 @@ async function addChannel(input) {
     const key = serverCh.channel_id;
     // 既登録チェック（サーバー応答のチャンネルID基準）
     if (channels[key]) {
-      showToast((channels[key].displayName || ch.value) + ' は既に追加済みです', 'err');
+      showToast(t('channel-already-added', { name: channels[key].displayName || ch.value }), 'err');
       return;
     }
     channels[key] = {
@@ -336,7 +339,7 @@ async function addChannel(input) {
     renderChannelPanel();
     document.getElementById('mChAddInput').value = '';
     await selectChannel(key);
-    showToast((serverCh.title || ch.value) + ' を追加しました');
+    showToast(t('ch-added', { name: serverCh.title || ch.value }));
     setTimeout(closeChannelPanel, 400);
   } catch (e) {
     showToast(t('connection-error') + ': ' + e.message, 'err');
@@ -703,9 +706,15 @@ function renderRanking() {
 
 // セッション ID（サーバー側でユーザーを区別するためのランダム文字列）
 var _mRsSessionId = (function() {
-  var k = 'reactions-session-id';
+  var k = 'thumb-session-id';
   var s = localStorage.getItem(k);
-  if (!s) { s = Date.now().toString(36) + Math.random().toString(36).slice(2); localStorage.setItem(k, s); }
+  if (!s) {
+    s = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+      var r = Math.random() * 16 | 0;
+      return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+    });
+    localStorage.setItem(k, s);
+  }
   return s;
 })();
 
