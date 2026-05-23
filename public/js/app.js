@@ -1613,7 +1613,7 @@ function buildFolderItem(folder) {
           const chRefBtn = chItem?.querySelector('.ch-action-refresh');
           if (chRefBtn) _startRefreshSpinner(chRefBtn);
           if (chItem) chItem.classList.add('compact-refreshing');
-          showToast((channels[key]?.displayName || channels[key]?.handle || '') + ' を更新中...', 'loading');
+        showToast(t('ch-refreshing', { name: channels[key]?.displayName || channels[key]?.handle || '' }), 'loading');
           try {
             const res = await fetch('/api/channels/' + key + '/refresh', { method: 'POST', headers: getRssOnly() ? { 'X-RSS-Only': '1' } : apiKeyHeaders() });
             const data = await res.json().catch(() => ({}));
@@ -3185,7 +3185,7 @@ async function addChannelFromSidebarInput() {
         const count = await importAllChannelVideos(ch.channel_id, msg => { showToast(msg, 'loading'); });
         state.allVideos = await fetchChannelVideos(ch.channel_id);
         renderCurrentView();
-        showToast(count + ' 件取得完了');
+        showToast(t('import-done', { count }));
       } catch (importErr) {
         if (importErr.code === 'API_KEY_INVALID') {
           markApiKeyError();

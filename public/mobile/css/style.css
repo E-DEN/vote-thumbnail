@@ -1563,7 +1563,7 @@ html, body {
   display: flex; align-items: center; gap: 10px;
   opacity: 0; pointer-events: none;
 }
-.gt-msg { flex: 1; font-size: 13.5px; line-height: 1.45; color: #9090a8; }
+.gt-msg { flex: 1; font-size: 13.5px; line-height: 1.45; color: var(--text-muted); }
 .gt-close {
   flex-shrink: 0; background: none; border: none;
   color: rgba(255,255,255,0.28); cursor: pointer;
@@ -1571,6 +1571,10 @@ html, body {
   pointer-events: auto; transition: color 150ms;
 }
 .gt-close:hover { color: rgba(255,255,255,0.7); }
+.gt-pill-bg { fill: #1c1c1e; }
+[data-theme="light"] .gt-pill-bg { fill: #ffffff; }
+[data-theme="light"] .gt-close { color: rgba(0,0,0,0.3); }
+[data-theme="light"] .gt-close:hover { color: rgba(0,0,0,0.65); }
 
 /* =====================
    スクロールバー
@@ -1887,12 +1891,12 @@ html, body {
   height: 16px;
 }
 .m-set-icon-green {
-  background: rgba(61,214,140,0.12);
-  color: #3dd68c;
+  background: var(--surface2);
+  color: var(--text-muted);
 }
 .m-set-icon-yel {
-  background: rgba(245,158,11,0.12);
-  color: #f59e0b;
+  background: var(--surface2);
+  color: var(--text-muted);
 }
 .m-set-item-text { flex: 1; }
 .m-set-item-label {
@@ -1931,9 +1935,9 @@ html, body {
 .m-set-sub-back {
   width: 32px;
   height: 32px;
-  border-radius: 8px;
-  background: var(--surface2);
-  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: transparent;
+  border: none;
   color: var(--text-muted);
   cursor: pointer;
   display: flex;

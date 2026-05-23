@@ -86,11 +86,11 @@ function _gtInit() {
   svg.setAttribute('height', _GT_BH + _GT_H); svg.setAttribute('viewBox', `0 0 ${W} ${_GT_BH + _GT_H}`);
   svg.setAttribute('filter', 'url(#gt-goo)');
   const bodyR = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-  bodyR.setAttribute('rx', '18'); bodyR.setAttribute('ry', '18'); bodyR.setAttribute('fill', '#1c1c1e');
+  bodyR.setAttribute('rx', '18'); bodyR.setAttribute('ry', '18'); bodyR.setAttribute('class', 'gt-pill-bg');
   bodyR.setAttribute('x', '0'); bodyR.setAttribute('y', '0'); bodyR.setAttribute('width', W);
   bodyR.setAttribute('height', '0'); bodyR.setAttribute('opacity', '0');
   const pillR = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-  pillR.setAttribute('rx', '18'); pillR.setAttribute('ry', '18'); pillR.setAttribute('fill', '#1c1c1e');
+  pillR.setAttribute('rx', '18'); pillR.setAttribute('ry', '18'); pillR.setAttribute('class', 'gt-pill-bg');
   pillR.setAttribute('x', Math.round((W - 120) / 2)); pillR.setAttribute('y', _GT_BH);
   pillR.setAttribute('width', '120'); pillR.setAttribute('height', _GT_H);
   svg.appendChild(bodyR); svg.appendChild(pillR);

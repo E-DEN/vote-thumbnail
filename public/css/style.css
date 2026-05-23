@@ -3808,7 +3808,7 @@ a.rs-video-title:hover { color: var(--accent); }
   display: flex; align-items: center; gap: 10px;
   opacity: 0; pointer-events: none;
 }
-.gt-msg { flex: 1; font-size: 13.5px; line-height: 1.45; color: #9090a8; }
+.gt-msg { flex: 1; font-size: 13.5px; line-height: 1.45; color: var(--text-muted); }
 .gt-close {
   flex-shrink: 0; background: none; border: none;
   color: rgba(255,255,255,0.28); cursor: pointer;
@@ -3816,6 +3816,10 @@ a.rs-video-title:hover { color: var(--accent); }
   pointer-events: auto; transition: color 150ms;
 }
 .gt-close:hover { color: rgba(255,255,255,0.7); }
+.gt-pill-bg { fill: #1c1c1e; }
+[data-theme="light"] .gt-pill-bg { fill: #ffffff; }
+[data-theme="light"] .gt-close { color: rgba(0,0,0,0.3); }
+[data-theme="light"] .gt-close:hover { color: rgba(0,0,0,0.65); }
 
 
 /* ===== Reactions Transport Overlay ===== */
