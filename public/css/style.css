@@ -3817,9 +3817,6 @@ a.rs-video-title:hover { color: var(--accent); }
 }
 .gt-close:hover { color: rgba(255,255,255,0.7); }
 .gt-pill-bg { fill: #1c1c1e; }
-[data-theme="light"] .gt-pill-bg { fill: #ffffff; }
-[data-theme="light"] .gt-close { color: rgba(0,0,0,0.3); }
-[data-theme="light"] .gt-close:hover { color: rgba(0,0,0,0.65); }
 
 
 /* ===== Reactions Transport Overlay ===== */
