@@ -4419,6 +4419,8 @@ document.getElementById('catFilter').addEventListener('click', e => {
   _reactionsStopPlayback = function() {
     if (_rafId) { cancelAnimationFrame(_rafId); _rafId = null; }
     _playing = false;
+    _currentTime = 0;
+    _updateProgressUI();
   };
   _reactionsResetTransport = function() {
     _transportVisible = true;
