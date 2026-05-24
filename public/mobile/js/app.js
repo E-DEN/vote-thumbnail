@@ -435,6 +435,11 @@ function renderList() {
   const grid = document.getElementById('mListGrid');
   const sentinel = document.getElementById('mListSentinel');
   const sortBar = document.getElementById('mListSortBar');
+
+  // 早期 return しても古い Observer が残らないよう先にリセット
+  if (_listObserver) { _listObserver.disconnect(); _listObserver = null; }
+  _listPool = [];
+  _listPage = 0;
   grid.innerHTML = '';
 
   if (!state.currentChannelKey) {

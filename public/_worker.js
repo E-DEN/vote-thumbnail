@@ -12,6 +12,19 @@ export default {
       return handleApi(request, env, url, ctx);
     }
 
+    // スマートフォンを /mobile/ へリダイレクト
+    // 対象: GET / または /index.html のみ（?pc=1 で PC 版に強制アクセス可）
+    if (
+      request.method === 'GET' &&
+      (url.pathname === '/' || url.pathname === '/index.html') &&
+      !url.searchParams.has('pc')
+    ) {
+      const ua = request.headers.get('User-Agent') || '';
+      if (/iPhone|Android.*Mobile|Mobile.*Android/i.test(ua)) {
+        return Response.redirect(url.origin + '/mobile/', 302);
+      }
+    }
+
     // 静的ファイルは Pages アセットストアから配信する
     return env.ASSETS.fetch(request);
   },
