@@ -1125,11 +1125,10 @@ header {
 @keyframes wfCursorMove {
   0%   { transform: translate(125px, 70px); opacity: 0; }
   8%   { transform: translate(125px, 70px); opacity: 1; animation-timing-function: cubic-bezier(0.22, 0, 0.12, 1); }
-  37%  { transform: translate(43px, 38px) scale(1); animation-timing-function: cubic-bezier(0.4, 0, 1, 0.6); }
-  40%  { transform: translate(43px, 38px) scale(.78); opacity: 1; animation-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1); }
-  46%  { transform: translate(43px, 38px) scale(1); opacity: 1; }
-  52%  { transform: translate(43px, 38px) scale(1); opacity: 0; }
-  100% { transform: translate(43px, 38px) scale(1); opacity: 0; }
+  37%  { transform: translate(43px, 38px); opacity: 1; }
+  40%    { transform: translate(43px, 38px); opacity: 1; }
+  41.5%  { transform: translate(43px, 38px); opacity: 0; }
+  100%   { transform: translate(43px, 38px); opacity: 0; }
 }
 .wf-thumbsup {
   position: absolute;
@@ -1140,11 +1139,11 @@ header {
   animation: wfThumbsUpPop 4s linear infinite;
 }
 @keyframes wfThumbsUpPop {
-  0%, 38%  { transform: translate(35px, 18px) scale(0); opacity: 0; }
-  40%      { transform: translate(35px, 18px) scale(1.25); opacity: 1; animation-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1); }
-  50%      { transform: translate(35px, 18px) scale(1); opacity: 1; }
-  62%      { transform: translate(35px, 18px) scale(1); opacity: 1; }
-  70%, 100%{ transform: translate(35px, 18px) scale(0.85); opacity: 0; }
+  0%, 38%  { transform: translate(35px, 29px) scale(0); opacity: 0; }
+  40%      { transform: translate(35px, 29px) scale(1.25); opacity: 1; animation-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1); }
+  50%      { transform: translate(35px, 29px) scale(1); opacity: 1; }
+  62%      { transform: translate(35px, 29px) scale(1); opacity: 1; }
+  70%, 100%{ transform: translate(35px, 29px) scale(0.85); opacity: 0; }
 }
 
 /* ランキングカード */
