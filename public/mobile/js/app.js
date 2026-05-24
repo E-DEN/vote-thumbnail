@@ -589,6 +589,8 @@ let _mDragStartX = 0, _mDragStartY = 0;
 let _mIndicator = null;
 let _mOffX = 0, _mOffY = 0;
 let _mDragFolderWasOpen = false;
+let _mScrolling = false;
+let _mScrollLastY = 0;
 
 function _mShowIndicator(refEl, before) {
   if (!_mIndicator) {
@@ -789,6 +791,7 @@ function _mEndDrag(cx, cy) {
   document.querySelectorAll('.merge-hover').forEach(el => el.classList.remove('merge-hover'));
   document.querySelectorAll('.drop-bottom').forEach(el => el.classList.remove('drop-bottom'));
   if (_mGhost) { _mGhost.remove(); _mGhost = null; }
+  _mSrcEl.style.touchAction = '';
   _mSrcEl.classList.remove('dragging');
   if (_mDragFolderWasOpen) {
     const childrenEl = _mSrcEl.querySelector('.sidebar-folder-children');
@@ -881,6 +884,7 @@ function _mEndDrag(cx, cy) {
     if (_mLongpressHint) { _mLongpressHint.remove(); _mLongpressHint = null; }
     _mDragging = true;
     document.body.style.touchAction = 'none';
+    srcEl.style.touchAction = 'none';
     if (pointerId != null) { try { srcEl.setPointerCapture(pointerId); } catch(_) {} }
     _mSrcEl = srcEl;
     chList.classList.add('sidebar--dragging');
@@ -912,6 +916,9 @@ function _mEndDrag(cx, cy) {
   chList.addEventListener('pointerdown', e => {
     const srcEl = e.target.closest('.sidebar-channel-item, .sidebar-folder');
     if (!srcEl || e.target.closest('.ch-action-btn')) return;
+    // ポインターダウン時点で touch-action を none にすることで、
+    // ブラウザのスクロール判定を JS に委ねる（スクロール意図が確認されたらリセット）
+    srcEl.style.touchAction = 'none';
     const startX = e.clientX, startY = e.clientY;
     _mDragStartX = startX; _mDragStartY = startY;
     const _activePid = e.pointerId;
@@ -921,13 +928,20 @@ function _mEndDrag(cx, cy) {
 
     const onMove = ev => {
       if (ev.pointerId !== _activePid) return;
-      if (_mLongpressTimer && !_mDragging) {
+      if (_mLongpressTimer && !_mDragging && !_mScrolling) {
         const dx = Math.abs(ev.clientX - _mDragStartX);
         const dy = Math.abs(ev.clientY - _mDragStartY);
         if (dx > 8 || dy > 8) {
           clearTimeout(_mLongpressTimer); _mLongpressTimer = null;
           document.body.style.touchAction = '';
+          _mScrolling = true;
+          _mScrollLastY = ev.clientY;
         }
+      }
+      if (_mScrolling) {
+        chList.scrollTop += _mScrollLastY - ev.clientY;
+        _mScrollLastY = ev.clientY;
+        return;
       }
       if (!_mDragging || !_mGhost) return;
       ev.preventDefault();
@@ -938,6 +952,8 @@ function _mEndDrag(cx, cy) {
     const onEnd = ev => {
       if (ev.pointerId !== _activePid) return;
       document.body.style.touchAction = '';
+      srcEl.style.touchAction = '';
+      _mScrolling = false;
       document.removeEventListener('pointermove', onMove);
       document.removeEventListener('pointerup',   onEnd);
       document.removeEventListener('pointercancel', onCancel);
@@ -951,11 +967,15 @@ function _mEndDrag(cx, cy) {
       document.removeEventListener('pointerup',   onEnd);
       document.removeEventListener('pointercancel', onCancel);
       clearTimeout(_mLongpressTimer); _mLongpressTimer = null;
+      document.body.style.touchAction = '';
+      srcEl.style.touchAction = '';
+      _mScrolling = false;
       // pointercancel はドロップではなく中断 — ゴーストだけ片付ける
       if (_mDragging) {
         _mDragging = false;
         if (_mGhost) { _mGhost.remove(); _mGhost = null; }
         if (_mSrcEl) {
+          _mSrcEl.style.touchAction = '';
           _mSrcEl.classList.remove('dragging');
           if (_mDragFolderWasOpen) {
             const childrenEl = _mSrcEl.querySelector('.sidebar-folder-children');
