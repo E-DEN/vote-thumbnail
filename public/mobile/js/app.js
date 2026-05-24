@@ -476,6 +476,7 @@ function renderChannelPanel() {
 }
 
 function openChannelPanel() {
+  renderChannelPanel();
   document.getElementById('mChPanel').classList.add('open');
   document.getElementById('mChOverlay').classList.add('open');
 }
@@ -876,10 +877,11 @@ function _mEndDrag(cx, cy) {
 (function() {
   const chList = document.getElementById('mChList');
 
-  function _mStartDrag(srcEl, startX, startY) {
+  function _mStartDrag(srcEl, startX, startY, pointerId) {
     if (_mLongpressHint) { _mLongpressHint.remove(); _mLongpressHint = null; }
     _mDragging = true;
     document.body.style.touchAction = 'none';
+    if (pointerId != null) { try { srcEl.setPointerCapture(pointerId); } catch(_) {} }
     _mSrcEl = srcEl;
     chList.classList.add('sidebar--dragging');
     if (_mTouchActiveEl) { _mTouchActiveEl.classList.remove('touch-hover'); _mTouchActiveEl = null; }
@@ -910,13 +912,11 @@ function _mEndDrag(cx, cy) {
   chList.addEventListener('pointerdown', e => {
     const srcEl = e.target.closest('.sidebar-channel-item, .sidebar-folder');
     if (!srcEl || e.target.closest('.ch-action-btn')) return;
-    e.preventDefault();
-    document.body.style.touchAction = 'none';
     const startX = e.clientX, startY = e.clientY;
     _mDragStartX = startX; _mDragStartY = startY;
     const _activePid = e.pointerId;
     _mLongpressTimer = setTimeout(() => {
-      _mStartDrag(srcEl, startX, startY);
+      _mStartDrag(srcEl, startX, startY, _activePid);
     }, 400);
 
     const onMove = ev => {

@@ -2459,9 +2459,8 @@ html, body {
   color: var(--text-muted);
   transition: background 0.12s, color 0.12s;
   user-select: none;
-  touch-action: none;
+  touch-action: pan-y;
 }
-.sidebar-channel-item:hover,
 .sidebar-channel-item.touch-hover { background: var(--surface2); color: var(--text); }
 .sidebar-channel-item.active { background: rgba(0, 176, 244, 0.12); color: var(--accent); }
 .sidebar-channel-item.dragging { opacity: 0.25; pointer-events: none; }
@@ -2530,9 +2529,7 @@ html, body {
   transition: background 0.12s, color 0.12s;
   touch-action: none;
 }
-.sidebar-folder-header:hover,
 .sidebar-folder-header.touch-hover { background: var(--surface2); color: var(--text); }
-.sidebar-folder--open > .sidebar-folder-header:hover,
 .sidebar-folder--open > .sidebar-folder-header.touch-hover { background: var(--folder-tint, var(--surface2)); color: var(--text); }
 .sidebar-folder--open > .sidebar-folder-header { color: var(--text); }
 .sidebar-folder-header.merge-hover {
@@ -2589,9 +2586,7 @@ html, body {
 
 /* ドラッグ中: hover 強調を抑制 */
 .sidebar--dragging .sidebar-channel-item.touch-hover,
-.sidebar--dragging .sidebar-channel-item:hover,
-.sidebar--dragging .sidebar-folder-header.touch-hover,
-.sidebar--dragging .sidebar-folder-header:hover {
+.sidebar--dragging .sidebar-folder-header.touch-hover {
   background: transparent !important;
   color: var(--text-muted) !important;
 }
