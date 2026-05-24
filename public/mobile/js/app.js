@@ -242,7 +242,7 @@ function _openFolderMenu(item, anchorEl) {
   // リネーム
   const renameBtn = document.createElement('button');
   renameBtn.className = 'm-ch-card-menu-item';
-  renameBtn.textContent = t('folder-rename-title');
+  { const _i = document.createElement('i'); _i.setAttribute('data-lucide','pencil'); renameBtn.append(_i, t('folder-rename-title')); }
   renameBtn.addEventListener('click', e => {
     e.stopPropagation();
     menu.remove();
@@ -255,7 +255,7 @@ function _openFolderMenu(item, anchorEl) {
   // フォルダの色（ボタン＋トグル展開）
   const colorBtn = document.createElement('button');
   colorBtn.className = 'm-ch-card-menu-item';
-  colorBtn.textContent = t('folder-color-title');
+  { const _i = document.createElement('i'); _i.setAttribute('data-lucide','palette'); colorBtn.append(_i, t('folder-color-title')); }
   const colorRow = document.createElement('div');
   colorRow.className = 'm-folder-color-row';
   colorRow.hidden = true;
@@ -294,7 +294,7 @@ function _openFolderMenu(item, anchorEl) {
   sep1.className = 'm-ch-card-menu-sep';
   const refreshBtn = document.createElement('button');
   refreshBtn.className = 'm-ch-card-menu-item';
-  refreshBtn.textContent = t('refresh-videos');
+  { const _i = document.createElement('i'); _i.setAttribute('data-lucide','refresh-cw'); refreshBtn.append(_i, t('refresh-videos')); }
   refreshBtn.addEventListener('click', e => {
     e.stopPropagation();
     menu.remove();
@@ -326,7 +326,7 @@ function _openFolderMenu(item, anchorEl) {
   sep2.className = 'm-ch-card-menu-sep';
   const deleteBtn = document.createElement('button');
   deleteBtn.className = 'm-ch-card-menu-item m-ch-menu-danger';
-  deleteBtn.textContent = t('folder-delete-title');
+  { const _i = document.createElement('i'); _i.setAttribute('data-lucide','x'); deleteBtn.append(_i, t('folder-delete-title')); }
   deleteBtn.addEventListener('click', e => {
     e.stopPropagation();
     menu.remove();
@@ -347,8 +347,9 @@ function _openFolderMenu(item, anchorEl) {
     );
   });
 
-  menu.append(renameBtn, colorBtn, colorRow, sep1, refreshBtn, sep2, deleteBtn);
+  menu.append(renameBtn, refreshBtn, sep1, colorBtn, colorRow, sep2, deleteBtn);
   document.body.appendChild(menu);
+  if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [menu] });
 
   const r = anchorEl.getBoundingClientRect();
   const mw = menu.offsetWidth || 160;
