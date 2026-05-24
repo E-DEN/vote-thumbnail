@@ -3338,8 +3338,9 @@ document.addEventListener('DOMContentLoaded', function() {
         sidebarOrder = parsed.sidebarOrder;
         saveSidebarOrder();
       }
+      _mCodeStatusMsg('', true);
       const importIds = Object.keys(parsed.channels);
-      _mCodeStatusMsg(t('preset-fetching'), true);
+      showToast(t('preset-fetching'), 'loading');
       // DBにある全チャンネルを一括取得
       let dbMap = {};
       try {
@@ -3383,10 +3384,10 @@ document.addEventListener('DOMContentLoaded', function() {
       saveChannels();
       renderChannelPanel();
       inp.value = '';
-      _mCodeStatusMsg(t('preset-imported'), true);
+      showToast(t('preset-imported'));
     } catch (e) {
       inp.classList.add('error');
-      _mCodeStatusMsg(t('preset-import-err'), false);
+      showToast(t('preset-import-err'), 'err');
     }
   });
 

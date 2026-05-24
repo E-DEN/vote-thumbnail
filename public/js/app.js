@@ -4145,8 +4145,9 @@ document.getElementById('sidebarSearchBtn').addEventListener('click', () => {
         localStorage.setItem(LS_SIDEBAR_ORDER, JSON.stringify(parsed.sidebarOrder));
       }
       loadSidebarOrder();
+      _vtCodeStatusMsg('', true);
       const importIds = Object.keys(parsed.channels);
-      _vtCodeStatusMsg(t('preset-fetching'), true);
+      showToast(t('preset-fetching'), 'loading');
       // DBにある全チャンネルを一括取得
       let dbMap = {};
       try {
@@ -4190,10 +4191,10 @@ document.getElementById('sidebarSearchBtn').addEventListener('click', () => {
       saveChannels();
       renderSidebar();
       inp.value = '';
-      _vtCodeStatusMsg(t('preset-imported'), true);
+      showToast(t('preset-imported'));
     } catch (e) {
       inp.classList.add('error');
-      _vtCodeStatusMsg(t('preset-import-err'), false);
+      showToast(t('preset-import-err'), 'err');
     }
   });
 
