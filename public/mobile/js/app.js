@@ -430,7 +430,17 @@ function _makeFolderEl(item) {
     if (_mDragging) return;
     const open = folder.classList.toggle('sidebar-folder--open');
     const ch = folder.querySelector('.sidebar-folder-children');
-    if (ch) ch.style.maxHeight = open ? '1200px' : '0';
+    if (ch) {
+      if (open) {
+        ch.style.maxHeight = ch.scrollHeight + 'px';
+        ch.addEventListener('transitionend', () => {
+          if (folder.classList.contains('sidebar-folder--open')) ch.style.maxHeight = 'none';
+        }, { once: true });
+      } else {
+        ch.style.maxHeight = ch.scrollHeight + 'px';
+        requestAnimationFrame(() => requestAnimationFrame(() => { ch.style.maxHeight = '0'; }));
+      }
+    }
     // sidebarOrder に open 状態を保存
     const it = sidebarOrder.find(it => it.type === 'folder' && it.id === item.id);
     if (it) { it.open = open; saveSidebarOrder(); }
@@ -441,7 +451,7 @@ function _makeFolderEl(item) {
   // 子チャンネルリスト
   const children = document.createElement('div');
   children.className = 'sidebar-folder-children';
-  children.style.maxHeight = (item.open !== false) ? '1200px' : '0';
+  children.style.maxHeight = (item.open !== false) ? 'none' : '0';
   keys.forEach(k => {
     const card = _makeChCard(k);
     children.appendChild(card);
@@ -495,7 +505,7 @@ function closeChannelPanel() {
     _swipeStartY = e.touches[0].clientY;
   }, { passive: true });
   panel.addEventListener('touchend', e => {
-    if (_mDragging) return;
+    if (_mDragging || _mEditMode) return;
     const dx = e.changedTouches[0].clientX - _swipeStartX;
     const dy = e.changedTouches[0].clientY - _swipeStartY;
     if (dx < -50 && Math.abs(dy) < Math.abs(dx)) closeChannelPanel();
@@ -581,6 +591,7 @@ function _mCloseFolderDialog() {
 
 // --- ドラッグ&ドロップ (チャンネルリスト) ---
 let _mDragging = false;
+let _mEditMode = false;
 let _mGhost = null;
 let _mSrcEl = null;
 let _mLongpressTimer = null;
@@ -590,8 +601,6 @@ let _mDragStartX = 0, _mDragStartY = 0;
 let _mIndicator = null;
 let _mOffX = 0, _mOffY = 0;
 let _mDragFolderWasOpen = false;
-let _mScrolling = false;
-let _mScrollLastY = 0;
 let _mAutoScrollDir = 0;
 let _mAutoScrollRaf = null;
 
@@ -817,7 +826,7 @@ function _mEndDrag(cx, cy) {
       _mSrcEl.classList.remove('dragging');
       if (_mDragFolderWasOpen) {
         const childrenEl = _mSrcEl.querySelector('.sidebar-folder-children');
-        if (childrenEl) childrenEl.style.maxHeight = '1200px';
+        if (childrenEl) childrenEl.style.maxHeight = 'none';
         _mSrcEl.classList.add('sidebar-folder--open');
       }
       _mDragFolderWasOpen = false;
@@ -830,7 +839,7 @@ function _mEndDrag(cx, cy) {
   _mSrcEl.classList.remove('dragging');
   if (_mDragFolderWasOpen) {
     const childrenEl = _mSrcEl.querySelector('.sidebar-folder-children');
-    if (childrenEl) childrenEl.style.maxHeight = '1200px';
+    if (childrenEl) childrenEl.style.maxHeight = 'none';
     _mSrcEl.classList.add('sidebar-folder--open');
   }
   _mDragFolderWasOpen = false;
@@ -944,42 +953,41 @@ function _mEndDrag(cx, cy) {
   }
 
   chList.addEventListener('pointerdown', e => {
+    if (!_mEditMode) return;
     if (_mDragging) { e.preventDefault(); return; }
     const srcEl = e.target.closest('.sidebar-channel-item, .sidebar-folder');
     if (!srcEl || e.target.closest('.ch-action-btn')) return;
-    // ポインターダウン時点で touch-action を none にすることで、
-    // ブラウザのスクロール判定を JS に委ねる（スクロール意図が確認されたらリセット）
-    srcEl.style.touchAction = 'none';
     const startX = e.clientX, startY = e.clientY;
     _mDragStartX = startX; _mDragStartY = startY;
     const _activePid = e.pointerId;
+    let _prevScrollY = startY;
+    let _prevScrollTime = performance.now();
+    let _scrollVY = 0;
+    let _momentumRaf = null;
     _mLongpressTimer = setTimeout(() => {
       _mStartDrag(srcEl, startX, startY, _activePid);
     }, 400);
 
     const onMove = ev => {
       if (ev.pointerId !== _activePid) return;
-      if (_mLongpressTimer && !_mDragging && !_mScrolling) {
+      if (_mLongpressTimer && !_mDragging) {
         const dx = Math.abs(ev.clientX - _mDragStartX);
         const dy = Math.abs(ev.clientY - _mDragStartY);
-        if (dy > dx && dy > 15) {
-          // 縦方向が主体の移動 → スクロール意図と判断
+        if (dy > 30 || dx > 20) {
           clearTimeout(_mLongpressTimer); _mLongpressTimer = null;
-          _mScrolling = true;
-          _mScrollLastY = ev.clientY;
-        } else if (dx > 20) {
-          // 横方向の移動 → ロングプレスのみキャンセル
-          clearTimeout(_mLongpressTimer); _mLongpressTimer = null;
-          srcEl.style.touchAction = '';
         }
       }
-      if (_mScrolling) {
-        chList.scrollTop += _mScrollLastY - ev.clientY;
-        _mScrollLastY = ev.clientY;
+      if (!_mDragging) {
+        const now = performance.now();
+        const dt = Math.max(1, now - _prevScrollTime);
+        const dy = ev.clientY - _prevScrollY;
+        chList.scrollTop -= dy;
+        _scrollVY = dy / dt;
+        _prevScrollY = ev.clientY;
+        _prevScrollTime = now;
         return;
       }
-      if (!_mDragging || !_mGhost) return;
-      ev.preventDefault();
+      if (!_mGhost) return;
       _mGhost.style.left = (ev.clientX - _mOffX) + 'px';
       _mGhost.style.top  = (ev.clientY - _mOffY) + 'px';
       _mUpdateFeedback(ev.clientX, ev.clientY);
@@ -1001,12 +1009,23 @@ function _mEndDrag(cx, cy) {
       if (ev.pointerId !== _activePid) return;
       document.body.style.touchAction = '';
       srcEl.style.touchAction = '';
-      _mScrolling = false;
       document.removeEventListener('pointermove', onMove);
       document.removeEventListener('pointerup',   onEnd);
       document.removeEventListener('pointercancel', onCancel);
       clearTimeout(_mLongpressTimer); _mLongpressTimer = null;
-      if (_mDragging) _mEndDrag(ev.clientX, ev.clientY);
+      if (_mDragging) {
+        _mEndDrag(ev.clientX, ev.clientY);
+      } else {
+        cancelAnimationFrame(_momentumRaf);
+        let v = _scrollVY * 16;
+        const step = () => {
+          v *= 0.92;
+          if (Math.abs(v) < 0.5) return;
+          chList.scrollTop -= v;
+          _momentumRaf = requestAnimationFrame(step);
+        };
+        _momentumRaf = requestAnimationFrame(step);
+      }
     };
     const onCancel = ev => {
       if (ev.pointerId !== _activePid) return;
@@ -1015,9 +1034,7 @@ function _mEndDrag(cx, cy) {
       document.removeEventListener('pointerup',   onEnd);
       document.removeEventListener('pointercancel', onCancel);
       clearTimeout(_mLongpressTimer); _mLongpressTimer = null;
-      document.body.style.touchAction = '';
       srcEl.style.touchAction = '';
-      _mScrolling = false;
       // pointercancel はドロップではなく中断 — ゴーストだけ片付ける
       if (_mDragging) {
         _mAutoScrollDir = 0;
@@ -1041,7 +1058,7 @@ function _mEndDrag(cx, cy) {
         _mHideIndicator();
       }
     };
-    document.addEventListener('pointermove', onMove, { passive: false });
+    document.addEventListener('pointermove', onMove, { passive: true });
     document.addEventListener('pointerup',   onEnd);
     document.addEventListener('pointercancel', onCancel);
   }, { passive: false });
@@ -3046,6 +3063,26 @@ document.addEventListener('DOMContentLoaded', function() {
   // イベントリスナー: 設定ボタン
   document.getElementById('mSettingsBtn').addEventListener('click', openSettings);
   document.getElementById('mSettingsClose').addEventListener('click', closeSettings);
+
+  // イベントリスナー: 並び替えモードボタン
+  (function() {
+    const btn = document.getElementById('mEditModeBtn');
+    const list = document.getElementById('mChList');
+    btn.addEventListener('click', () => {
+      _mEditMode = !_mEditMode;
+      btn.classList.toggle('edit-active', _mEditMode);
+      list.classList.toggle('edit-mode', _mEditMode);
+      if (!_mEditMode && _mDragging) {
+        // モード解除時にドラッグ中なら中断
+        _mAutoScrollDir = 0;
+        if (_mAutoScrollRaf) { cancelAnimationFrame(_mAutoScrollRaf); _mAutoScrollRaf = null; }
+        _mDragging = false;
+        if (_mGhost) { _mGhost.remove(); _mGhost = null; }
+        if (_mSrcEl) { _mSrcEl.classList.remove('dragging'); _mSrcEl = null; }
+        document.body.style.touchAction = '';
+      }
+    });
+  })();
 
   // 動画詳細メニュー: タイトルタップ
   document.getElementById('mRsVideoTitle').addEventListener('click', function(e) {

@@ -258,11 +258,23 @@ html, body {
   text-transform: uppercase;
   letter-spacing: 0.06em;
 }
+.m-ch-panel-header-btns {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.m-ch-panel-header-btns .m-header-icon-btn.edit-active {
+  color: var(--accent);
+}
 
 .m-ch-list {
   flex: 1;
   overflow-y: auto;
   padding: 6px 4px;
+  -webkit-overflow-scrolling: touch;
+}
+.m-ch-list.edit-mode {
+  touch-action: none;
 }
 
 /* チャンネルカード */
@@ -2499,7 +2511,6 @@ html, body {
   color: var(--text-muted);
   transition: background 0.12s, color 0.12s;
   user-select: none;
-  touch-action: none;
 }
 .sidebar-channel-item.touch-hover { background: var(--surface2); color: var(--text); }
 .sidebar-channel-item.active { background: rgba(0, 176, 244, 0.12); color: var(--accent); }
@@ -2567,7 +2578,6 @@ html, body {
   cursor: pointer; border-radius: 4px; user-select: none;
   color: var(--text-muted);
   transition: background 0.12s, color 0.12s;
-  touch-action: none;
 }
 .sidebar-folder-header.touch-hover { background: var(--surface2); color: var(--text); }
 .sidebar-folder--open > .sidebar-folder-header.touch-hover { background: var(--folder-tint, var(--surface2)); color: var(--text); }
@@ -2612,7 +2622,6 @@ html, body {
 }
 .sidebar-folder--open > .sidebar-folder-children {
   padding-bottom: 4px;
-  max-height: 1200px;
 }
 .sidebar-folder--open.drop-bottom > .sidebar-folder-children {
   padding-bottom: 28px;
