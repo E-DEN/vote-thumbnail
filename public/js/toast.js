@@ -2,7 +2,8 @@
 // Gooey トースト通知（desktop / mobile 共用モジュール）
 // export: showToast(msg, type?), showToastPromise(promise, opts), closeToast()
 //
-// type: 'ok' | 'err' | 'loading' | true (= 'err') | false (= 'ok')
+// type: 'ok' | 'info' | 'warn' | 'err' | 'loading' | true (= 'err') | false (= 'ok')
+// showToast 第3引数 opts: { action: { label, onClick } }  アクションボタン
 // showToastPromise opts: { loading, success, error }  各値は文字列 or (result) => string
 
 // ============================================================
@@ -34,14 +35,26 @@ const _GT_IA = 'xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBo
 const _GT_ICONS = {
   ok:      `<svg ${_GT_IA}><path d="M20 6 9 17l-5-5"/></svg>`,
   err:     `<svg ${_GT_IA}><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>`,
+  info:    `<svg ${_GT_IA}><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`,
+  warn:    `<svg ${_GT_IA}><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`,
   loading: `<svg ${_GT_IA}><circle cx="12" cy="12" r="9" stroke-dasharray="20 40"><animateTransform attributeName="transform" type="rotate" dur="1s" from="0 12 12" to="360 12 12" repeatCount="indefinite"/></circle></svg>`,
 };
+
+function _gtTypeInfo(type) {
+  switch (type) {
+    case 'err':     return { color: '#f85149', title: 'エラー' };
+    case 'warn':    return { color: '#f59e0b', title: '注意' };
+    case 'info':    return { color: '#3b82f6', title: '情報' };
+    case 'loading': return { color: '#8e8e93', title: '処理中' };
+    default:        return { color: '#3fb950', title: '完了' };
+  }
+}
 
 // ============================================================
 //  Module-level state
 // ============================================================
 let _gtW = 350, _gtE = null, _gtSp = null, _gtRaf = null, _gtLt = null;
-let _gtCb = null, _gtMh = null;
+let _gtCb = null, _gtMh = null, _gtActionCb = null;
 let _gtCollapsing = false, _gtCollapseTimer = null, _gtCloseFailsafe = null, _gtXfadeTimer = null;
 let _gtType = null, _gtTimers = [], _gtHovered = false, _gtDragY = null;
 
@@ -101,20 +114,26 @@ function _gtInit() {
   hd.append(badge, ttl);
   const body = document.createElement('div'); body.className = 'gt-body'; body.style.width = W + 'px';
   const msgEl = document.createElement('span'); msgEl.className = 'gt-msg';
+  const actBtn = document.createElement('button'); actBtn.className = 'gt-action'; actBtn.style.display = 'none';
+  actBtn.addEventListener('click', () => {
+    if (!_gtActionCb) return;
+    const cb = _gtActionCb; _gtActionCb = null;
+    closeToast(); cb();
+  });
   const cls = document.createElement('button'); cls.className = 'gt-close';
   cls.innerHTML = '&#x2715;'; cls.addEventListener('click', closeToast);
-  body.append(msgEl, cls); ov.append(hd, body); wrap.append(svg, ov); ct.appendChild(wrap);
-  _gtE = { wrap, pillR, bodyR, hd, badge, ttl, body, msgEl, cls };
+  body.append(msgEl, actBtn, cls); ov.append(hd, body); wrap.append(svg, ov); ct.appendChild(wrap);
+  _gtE = { wrap, pillR, bodyR, hd, badge, ttl, body, msgEl, action: actBtn, cls };
 
-  // ホバー: ok タイプのタイマー一時停止 + body 展開/収縮
+  // ホバー: ok/info タイプのタイマー一時停止 + body 展開/収縮
   wrap.addEventListener('mouseenter', () => {
-    if (_gtCollapsing || !_gtSp || _gtType !== 'ok') return;
+    if (_gtCollapsing || !_gtSp || (_gtType !== 'ok' && _gtType !== 'info')) return;
     _gtHovered = true;
     _gtPauseTimers();
     _gtAnim(_GT_EXH, _GT_BH, 1);
   });
   wrap.addEventListener('mouseleave', () => {
-    if (_gtCollapsing || !_gtSp || _gtType !== 'ok') return;
+    if (_gtCollapsing || !_gtSp || (_gtType !== 'ok' && _gtType !== 'info')) return;
     _gtHovered = false;
     _gtAnim(_GT_H, 0, 0);
     _gtResumeTimers();
@@ -127,7 +146,7 @@ function _gtInit() {
     wrap.setPointerCapture(e.pointerId);
     wrap.style.transition = '';
     // ドラッグ中にオートパイロットが発火しないようタイマーを停止
-    if (_gtSp && _gtType === 'ok' && !_gtHovered) {
+    if (_gtSp && (_gtType === 'ok' || _gtType === 'info') && !_gtHovered) {
       _gtPauseTimers();
     }
   });
@@ -149,7 +168,7 @@ function _gtInit() {
       wrap.style.transform  = '';
       setTimeout(() => { wrap.style.transition = ''; }, 260);
       // ホバー中でなければタイマーを再開
-      if (_gtSp && _gtType === 'ok' && !_gtHovered) {
+      if (_gtSp && (_gtType === 'ok' || _gtType === 'info') && !_gtHovered) {
         _gtResumeTimers();
       }
     }
@@ -158,7 +177,7 @@ function _gtInit() {
     if (_gtDragY === null) return;
     _gtDragY = null;
     wrap.style.transform = '';
-    if (_gtSp && _gtType === 'ok' && !_gtHovered) {
+    if (_gtSp && (_gtType === 'ok' || _gtType === 'info') && !_gtHovered) {
       _gtResumeTimers();
     }
   });
@@ -238,7 +257,8 @@ function _gtDoHide() {
   clearTimeout(_gtCloseFailsafe); _gtCloseFailsafe = null;
   _gtClearTimers(); _gtHovered = false; _gtDragY = null;
   if (_gtRaf) { cancelAnimationFrame(_gtRaf); _gtRaf = null; }
-  _gtCb = null; _gtCollapsing = false;
+  _gtCb = null; _gtActionCb = null; _gtCollapsing = false;
+  if (_gtE) { _gtE.action.style.display = 'none'; _gtE.action.textContent = ''; }
   _gtE.wrap.style.transition    = '';
   _gtE.body.style.transition    = '';
   _gtE.wrap.style.opacity       = '0';
@@ -273,9 +293,10 @@ export function closeToast() {
 }
 
 // トースト表示
-// type: 'ok' (緑, 3.5s 自動クローズ) | 'err' (赤, × で閉じる) | 'loading' (グレー, 自動クローズなし)
+// type: 'ok'(緑,自動) | 'info'(青,自動) | 'warn'(黄,手動) | 'err'(赤,手動) | 'loading'(グレー,手動)
 // 後方互換: true → 'err' / false → 'ok'
-export function showToast(msg, type = 'ok') {
+// opts.action: { label: string, onClick: fn }  アクションボタン
+export function showToast(msg, type = 'ok', opts = {}) {
   if (type === true)                    type = 'err';
   if (type === false || type == null)   type = 'ok';
 
@@ -285,8 +306,7 @@ export function showToast(msg, type = 'ok') {
   _gtInit();
   if (!_gtE) return;
 
-  const color = type === 'err' ? '#f85149' : type === 'loading' ? '#8e8e93' : '#3fb950';
-  const title = type === 'err' ? 'エラー'   : type === 'loading' ? '処理中'   : '完了';
+  const { color, title } = _gtTypeInfo(type);
 
   const _prevType = _gtType;
   _gtType = type;
@@ -308,6 +328,9 @@ export function showToast(msg, type = 'ok') {
       _gtE.ttl.style.color        = color;
       _gtE.msgEl.textContent      = msg;
       _gtE.cls.style.display      = type === 'loading' ? 'none' : '';
+      _gtActionCb = opts.action?.onClick || null;
+      _gtE.action.textContent = opts.action?.label || '';
+      _gtE.action.style.display = opts.action ? '' : 'none';
       [_gtE.badge, _gtE.ttl, _gtE.msgEl].forEach(el => {
         el.style.transition = 'opacity 200ms ease, filter 200ms ease';
         el.style.opacity    = '';
@@ -322,6 +345,9 @@ export function showToast(msg, type = 'ok') {
     _gtE.ttl.style.color        = color;
     _gtE.msgEl.textContent      = msg;
     _gtE.cls.style.display      = type === 'loading' ? 'none' : '';
+    _gtActionCb = opts.action?.onClick || null;
+    _gtE.action.textContent = opts.action?.label || '';
+    _gtE.action.style.display = opts.action ? '' : 'none';
   }
 
   // closeToast 途中に上書きされた transition をリセット
@@ -343,9 +369,9 @@ export function showToast(msg, type = 'ok') {
   _gtE.wrap.classList.add('gt-visible');
   _gtE.wrap.style.pointerEvents = 'auto';
 
-  if (type === 'ok') {
-    // autopilot: DEMO 公式に準拠 (duration: 6000ms)
-    const dur = 6000;
+  if (type === 'ok' || type === 'info') {
+    // autopilot: ok=6000ms, info=4000ms
+    const dur = type === 'info' ? 4000 : 6000;
     const expandDelay = Math.max(Math.round(dur * 0.025), 100); // 150ms
     const collapseAt  = Math.max(dur - 2000, Math.round(dur * 0.5)); // 4000ms
     setTimeout(() => _gtAnim(_GT_EXH, _GT_BH, 1), expandDelay);

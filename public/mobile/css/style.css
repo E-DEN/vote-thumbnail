@@ -369,6 +369,68 @@ html, body {
   background: var(--border);
 }
 
+/* フォルダカラースウォッチ */
+.m-folder-color-row {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 6px;
+  padding: 8px 10px;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+.m-folder-color-row[hidden] { display: none; }
+.m-folder-color-swatch {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+}
+.m-folder-color-swatch.active {
+  border-color: var(--text);
+}
+.m-folder-color-swatch--none {
+  background: var(--surface2);
+  position: relative;
+}
+.m-folder-color-swatch--none::after {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, transparent 45%, var(--err, #c0392b) 45%, var(--err, #c0392b) 55%, transparent 55%);
+}
+
+/* 削除確認ポップアップ（共通 style.css が未ロードのためここに定義） */
+.ch-del-popup {
+  position: fixed;
+  z-index: 10000;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  box-shadow: 0 4px 18px rgba(0,0,0,0.45);
+  font-size: 13px;
+  color: var(--text);
+  max-width: 240px;
+}
+.ch-del-popup-msg { line-height: 1.4; }
+.ch-del-popup-btns { display: flex; gap: 6px; justify-content: flex-end; }
+.ch-del-popup-ok, .ch-del-popup-cancel {
+  padding: 5px 12px;
+  border-radius: 5px;
+  font-size: 12px;
+  cursor: pointer;
+  border: none;
+}
+.ch-del-popup-ok { background: var(--err, #c0392b); color: #fff; }
+.ch-del-popup-cancel { background: var(--surface2); border: 1px solid var(--border); color: var(--text); }
+
 .m-ch-panel-footer {
   padding: 10px 16px;
   border-top: 1px solid var(--border);
@@ -2379,6 +2441,207 @@ html, body {
 
 /* ここ好きアニメーション */
 .m-welcome .wf-reaction-anim { display: flex; flex-direction: column; align-items: stretch; width: 96px; }
+
+/* ===== チャンネルパネル: サイドバーUI ===== */
+
+/* チャンネルリストのスクロールエリア */
+.m-ch-list { padding: 6px 0; }
+
+/* チャンネルアイテム */
+.sidebar-channel-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 4px 10px 4px 12px;
+  border-radius: 4px; margin: 0 4px;
+  cursor: pointer; font-size: 13px;
+  color: var(--text-muted);
+  transition: background 0.12s, color 0.12s;
+  user-select: none;
+  touch-action: none;
+}
+.sidebar-channel-item:hover,
+.sidebar-channel-item.touch-hover { background: var(--surface2); color: var(--text); }
+.sidebar-channel-item.active { background: rgba(0, 176, 244, 0.12); color: var(--accent); }
+.sidebar-channel-item.dragging { opacity: 0.25; pointer-events: none; }
+.sidebar-channel-item.merge-hover {
+  box-shadow: 0 0 0 2px var(--accent) !important;
+  border-radius: 8px !important;
+  background: var(--surface2);
+}
+.sidebar-ch-avatar-wrap {
+  position: relative; flex-shrink: 0;
+  width: 44px; height: 44px;
+  display: flex; align-items: center; justify-content: center;
+}
+@keyframes m-ch-spin { to { transform: rotate(360deg); } }
+.sidebar-channel-item.m-ch-refreshing .sidebar-ch-avatar-wrap::after {
+  content: '';
+  position: absolute; inset: 0; border-radius: 50%;
+  background: rgba(0,0,0,0.45);
+  border: 2.5px solid rgba(255,255,255,0.15);
+  border-top-color: rgba(255,255,255,0.85);
+  animation: m-ch-spin 0.75s linear infinite;
+  pointer-events: none;
+}
+.sidebar-ch-avatar {
+  display: block; width: 44px; height: 44px;
+  border-radius: 50%; object-fit: cover; background: var(--surface2);
+}
+.sidebar-ch-avatar-ph {
+  display: block; width: 44px; height: 44px;
+  border-radius: 50%; background: var(--surface3); border: 1px solid var(--border);
+}
+.sidebar-ch-name {
+  flex: 1; min-width: 0;
+  overflow: hidden; white-space: nowrap; font-size: 13px;
+}
+
+/* アクションボタン */
+.ch-actions {
+  display: flex; gap: 2px; align-items: center; flex-shrink: 0;
+  overflow: hidden; max-width: 0; opacity: 0; margin-left: -5px;
+  transition: opacity 0.15s ease;
+}
+.sidebar-channel-item.touch-hover .ch-actions,
+.sidebar-folder-header.touch-hover .ch-actions { max-width: 80px; opacity: 1; margin-left: 0; }
+.ch-action-btn {
+  background: none; border: none; color: var(--text-muted);
+  cursor: pointer; padding: 0;
+  width: 18px; height: 18px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; pointer-events: none;
+  transition: color 0.15s;
+}
+.sidebar-channel-item.touch-hover .ch-action-btn,
+.sidebar-folder-header.touch-hover .ch-action-btn { pointer-events: auto; }
+.ch-action-btn svg { width: 11px; height: 11px; }
+.ch-action-refresh:hover { color: var(--accent); }
+.ch-action-delete:hover  { color: #f04747; }
+
+/* フォルダ */
+.sidebar-folder { margin: 0 4px; }
+.sidebar-folder-header {
+  display: flex; align-items: center; gap: 10px;
+  padding: 4px 10px 4px 12px; margin: 0;
+  cursor: pointer; border-radius: 4px; user-select: none;
+  color: var(--text-muted);
+  transition: background 0.12s, color 0.12s;
+  touch-action: none;
+}
+.sidebar-folder-header:hover,
+.sidebar-folder-header.touch-hover { background: var(--surface2); color: var(--text); }
+.sidebar-folder--open > .sidebar-folder-header:hover,
+.sidebar-folder--open > .sidebar-folder-header.touch-hover { background: var(--folder-tint, var(--surface2)); color: var(--text); }
+.sidebar-folder--open > .sidebar-folder-header { color: var(--text); }
+.sidebar-folder-header.merge-hover {
+  box-shadow: 0 0 0 2px var(--accent) !important;
+  border-radius: 8px !important;
+}
+.sidebar-folder-header.dragging { opacity: 0.25; pointer-events: none; }
+.sidebar-folder-preview {
+  position: relative; width: 44px; height: 44px;
+  flex-shrink: 0; border-radius: 50%; overflow: hidden;
+  background: var(--surface2);
+}
+.sidebar-folder-preview-img {
+  position: absolute; width: 30px; height: 30px;
+  border-radius: 50%; object-fit: cover;
+  border: 1.5px solid var(--surface2);
+  transition: opacity 0.18s ease;
+}
+.sidebar-folder-preview-img:nth-child(1) { top: 0; left: 0; }
+.sidebar-folder-preview-img:nth-child(2) { bottom: 0; right: 0; }
+.sidebar-folder-open-icon {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--surface2); border-radius: 50%;
+  color: var(--text-muted);
+  opacity: 0; transition: opacity 0.18s ease;
+  pointer-events: none;
+}
+.sidebar-folder-open-icon svg { width: 18px; height: 18px; }
+.sidebar-folder--open .sidebar-folder-open-icon { opacity: 1; background: transparent; }
+.sidebar-folder--open > .sidebar-folder-header .sidebar-folder-preview { background: transparent; }
+.sidebar-folder--open .sidebar-folder-preview-img { opacity: 0; }
+.sidebar-folder-name { flex: 1; min-width: 0; font-size: 13px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.sidebar-folder-badge { font-size: 11px; color: var(--text-muted); }
+.sidebar-folder-children {
+  overflow: hidden;
+  max-height: 0;
+  transition: max-height 0.2s ease;
+}
+.sidebar-folder--open > .sidebar-folder-children {
+  padding-bottom: 4px;
+  max-height: 1200px;
+}
+.sidebar-folder--open.drop-bottom > .sidebar-folder-children {
+  padding-bottom: 28px;
+}
+.sidebar-folder--open {
+  background: var(--folder-tint, transparent);
+  border-radius: 6px;
+  margin: 1px 4px 2px;
+}
+.sidebar-folder--open > .sidebar-folder-header { margin: 0; }
+.sidebar-folder-children .sidebar-channel-item { margin-left: 0; margin-right: 0; }
+
+/* ドラッグ中: hover 強調を抑制 */
+.sidebar--dragging .sidebar-channel-item.touch-hover,
+.sidebar--dragging .sidebar-channel-item:hover,
+.sidebar--dragging .sidebar-folder-header.touch-hover,
+.sidebar--dragging .sidebar-folder-header:hover {
+  background: transparent !important;
+  color: var(--text-muted) !important;
+}
+
+/* ドラッグゴースト */
+.m-drag-ghost {
+  position: fixed; pointer-events: none; z-index: 9999;
+  background: var(--surface2) !important;
+  border: 1px solid var(--accent) !important;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.6) !important;
+  opacity: 0.92 !important;
+}
+
+/* 長押しリップル */
+@keyframes m-longpress-ring {
+  0%   { transform: scale(0.6); opacity: 0.8; }
+  100% { transform: scale(1.4); opacity: 0; }
+}
+.m-longpress-hint {
+  position: fixed; pointer-events: none; z-index: 9000;
+  width: 48px; height: 48px; border-radius: 50%;
+  border: 2px solid var(--accent);
+  animation: m-longpress-ring 0.45s ease-out forwards;
+  margin-top: -24px; margin-left: -24px;
+}
+
+/* フォルダ名ダイアログ */
+.m-folder-overlay {
+  display: none; position: fixed; inset: 0;
+  background: rgba(0,0,0,0.55); z-index: 600;
+  align-items: center; justify-content: center;
+}
+.m-folder-overlay.open { display: flex; }
+.m-folder-dialog {
+  background: var(--surface); border-radius: 12px;
+  padding: 20px; width: 260px;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.6);
+}
+.m-folder-dialog-title { font-size: 14px; font-weight: 600; margin-bottom: 6px; }
+.m-folder-dialog-sub { font-size: 11px; color: var(--text-muted); margin-bottom: 12px; line-height: 1.5; }
+.m-folder-dialog-input {
+  width: 100%; background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 8px; padding: 9px 12px; font-size: 14px; color: var(--text);
+  outline: none; margin-bottom: 14px; transition: border-color 0.15s;
+  -webkit-user-select: text; user-select: text;
+}
+.m-folder-dialog-input:focus { border-color: var(--accent); }
+.m-folder-dialog-btns { display: flex; gap: 8px; justify-content: flex-end; }
+.m-folder-dialog-btn { padding: 8px 16px; border-radius: 7px; font-size: 13px; font-weight: 500; }
+.m-folder-dialog-btn.cancel { color: var(--text-muted); }
+.m-folder-dialog-btn.cancel:active { background: var(--surface2); }
+.m-folder-dialog-btn.ok { background: var(--accent); color: #fff; }
+.m-folder-dialog-btn.ok:active { opacity: 0.75; }
 .m-welcome .wf-video-frame {
   width: 100%;
   aspect-ratio: 16 / 9;

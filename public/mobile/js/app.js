@@ -1,6 +1,6 @@
 // mobile/js/app.js
 // モバイル専用アプリケーションロジック
-import { state, LS_CAT, LS_SORT, LS_CHANNELS, LS_API_KEY, LS_RSS_ONLY } from '../../js/state.js';
+import { state, LS_CAT, LS_SORT, LS_CHANNELS, LS_API_KEY, LS_RSS_ONLY, LS_SIDEBAR_ORDER } from '../../js/state.js';
 import { loadRating, applyVoteLocal, syncVoteToServer, getVotePair, setVotePair, pickPair, _playedPairs, _pairKey, getRating, getRd, getWins, getBattles } from '../../js/rating.js';
 import { loadChannels, saveChannels, loadVideosForChannel, saveVideosForChannel, fetchChannelVideos, filteredVideos } from '../../js/storage.js';
 import { formatViews, formatRelTime, formatViewsShort } from '../../js/format.js';
@@ -37,6 +37,42 @@ function _mBuildPinDot(v) {
 // オブジェクトエイリアス（参照が同一なので変更は state に反映される）
 const ratingData = state.ratingData;
 const channels   = state.channels;
+
+// --- サイドバー順序管理 ---
+let sidebarOrder = [];
+
+function loadSidebarOrder() {
+  const raw = localStorage.getItem(LS_SIDEBAR_ORDER);
+  sidebarOrder = raw ? JSON.parse(raw) : [];
+}
+function saveSidebarOrder() {
+  try { localStorage.setItem(LS_SIDEBAR_ORDER, JSON.stringify(sidebarOrder)); } catch {}
+}
+function syncSidebarOrder() {
+  const known = new Set(Object.keys(channels));
+  sidebarOrder = sidebarOrder.filter(item => {
+    if (item.type === 'channel') return known.has(item.key);
+    if (item.type === 'folder') {
+      item.children = item.children.filter(k => known.has(k));
+      return item.children.length > 0;
+    }
+    return false;
+  });
+  // 子が1件のフォルダを解除
+  sidebarOrder = sidebarOrder.map(item =>
+    (item.type === 'folder' && item.children.length === 1)
+      ? { type: 'channel', key: item.children[0] } : item
+  );
+  // order 未登録チャンネルを末尾に追加
+  const inOrder = new Set();
+  sidebarOrder.forEach(item => {
+    if (item.type === 'channel') inOrder.add(item.key);
+    else if (item.type === 'folder') item.children.forEach(k => inOrder.add(k));
+  });
+  Object.keys(channels).forEach(k => {
+    if (!inOrder.has(k)) sidebarOrder.push({ type: 'channel', key: k });
+  });
+}
 
 // モバイル固有状態
 let currentTab      = 'list';
@@ -127,13 +163,299 @@ function syncChannelMeta(key, ch) {
 }
 
 
+// --- フォルダカラーパレット ---
+const WASHOKU_PALETTE = [
+  { hue:   0, name: '茜' },
+  { hue:  15, name: '柿' },
+  { hue:  32, name: '山吹' },
+  { hue:  68, name: '萌黄' },
+  { hue: 105, name: '若竹' },
+  { hue: 155, name: '木賊' },
+  { hue: 185, name: '浅葱' },
+  { hue: 208, name: '縹' },
+  { hue: 228, name: '瑠璃' },
+  { hue: 258, name: '桔梗' },
+  { hue: 292, name: '牡丹' },
+];
+
 // --- チャンネルパネル ---
+
+// チャンネルカードのHTML要素を生成
+function _makeChCard(key) {
+  const ch = channels[key];
+  const name = ch ? (ch.displayName || ch.handle || key) : key;
+  const card = document.createElement('div');
+  card.className = 'sidebar-channel-item' + (key === state.currentChannelKey ? ' active' : '');
+  card.dataset.key = key;
+
+  // アバター
+  const avatarWrap = document.createElement('div');
+  avatarWrap.className = 'sidebar-ch-avatar-wrap';
+  if (ch && ch.avatar) {
+    const img = document.createElement('img');
+    img.className = 'sidebar-ch-avatar';
+    img.src = ch.avatar;
+    img.alt = '';
+    img.referrerPolicy = 'no-referrer';
+    img.onerror = function() { this.style.display = 'none'; };
+    avatarWrap.appendChild(img);
+  } else {
+    const ph = document.createElement('div');
+    ph.className = 'sidebar-ch-avatar-ph';
+    avatarWrap.appendChild(ph);
+  }
+  card.appendChild(avatarWrap);
+
+  // チャンネル名
+  const nameEl = document.createElement('span');
+  nameEl.className = 'sidebar-ch-name';
+  nameEl.textContent = name;
+  card.appendChild(nameEl);
+
+  // 設定ボタン（⋮）
+  const menuBtn = document.createElement('button');
+  menuBtn.className = 'm-ch-card-menu-btn';
+  menuBtn.setAttribute('aria-label', t('settings-btn-title'));
+  menuBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>';
+  menuBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    _openChMenu(key, menuBtn);
+  });
+  card.appendChild(menuBtn);
+
+  card.addEventListener('click', async () => {
+    if (_mDragging) return;
+    closeChannelPanel();
+    await selectChannel(key);
+  });
+
+  return card;
+}
+
+// フォルダ⋮メニューを表示
+function _openFolderMenu(item, anchorEl) {
+  document.querySelectorAll('.m-folder-popup-menu').forEach(m => m.remove());
+
+  const menu = document.createElement('div');
+  menu.className = 'm-ch-card-menu m-folder-popup-menu';
+
+  // リネーム
+  const renameBtn = document.createElement('button');
+  renameBtn.className = 'm-ch-card-menu-item';
+  renameBtn.textContent = t('folder-rename-title');
+  renameBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    menu.remove();
+    _mOpenFolderDialog(newName => {
+      const it = sidebarOrder.find(it => it.type === 'folder' && it.id === item.id);
+      if (it) { it.name = newName; saveSidebarOrder(); renderChannelPanel(); }
+    }, item.name || '');
+  });
+
+  // フォルダの色（ボタン＋トグル展開）
+  const colorBtn = document.createElement('button');
+  colorBtn.className = 'm-ch-card-menu-item';
+  colorBtn.textContent = t('folder-color-title');
+  const colorRow = document.createElement('div');
+  colorRow.className = 'm-folder-color-row';
+  colorRow.hidden = true;
+  colorBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    colorRow.hidden = !colorRow.hidden;
+  });
+  const noneBtn = document.createElement('button');
+  noneBtn.className = 'm-folder-color-swatch m-folder-color-swatch--none' + (item.hue == null ? ' active' : '');
+  noneBtn.title = t('folder-color-none');
+  noneBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    const it = sidebarOrder.find(it => it.type === 'folder' && it.id === item.id);
+    if (it) { it.hue = null; item.hue = null; saveSidebarOrder(); renderChannelPanel(); }
+    colorRow.querySelectorAll('.m-folder-color-swatch').forEach(s => s.classList.remove('active'));
+    noneBtn.classList.add('active');
+  });
+  colorRow.appendChild(noneBtn);
+  WASHOKU_PALETTE.forEach(entry => {
+    const sw = document.createElement('button');
+    sw.className = 'm-folder-color-swatch' + (item.hue === entry.hue ? ' active' : '');
+    sw.style.background = 'hsl(' + entry.hue + ',40%,52%)';
+    sw.title = entry.name;
+    sw.addEventListener('click', e => {
+      e.stopPropagation();
+      const it = sidebarOrder.find(it => it.type === 'folder' && it.id === item.id);
+      if (it) { it.hue = entry.hue; item.hue = entry.hue; saveSidebarOrder(); renderChannelPanel(); }
+      colorRow.querySelectorAll('.m-folder-color-swatch').forEach(s => s.classList.remove('active'));
+      sw.classList.add('active');
+    });
+    colorRow.appendChild(sw);
+  });
+
+  // リフレッシュ
+  const sep1 = document.createElement('div');
+  sep1.className = 'm-ch-card-menu-sep';
+  const refreshBtn = document.createElement('button');
+  refreshBtn.className = 'm-ch-card-menu-item';
+  refreshBtn.textContent = t('refresh-videos');
+  refreshBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    menu.remove();
+    const keys = [...(item.children || [])];
+    const count = keys.length;
+    if (!count) return;
+    const msg = t('folder-refresh-confirm').replace('{name}', item.name || '').replace('{count}', count);
+    _mShowDelPopup(anchorEl, msg, async () => {
+      for (const key of keys) {
+        if (!channels[key]) continue;
+        const cardEl = document.querySelector('.sidebar-channel-item[data-key="' + key + '"]');
+        if (cardEl) cardEl.classList.add('m-ch-refreshing');
+        try {
+          const res = await fetch('/api/channels/' + key + '/refresh', { method: 'POST' });
+          if (res.ok && key === state.currentChannelKey) {
+            state.allVideos = await fetchChannelVideos(key);
+            saveVideosForChannel(key, state.allVideos);
+            renderCurrentTab();
+          }
+        } catch (_) { /* ignore */ }
+        if (cardEl) cardEl.classList.remove('m-ch-refreshing');
+      }
+      showToast(t('refresh-done-api', { total: '?' }));
+    }, t('folder-refresh-confirm-btn'));
+  });
+
+  // 削除（フォルダ解除）
+  const sep2 = document.createElement('div');
+  sep2.className = 'm-ch-card-menu-sep';
+  const deleteBtn = document.createElement('button');
+  deleteBtn.className = 'm-ch-card-menu-item m-ch-menu-danger';
+  deleteBtn.textContent = t('folder-delete-title');
+  deleteBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    menu.remove();
+    const anchorRect = anchorEl.getBoundingClientRect();
+    _mShowDelPopup(anchorEl,
+      t('folder-delete-confirm').replace('{name}', item.name || t('new-folder')),
+      () => {
+        const idx = sidebarOrder.findIndex(it => it.type === 'folder' && it.id === item.id);
+        if (idx !== -1) {
+          const children = sidebarOrder[idx].children.map(k => ({ type: 'channel', key: k }));
+          sidebarOrder.splice(idx, 1, ...children);
+          saveSidebarOrder();
+          renderChannelPanel();
+        }
+      },
+      t('folder-delete-title'),
+      anchorRect
+    );
+  });
+
+  menu.append(renameBtn, colorBtn, colorRow, sep1, refreshBtn, sep2, deleteBtn);
+  document.body.appendChild(menu);
+
+  const r = anchorEl.getBoundingClientRect();
+  const mw = menu.offsetWidth || 160;
+  const mh = menu.offsetHeight || 150;
+  let left = r.right - mw;
+  let top  = r.bottom + 4;
+  if (left < 4) left = 4;
+  if (top + mh > window.innerHeight - 8) top = r.top - mh - 4;
+  menu.style.left = left + 'px';
+  menu.style.top  = top  + 'px';
+
+  setTimeout(() => {
+    const outside = ev => {
+      if (!menu.contains(ev.target)) {
+        menu.remove();
+        document.removeEventListener('click', outside, true);
+      }
+    };
+    document.addEventListener('click', outside, true);
+  }, 0);
+}
+
+// フォルダ要素を生成
+function _makeFolderEl(item) {
+  const folder = document.createElement('div');
+  folder.className = 'sidebar-folder';
+  if (item.open !== false) folder.classList.add('sidebar-folder--open');
+  folder.dataset.folderId = item.id;
+  folder.dataset.hue = item.hue != null ? item.hue : '';
+  if (item.hue != null) {
+    folder.style.setProperty('--folder-tint', 'hsla(' + item.hue + ',55%,42%,0.10)');
+  }
+
+  // ヘッダー
+  const header = document.createElement('div');
+  header.className = 'sidebar-folder-header';
+
+  // プレビュー（子チャンネルの最初の2つ）
+  const preview = document.createElement('div');
+  preview.className = 'sidebar-folder-preview';
+  const keys = item.children || [];
+  [0, 1].forEach(i => {
+    const img = document.createElement('div');
+    img.className = 'sidebar-folder-preview-img';
+    const ch = keys[i] ? channels[keys[i]] : null;
+    if (ch && ch.avatar) {
+      img.style.backgroundImage = 'url(' + ch.avatar + ')';
+      img.style.backgroundSize = 'cover';
+    } else {
+      img.style.background = 'hsl(' + ((item.hue || 0) + i * 30) + ',40%,35%)';
+    }
+    preview.appendChild(img);
+  });
+  const openIcon = document.createElement('div');
+  openIcon.className = 'sidebar-folder-open-icon';
+  openIcon.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>';
+  preview.appendChild(openIcon);
+  header.appendChild(preview);
+
+  const nameEl = document.createElement('span');
+  nameEl.className = 'sidebar-folder-name';
+  nameEl.textContent = item.name || t('new-folder');
+  header.appendChild(nameEl);
+
+  // ⋮メニューボタン
+  const folderMenuBtn = document.createElement('button');
+  folderMenuBtn.className = 'm-ch-card-menu-btn';
+  folderMenuBtn.setAttribute('aria-label', t('settings-btn-title'));
+  folderMenuBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>';
+  folderMenuBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    _openFolderMenu(item, folderMenuBtn);
+  });
+  header.appendChild(folderMenuBtn);
+
+  // トグル
+  header.addEventListener('click', () => {
+    if (_mDragging) return;
+    const open = folder.classList.toggle('sidebar-folder--open');
+    const ch = folder.querySelector('.sidebar-folder-children');
+    if (ch) ch.style.maxHeight = open ? '1200px' : '0';
+    // sidebarOrder に open 状態を保存
+    const it = sidebarOrder.find(it => it.type === 'folder' && it.id === item.id);
+    if (it) { it.open = open; saveSidebarOrder(); }
+  });
+
+  folder.appendChild(header);
+
+  // 子チャンネルリスト
+  const children = document.createElement('div');
+  children.className = 'sidebar-folder-children';
+  children.style.maxHeight = (item.open !== false) ? '1200px' : '0';
+  keys.forEach(k => {
+    const card = _makeChCard(k);
+    children.appendChild(card);
+  });
+  folder.appendChild(children);
+
+  return folder;
+}
+
 function renderChannelPanel() {
+  syncSidebarOrder();
   const list = document.getElementById('mChList');
   list.innerHTML = '';
 
-  const keys = Object.keys(channels);
-  if (keys.length === 0) {
+  if (Object.keys(channels).length === 0) {
     const msg = document.createElement('div');
     msg.className = 'm-empty-msg';
     msg.style.padding = '24px 16px';
@@ -143,54 +465,12 @@ function renderChannelPanel() {
     return;
   }
 
-  keys.forEach(key => {
-    const ch = channels[key];
-    const name = ch.displayName || ch.handle || key;
-    const card = document.createElement('div');
-    card.className = 'm-ch-card' + (key === state.currentChannelKey ? ' active' : '');
-    card.dataset.key = key;
-
-    // アバター
-    const avatarWrap = document.createElement('div');
-    avatarWrap.className = 'm-ch-avatar-wrap';
-    if (ch.avatar) {
-      const img = document.createElement('img');
-      img.className = 'm-ch-avatar';
-      img.src = ch.avatar;
-      img.alt = '';
-      img.referrerPolicy = 'no-referrer';
-      img.onerror = function() { this.style.display = 'none'; };
-      avatarWrap.appendChild(img);
-    } else {
-      const ph = document.createElement('div');
-      ph.className = 'm-ch-avatar-placeholder';
-      avatarWrap.appendChild(ph);
+  sidebarOrder.forEach(item => {
+    if (item.type === 'channel') {
+      list.appendChild(_makeChCard(item.key));
+    } else if (item.type === 'folder') {
+      list.appendChild(_makeFolderEl(item));
     }
-    card.appendChild(avatarWrap);
-
-    // チャンネル名
-    const nameEl = document.createElement('span');
-    nameEl.className = 'm-ch-card-name';
-    nameEl.textContent = name;
-    card.appendChild(nameEl);
-
-    // 設定ボタン（⋮）
-    const menuBtn = document.createElement('button');
-    menuBtn.className = 'm-ch-card-menu-btn';
-    menuBtn.setAttribute('aria-label', t('settings-btn-title'));
-    menuBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>';
-    menuBtn.addEventListener('click', e => {
-      e.stopPropagation();
-      _openChMenu(key, menuBtn);
-    });
-    card.appendChild(menuBtn);
-
-    card.addEventListener('click', async () => {
-      closeChannelPanel();
-      await selectChannel(key);
-    });
-
-    list.appendChild(card);
   });
 }
 
@@ -219,8 +499,485 @@ function closeChannelPanel() {
   }, { passive: true });
 })();
 
-// --- チャンネルカードメニュー ---
+// --- 削除確認ポップアップ (PC版 _showChDelPopup と同等) ---
+function _mShowDelPopup(anchorEl, msg, onConfirm, okLabel, anchorRect) {
+  const rect = anchorRect || anchorEl.getBoundingClientRect();
+  document.querySelectorAll('.ch-del-popup').forEach(p => p.remove());
+  const popup = document.createElement('div');
+  popup.className = 'ch-del-popup';
+  popup.style.visibility = 'hidden';
+  const msgEl = document.createElement('span');
+  msgEl.className = 'ch-del-popup-msg';
+  msgEl.textContent = msg;
+  const btnRow = document.createElement('div');
+  btnRow.className = 'ch-del-popup-btns';
+  const okBtn = document.createElement('button');
+  okBtn.className = 'ch-del-popup-ok';
+  okBtn.textContent = okLabel || t('ch-delete-confirm-btn');
+  const cancelBtn = document.createElement('button');
+  cancelBtn.className = 'ch-del-popup-cancel';
+  cancelBtn.textContent = t('ch-delete-cancel-btn');
+  btnRow.append(okBtn, cancelBtn);
+  popup.append(msgEl, btnRow);
+  document.body.appendChild(popup);
+  const pw = popup.offsetWidth, ph = popup.offsetHeight;
+  let left = rect.left;
+  let top  = rect.bottom + 6;
+  if (left + pw > window.innerWidth  - 4) left = window.innerWidth  - pw - 4;
+  if (left < 4) left = 4;
+  if (top  + ph > window.innerHeight - 4) top  = rect.top - ph - 6;
+  if (top  < 4) top = 4;
+  popup.style.left = left + 'px';
+  popup.style.top  = top  + 'px';
+  popup.style.visibility = '';
+  const close = () => {
+    popup.remove();
+    document.removeEventListener('keydown', escHandler);
+  };
+  const escHandler = e => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
+  document.addEventListener('keydown', escHandler);
+  okBtn.addEventListener('click', e => { e.stopPropagation(); close(); onConfirm(); });
+  cancelBtn.addEventListener('click', e => { e.stopPropagation(); close(); });
+  setTimeout(() => {
+    const outside = e => { if (!popup.contains(e.target)) { close(); document.removeEventListener('click', outside, true); } };
+    document.addEventListener('click', outside, true);
+  }, 0);
+}
+
+// --- フォルダ名ダイアログ ---
+let _mFolderDialogCb = null;
+
+function _mOpenFolderDialog(cb, initialValue) {
+  _mFolderDialogCb = cb;
+  const overlay = document.getElementById('mFolderOverlay');
+  const input = document.getElementById('mFolderNameInput');
+  input.value = initialValue || '';
+  overlay.classList.add('open');
+  setTimeout(() => { input.focus(); input.select(); }, 50);
+}
+function _mCloseFolderDialog() {
+  document.getElementById('mFolderOverlay').classList.remove('open');
+  _mFolderDialogCb = null;
+}
+(function() {
+  document.getElementById('mFolderOkBtn').addEventListener('click', () => {
+    if (!_mFolderDialogCb) return;
+    const name = document.getElementById('mFolderNameInput').value.trim();
+    _mFolderDialogCb(name || t('new-folder'));
+    _mCloseFolderDialog();
+  });
+  document.getElementById('mFolderCancelBtn').addEventListener('click', _mCloseFolderDialog);
+  document.getElementById('mFolderNameInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') document.getElementById('mFolderOkBtn').click();
+    if (e.key === 'Escape') _mCloseFolderDialog();
+  });
+  document.getElementById('mFolderOverlay').addEventListener('click', e => {
+    if (e.target === document.getElementById('mFolderOverlay')) _mCloseFolderDialog();
+  });
+})();
+
+// --- ドラッグ&ドロップ (チャンネルリスト) ---
+let _mDragging = false;
+let _mGhost = null;
+let _mSrcEl = null;
+let _mLongpressTimer = null;
+let _mLongpressHint = null;
+let _mTouchActiveEl = null;
+let _mDragStartX = 0, _mDragStartY = 0;
+let _mIndicator = null;
+let _mOffX = 0, _mOffY = 0;
+let _mDragFolderWasOpen = false;
+
+function _mShowIndicator(refEl, before) {
+  if (!_mIndicator) {
+    _mIndicator = document.createElement('div');
+    _mIndicator.className = 'm-drop-indicator';
+    _mIndicator.style.cssText = 'position:fixed;left:0;right:0;height:2px;background:var(--accent);z-index:9999;pointer-events:none;border-radius:2px;';
+    document.body.appendChild(_mIndicator);
+  }
+  const r = refEl.getBoundingClientRect();
+  const chList = document.getElementById('mChList');
+  const lr = chList.getBoundingClientRect();
+  _mIndicator.style.display = 'block';
+  _mIndicator.style.top  = (before ? r.top - 1 : r.bottom - 1) + 'px';
+  _mIndicator.style.left = lr.left + 'px';
+  _mIndicator.style.right = (window.innerWidth - lr.right) + 'px';
+  _mIndicator.style.width = '';
+}
+function _mHideIndicator() {
+  if (_mIndicator) _mIndicator.style.display = 'none';
+}
+
+function _mGetDropInfo(cy) {
+  const chList = document.getElementById('mChList');
+  const items = [...chList.querySelectorAll(':scope > .sidebar-channel-item:not(.dragging), :scope > .sidebar-folder:not(.dragging)')];
+  if (!items.length) return null;
+  const first = items[0].getBoundingClientRect();
+  if (cy < first.top + first.height * 0.3) return { before: items[0] };
+  const last = items[items.length - 1].getBoundingClientRect();
+  if (cy > last.bottom) return { after: items[items.length - 1] };
+  for (let i = 0; i < items.length; i++) {
+    const r = items[i].getBoundingClientRect();
+    if (cy >= r.top && cy <= r.bottom) {
+      const relY = (cy - r.top) / r.height;
+      if (relY < 0.3) {
+        const prev = items[i - 1];
+        return prev ? { after: prev } : { before: items[i] };
+      } else if (relY > 0.7) {
+        return { after: items[i] };
+      } else {
+        return null; // merge zone
+      }
+    }
+  }
+  if (items.length > 1) {
+    const prev = items[items.length - 2];
+    const cur  = items[items.length - 1];
+    if (cy > prev.getBoundingClientRect().bottom && cy < cur.getBoundingClientRect().top) {
+      return { after: prev };
+    }
+  }
+  return null;
+}
+
+function _mUpdateFeedback(cx, cy) {
+  if (!_mDragging || !_mSrcEl) return;
+  document.querySelectorAll('.merge-hover').forEach(el => el.classList.remove('merge-hover'));
+  document.querySelectorAll('.drop-bottom').forEach(el => el.classList.remove('drop-bottom'));
+
+  // リスト全体の最後のアイテムより下の空白にある場合は先に確定
+  const _chListEl = document.getElementById('mChList');
+  const _topItems = [..._chListEl.querySelectorAll(':scope > .sidebar-channel-item:not(.dragging), :scope > .sidebar-folder:not(.dragging)')];
+  if (_topItems.length) {
+    const _lastRect = _topItems[_topItems.length - 1].getBoundingClientRect();
+    if (cy > _lastRect.bottom) {
+      _mShowIndicator(_topItems[_topItems.length - 1], false);
+      return;
+    }
+  }
+
+  const under = document.elementFromPoint(cx, cy);
+  const srcIsCard  = _mSrcEl.classList.contains('sidebar-channel-item');
+  const targetCard = under?.closest('.sidebar-channel-item:not(.dragging)');
+  const targetFolHdr = under?.closest('.sidebar-folder-header');
+
+  if (srcIsCard && targetCard) {
+    const inChildren    = !!targetCard.closest('.sidebar-folder-children');
+    const srcInChildren = !!_mSrcEl.closest('.sidebar-folder-children');
+    const r = targetCard.getBoundingClientRect();
+    const relY = (cy - r.top) / r.height;
+    // フォルダ内最後チャンネルの下半分 → drop-bottom CSS 付与
+    if (inChildren && relY > 0.5) {
+      const siblings = [...targetCard.closest('.sidebar-folder-children').querySelectorAll('.sidebar-channel-item:not(.dragging)')];
+      if (targetCard === siblings[siblings.length - 1]) {
+        const folder = targetCard.closest('.sidebar-folder--open');
+        if (folder) folder.classList.add('drop-bottom');
+      }
+    }
+    if (inChildren || srcInChildren) {
+      if (relY < 0.5) {
+        const prev = targetCard.previousElementSibling;
+        if (prev && prev.classList.contains('sidebar-channel-item') && !prev.classList.contains('dragging')) {
+          _mShowIndicator(prev, false);
+        } else { _mShowIndicator(targetCard, true); }
+      } else { _mShowIndicator(targetCard, false); }
+    } else {
+      if (relY < 0.3) {
+        const prev = targetCard.previousElementSibling;
+        if (prev && prev.classList.contains('sidebar-channel-item') && !prev.classList.contains('dragging')) {
+          _mShowIndicator(prev, false);
+        } else { _mShowIndicator(targetCard, true); }
+      } else if (relY > 0.7) { _mShowIndicator(targetCard, false); }
+      else { targetCard.classList.add('merge-hover'); _mHideIndicator(); }
+    }
+  } else if (srcIsCard && targetFolHdr && !_mSrcEl.closest('.sidebar-folder-children')) {
+    targetFolHdr.classList.add('merge-hover'); _mHideIndicator();
+  } else {
+    const targetFolder = under?.closest('.sidebar-folder--open');
+    if (srcIsCard && targetFolder) {
+      const kids = [...targetFolder.querySelectorAll('.sidebar-folder-children > .sidebar-channel-item:not(.dragging)')];
+      const lastKid = kids[kids.length - 1];
+      if (lastKid && cy > lastKid.getBoundingClientRect().bottom && lastKid.nextElementSibling !== _mSrcEl) {
+        targetFolder.classList.add('drop-bottom'); _mShowIndicator(lastKid, false); return;
+      }
+    }
+    if (_mSrcEl.closest('.sidebar-folder-children')) { _mHideIndicator(); return; }
+    const info = _mGetDropInfo(cy);
+    if (info) { if (info.before) _mShowIndicator(info.before, true); else _mShowIndicator(info.after, false); }
+    else _mHideIndicator();
+  }
+}
+
+function _mMergeIntoNewFolder(srcEl, targetEl, name) {
+  const srcKey    = srcEl.dataset.key;
+  const targetKey = targetEl.dataset.key;
+  // sidebarOrder を更新
+  const srcIdx    = _mFindOrderIdx(srcKey);
+  const targetIdx = _mFindOrderIdx(targetKey);
+  const hue = Math.floor(Math.random() * 360);
+  const fid = 'f' + Date.now();
+  const newFolder = { type: 'folder', id: fid, name, hue, children: [targetKey, srcKey], open: true };
+  // targetIdx に folder を挿入、srcIdx を削除
+  sidebarOrder.splice(Math.min(srcIdx, targetIdx), 0, newFolder);
+  sidebarOrder = sidebarOrder.filter((it, i) => {
+    if (i === Math.min(srcIdx, targetIdx)) return true; // 新フォルダ
+    if (it.type === 'channel' && (it.key === srcKey || it.key === targetKey)) return false;
+    return true;
+  });
+  // インデックスがずれているので再フィルタ
+  const seen = new Set();
+  const deduped = [];
+  for (const it of sidebarOrder) {
+    const uid = it.type === 'folder' ? it.id : it.key;
+    if (!seen.has(uid)) { seen.add(uid); deduped.push(it); }
+  }
+  sidebarOrder = deduped;
+  saveSidebarOrder();
+  renderChannelPanel();
+}
+
+function _mFindOrderIdx(key) {
+  for (let i = 0; i < sidebarOrder.length; i++) {
+    const it = sidebarOrder[i];
+    if (it.type === 'channel' && it.key === key) return i;
+    if (it.type === 'folder' && it.children.includes(key)) return i;
+  }
+  return sidebarOrder.length;
+}
+
+function _mAddToFolder(srcEl, fid) {
+  const srcKey = srcEl.dataset.key;
+  // src を既存 order から除去
+  sidebarOrder = sidebarOrder.filter(it => !(it.type === 'channel' && it.key === srcKey));
+  sidebarOrder.forEach(it => {
+    if (it.type === 'folder' && it.id !== fid) {
+      it.children = it.children.filter(k => k !== srcKey);
+    }
+  });
+  // 対象フォルダに追加
+  const folder = sidebarOrder.find(it => it.type === 'folder' && it.id === fid);
+  if (folder && !folder.children.includes(srcKey)) folder.children.push(srcKey);
+  saveSidebarOrder();
+  renderChannelPanel();
+}
+
+function _mSaveSidebarOrderFromDOM() {
+  const chList = document.getElementById('mChList');
+  const newOrder = [];
+  for (const el of chList.children) {
+    if (el.classList.contains('sidebar-channel-item')) {
+      newOrder.push({ type: 'channel', key: el.dataset.key });
+    } else if (el.classList.contains('sidebar-folder')) {
+      const fid = el.dataset.folderId;
+      const fname = el.querySelector('.sidebar-folder-name')?.textContent || '';
+      const hue = el.dataset.hue !== '' ? parseInt(el.dataset.hue) : null;
+      const open = el.classList.contains('sidebar-folder--open');
+      const children = [...el.querySelectorAll('.sidebar-folder-children > .sidebar-channel-item')].map(c => c.dataset.key);
+      newOrder.push({ type: 'folder', id: fid, name: fname, hue, children, open });
+    }
+  }
+  sidebarOrder = newOrder;
+  saveSidebarOrder();
+}
+
+function _mEndDrag(cx, cy) {
+  if (!_mDragging) return;
+  _mDragging = false;
+  document.getElementById('mChList').classList.remove('sidebar--dragging');
+  document.querySelectorAll('.merge-hover').forEach(el => el.classList.remove('merge-hover'));
+  document.querySelectorAll('.drop-bottom').forEach(el => el.classList.remove('drop-bottom'));
+  if (_mGhost) { _mGhost.remove(); _mGhost = null; }
+  _mSrcEl.classList.remove('dragging');
+  if (_mDragFolderWasOpen) {
+    const childrenEl = _mSrcEl.querySelector('.sidebar-folder-children');
+    if (childrenEl) childrenEl.style.maxHeight = '';
+    _mSrcEl.classList.add('sidebar-folder--open');
+  }
+  _mDragFolderWasOpen = false;
+  _mHideIndicator();
+
+  // リスト全体の最後のアイテムより下にドロップ → フォルダ内外問わずトップレベル末尾へ
+  {
+    const _dropChList = document.getElementById('mChList');
+    const _dropItems  = [..._dropChList.querySelectorAll(':scope > .sidebar-channel-item, :scope > .sidebar-folder')].filter(el => el !== _mSrcEl);
+    if (_dropItems.length && cy > _dropItems[_dropItems.length - 1].getBoundingClientRect().bottom) {
+      _dropChList.appendChild(_mSrcEl);
+      _mSaveSidebarOrderFromDOM();
+      _mSrcEl = null; return;
+    }
+  }
+
+  _mSrcEl.style.visibility = 'hidden';
+  const under = document.elementFromPoint(cx, cy);
+  _mSrcEl.style.visibility = '';
+
+  if (under) {
+    const targetCard   = under.closest('.sidebar-channel-item');
+    const targetFolHdr = under.closest('.sidebar-folder-header');
+    const srcIsCard    = _mSrcEl.classList.contains('sidebar-channel-item');
+    if (srcIsCard && targetCard && targetCard !== _mSrcEl) {
+      const inChildren    = !!targetCard.closest('.sidebar-folder-children');
+      const srcInChildren = !!_mSrcEl.closest('.sidebar-folder-children');
+      const r = targetCard.getBoundingClientRect();
+      const relY = (cy - r.top) / r.height;
+      if (inChildren || srcInChildren) {
+        if (relY < 0.5) {
+          const prev = targetCard.previousElementSibling;
+          if (prev && prev.classList.contains('sidebar-channel-item') && !prev.classList.contains('dragging')) {
+            prev.after(_mSrcEl);
+          } else { targetCard.before(_mSrcEl); }
+        } else { targetCard.after(_mSrcEl); }
+        _mSaveSidebarOrderFromDOM(); _mSrcEl = null; return;
+      } else {
+        if (relY < 0.3) {
+          const prev = targetCard.previousElementSibling;
+          if (prev && prev.classList.contains('sidebar-channel-item') && !prev.classList.contains('dragging')) {
+            prev.after(_mSrcEl);
+          } else { targetCard.before(_mSrcEl); }
+          _mSaveSidebarOrderFromDOM(); _mSrcEl = null; return;
+        } else if (relY > 0.7) {
+          targetCard.after(_mSrcEl);
+          _mSaveSidebarOrderFromDOM(); _mSrcEl = null; return;
+        } else {
+          // merge
+          const paired  = targetCard;
+          const srcSnap = _mSrcEl;
+          _mOpenFolderDialog(name => { _mMergeIntoNewFolder(srcSnap, paired, name); });
+          _mSrcEl = null; return;
+        }
+      }
+    } else if (srcIsCard && targetFolHdr && !_mSrcEl.closest('.sidebar-folder-children')) {
+      const fid = targetFolHdr.closest('.sidebar-folder').dataset.folderId;
+      _mAddToFolder(_mSrcEl, fid);
+      _mSrcEl = null; return;
+    }
+    const targetFolder2 = under.closest('.sidebar-folder--open');
+    if (srcIsCard && targetFolder2) {
+      const kids2 = [...targetFolder2.querySelectorAll('.sidebar-folder-children > .sidebar-channel-item')].filter(el => el !== _mSrcEl);
+      const lastKid2 = kids2[kids2.length - 1];
+      if (lastKid2 && cy > lastKid2.getBoundingClientRect().bottom && lastKid2.nextElementSibling !== _mSrcEl) {
+        lastKid2.after(_mSrcEl);
+        _mSaveSidebarOrderFromDOM(); _mSrcEl = null; return;
+      }
+    }
+  }
+
+  if (_mSrcEl && _mSrcEl.closest('.sidebar-folder-children')) { _mSrcEl = null; return; }
+  const info = _mGetDropInfo(cy);
+  const chList = document.getElementById('mChList');
+  if (info) {
+    if (info.before && info.before !== _mSrcEl) chList.insertBefore(_mSrcEl, info.before);
+    else if (info.after && info.after !== _mSrcEl) info.after.after(_mSrcEl);
+  }
+  _mSaveSidebarOrderFromDOM(); _mSrcEl = null;
+}
+
+(function() {
+  const chList = document.getElementById('mChList');
+
+  function _mStartDrag(srcEl, startX, startY) {
+    if (_mLongpressHint) { _mLongpressHint.remove(); _mLongpressHint = null; }
+    _mDragging = true;
+    document.body.style.touchAction = 'none';
+    _mSrcEl = srcEl;
+    chList.classList.add('sidebar--dragging');
+    if (_mTouchActiveEl) { _mTouchActiveEl.classList.remove('touch-hover'); _mTouchActiveEl = null; }
+    _mDragFolderWasOpen = false;
+    if (srcEl.classList.contains('sidebar-folder') && srcEl.classList.contains('sidebar-folder--open')) {
+      _mDragFolderWasOpen = true;
+      srcEl.classList.remove('sidebar-folder--open');
+      const childrenEl = srcEl.querySelector('.sidebar-folder-children');
+      if (childrenEl) {
+        childrenEl.style.transition = 'none';
+        childrenEl.style.maxHeight = '0';
+        void childrenEl.offsetHeight;
+        setTimeout(() => { childrenEl.style.transition = ''; }, 0);
+      }
+    }
+    srcEl.classList.add('dragging');
+    const r = srcEl.getBoundingClientRect();
+    _mOffX = startX - r.left;
+    _mOffY = startY - r.top;
+    _mGhost = srcEl.cloneNode(true);
+    _mGhost.classList.add('m-drag-ghost');
+    _mGhost.classList.remove('active', 'dragging', 'touch-hover');
+    _mGhost.style.cssText = 'position:fixed;z-index:9998;pointer-events:none;width:' + r.width + 'px;left:' + (startX - _mOffX) + 'px;top:' + (startY - _mOffY) + 'px;';
+    _mGhost.querySelectorAll('.m-ch-card-menu-btn, .ch-actions').forEach(el => el.remove());
+    document.body.appendChild(_mGhost);
+  }
+
+  chList.addEventListener('pointerdown', e => {
+    const srcEl = e.target.closest('.sidebar-channel-item, .sidebar-folder');
+    if (!srcEl || e.target.closest('.ch-action-btn')) return;
+    e.preventDefault();
+    document.body.style.touchAction = 'none';
+    const startX = e.clientX, startY = e.clientY;
+    _mDragStartX = startX; _mDragStartY = startY;
+    const _activePid = e.pointerId;
+    _mLongpressTimer = setTimeout(() => {
+      _mStartDrag(srcEl, startX, startY);
+    }, 400);
+
+    const onMove = ev => {
+      if (ev.pointerId !== _activePid) return;
+      if (_mLongpressTimer && !_mDragging) {
+        const dx = Math.abs(ev.clientX - _mDragStartX);
+        const dy = Math.abs(ev.clientY - _mDragStartY);
+        if (dx > 8 || dy > 8) {
+          clearTimeout(_mLongpressTimer); _mLongpressTimer = null;
+          document.body.style.touchAction = '';
+        }
+      }
+      if (!_mDragging || !_mGhost) return;
+      ev.preventDefault();
+      _mGhost.style.left = (ev.clientX - _mOffX) + 'px';
+      _mGhost.style.top  = (ev.clientY - _mOffY) + 'px';
+      _mUpdateFeedback(ev.clientX, ev.clientY);
+    };
+    const onEnd = ev => {
+      if (ev.pointerId !== _activePid) return;
+      document.body.style.touchAction = '';
+      document.removeEventListener('pointermove', onMove);
+      document.removeEventListener('pointerup',   onEnd);
+      document.removeEventListener('pointercancel', onCancel);
+      clearTimeout(_mLongpressTimer); _mLongpressTimer = null;
+      if (_mDragging) _mEndDrag(ev.clientX, ev.clientY);
+    };
+    const onCancel = ev => {
+      if (ev.pointerId !== _activePid) return;
+      document.body.style.touchAction = '';
+      document.removeEventListener('pointermove', onMove);
+      document.removeEventListener('pointerup',   onEnd);
+      document.removeEventListener('pointercancel', onCancel);
+      clearTimeout(_mLongpressTimer); _mLongpressTimer = null;
+      // pointercancel はドロップではなく中断 — ゴーストだけ片付ける
+      if (_mDragging) {
+        _mDragging = false;
+        if (_mGhost) { _mGhost.remove(); _mGhost = null; }
+        if (_mSrcEl) {
+          _mSrcEl.classList.remove('dragging');
+          if (_mDragFolderWasOpen) {
+            const childrenEl = _mSrcEl.querySelector('.sidebar-folder-children');
+            if (childrenEl) childrenEl.style.maxHeight = '';
+            _mSrcEl.classList.add('sidebar-folder--open');
+          }
+          _mSrcEl = null;
+        }
+        _mDragFolderWasOpen = false;
+        chList.classList.remove('sidebar--dragging');
+        document.querySelectorAll('.merge-hover').forEach(el => el.classList.remove('merge-hover'));
+        document.querySelectorAll('.drop-bottom').forEach(el => el.classList.remove('drop-bottom'));
+        _mHideIndicator();
+      }
+    };
+    document.addEventListener('pointermove', onMove, { passive: false });
+    document.addEventListener('pointerup',   onEnd);
+    document.addEventListener('pointercancel', onCancel);
+  }, { passive: false });
+
+})();
 let _chMenuTarget = null;
+
 
 function _openChMenu(key, anchorEl) {
   _chMenuTarget = { key };
@@ -248,7 +1005,7 @@ async function _refreshMobileChannel(key) {
   showToast(t('fetching'), 'loading');
   openChannelPanel();
   // アバターにスピナーを表示
-  const cardEl = document.querySelector('.m-ch-card[data-key="' + key + '"]');
+  const cardEl = document.querySelector('.sidebar-channel-item[data-key="' + key + '"]');
   if (cardEl) cardEl.classList.add('m-ch-refreshing');
   try {
     const res = await fetch('/api/channels/' + key + '/refresh', { method: 'POST' });
@@ -272,7 +1029,7 @@ async function _refreshMobileChannel(key) {
     showToast(t('connection-error'), true);
   } finally {
     // スピナーを除去（renderChannelPanel 再描画前に外しておく）
-    const card = document.querySelector('.m-ch-card[data-key="' + key + '"]');
+    const card = document.querySelector('.sidebar-channel-item[data-key="' + key + '"]');
     if (card) card.classList.remove('m-ch-refreshing');
   }
 }
@@ -282,6 +1039,8 @@ function _deleteMobileChannel(key) {
   fetch('/api/channels/' + key, { method: 'DELETE' }).catch(() => {});
   delete channels[key];
   saveChannels();
+  syncSidebarOrder();
+  saveSidebarOrder();
   renderChannelPanel();
   if (wasActive) {
     state.currentChannelKey = null;
@@ -304,7 +1063,7 @@ async function addChannel(input) {
   if (ch.type === 'handle') {
     const existing = Object.values(channels).find(c => c.handle === ch.value);
     if (existing) {
-      showToast(t('channel-already-added', { name: existing.displayName || ch.value }), 'err');
+      showToast(t('channel-already-added', { name: existing.displayName || ch.value }), 'info');
       return;
     }
   }
@@ -326,7 +1085,7 @@ async function addChannel(input) {
     const key = serverCh.channel_id;
     // 既登録チェック（サーバー応答のチャンネルID基準）
     if (channels[key]) {
-      showToast(t('channel-already-added', { name: channels[key].displayName || ch.value }), 'err');
+      showToast(t('channel-already-added', { name: channels[key].displayName || ch.value }), 'info');
       return;
     }
     channels[key] = {
@@ -336,6 +1095,8 @@ async function addChannel(input) {
       avatar:      serverCh.icon_url,
     };
     saveChannels();
+    syncSidebarOrder();
+    saveSidebarOrder();
     renderChannelPanel();
     const _inp = document.getElementById('mChAddInput');
     _inp.value = '';
@@ -1666,6 +2427,7 @@ document.addEventListener('DOMContentLoaded', function() {
   // チャンネル・レーティングをロード
   loadChannels();
   loadRating();
+  loadSidebarOrder();
 
   // チャンネルパネルを構築
   renderChannelPanel();
@@ -1713,8 +2475,15 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!_chMenuTarget) return;
     const key  = _chMenuTarget.key;
     const name = channels[key]?.displayName || channels[key]?.handle || key;
+    const menuBtn = document.getElementById('mChMenuDelete');
+    const anchorRect = menuBtn.getBoundingClientRect();
     _closeChMenu();
-    if (confirm(name + ' を削除しますか？')) _deleteMobileChannel(key);
+    _mShowDelPopup(menuBtn,
+      t('ch-delete-confirm').replace('{name}', name),
+      () => _deleteMobileChannel(key),
+      t('ch-delete-confirm-btn'),
+      anchorRect
+    );
   });
   document.addEventListener('click', e => {
     const menu = document.getElementById('mChCardMenu');

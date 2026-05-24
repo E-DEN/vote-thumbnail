@@ -530,5 +530,17 @@
   <script src="../js/reactions-utils.js"></script>
   <script type="module" src="js/app.js"></script>
 
+  <!-- フォルダ名ダイアログ -->
+  <div class="m-folder-overlay" id="mFolderOverlay">
+    <div class="m-folder-dialog">
+      <div class="m-folder-dialog-title" data-i18n="folder-dialog-title">新規フォルダ</div>
+      <input class="m-folder-dialog-input" id="mFolderNameInput" type="text" maxlength="40">
+      <div class="m-folder-dialog-btns">
+        <button class="m-folder-dialog-btn cancel" id="mFolderCancelBtn" data-i18n="cancel">キャンセル</button>
+        <button class="m-folder-dialog-btn ok" id="mFolderOkBtn" data-i18n="folder-dialog-create">作成</button>
+      </div>
+    </div>
+  </div>
+
 </body>
 </html>

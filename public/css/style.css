@@ -2338,7 +2338,8 @@ header {
   transition: opacity 0.18s ease;
   pointer-events: none;
 }
-.sidebar-folder--open .sidebar-folder-open-icon { opacity: 1; }
+.sidebar-folder--open .sidebar-folder-open-icon { opacity: 1; background: transparent; }
+.sidebar-folder--open > .sidebar-folder-header .sidebar-folder-preview { background: transparent; }
 .sidebar-folder-preview-img {
   transition: opacity 0.18s ease;
 }
@@ -3808,7 +3809,16 @@ a.rs-video-title:hover { color: var(--accent); }
   display: flex; align-items: center; gap: 10px;
   opacity: 0; pointer-events: none;
 }
-.gt-msg { flex: 1; font-size: 13.5px; line-height: 1.45; color: var(--text-muted); }
+.gt-msg { flex: 1; font-size: 13.5px; line-height: 1.45; color: rgba(255,255,255,0.82); }
+.gt-action {
+  flex-shrink: 0; background: none; border: 1px solid rgba(255,255,255,0.18);
+  color: rgba(255,255,255,0.75); cursor: pointer;
+  font-size: 12px; font-weight: 500; line-height: 1; padding: 4px 10px;
+  border-radius: 6px; pointer-events: auto;
+  transition: background 150ms, color 150ms;
+  white-space: nowrap;
+}
+.gt-action:hover { background: rgba(255,255,255,0.12); color: #fff; }
 .gt-close {
   flex-shrink: 0; background: none; border: none;
   color: rgba(255,255,255,0.28); cursor: pointer;
