@@ -1059,7 +1059,7 @@ async function mRsOpenMode(videoId) {
     if (resp.ok) {
       const data = await resp.json();
       _mRsPins = data.pins || [];
-      if (/^(localhost|127\.|192\.168\.)/.test(location.hostname)) _mRsFillDummyPins(_mRsPins);
+      if (data.demo_fill || /^(localhost|127\.|192\.168\.)/.test(location.hostname)) _mRsFillDummyPins(_mRsPins);
       _mRsKde  = mRsComputeKde(_mRsPins);
       if (data.my_pin && !_mRsMyPins[videoId]) {
         _mRsMyPins[videoId] = { x: data.my_pin.x, y: data.my_pin.y };

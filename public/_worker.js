@@ -374,7 +374,7 @@ async function handleApi(request, env, url, ctx) {
         .map(function(r) { return { x: r.x, y: r.y }; });
       // seeds はヒートマップ用に全ピン（自分含む）から計算
       const allCoords = allPins.map(function(r) { return { x: r.x, y: r.y }; });
-      return json({ pins, seeds: aggregateToSeeds(allCoords), my_pin });
+      return json({ pins, seeds: aggregateToSeeds(allCoords), my_pin, demo_fill: env.DEMO_FILL === '1' });
     }
 
     // --- POST /api/pins ---

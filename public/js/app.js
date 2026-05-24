@@ -2496,6 +2496,7 @@ async function loadReactionSeeds(videoId) {
     if (!resp.ok) return [];
     const data = await resp.json();
     _reactionsPins = data.pins  || [];
+    if (data.demo_fill) pinFillDummy(_reactionsPins, 30);
     _reactionsKde  = reactionsComputeKde(_reactionsPins);
     // サーバーから自分のピンを復元（ローカルに未保存の場合）
     if (data.my_pin && !_reactionsMyPins[videoId]) {
