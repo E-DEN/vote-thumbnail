@@ -3361,12 +3361,14 @@ document.addEventListener('DOMContentLoaded', function() {
             tags: parsed.channels[id]?.tags || channels[id]?.tags || [],
             addedAt: channels[id]?.addedAt || new Date().toISOString(),
           };
-        } else if (!channels[id]) {
+        } else {
           channels[id] = {
             key: id, channelId: id,
-            handle: '', displayName: '', avatar: parsed.channels[id]?.avatar || '',
-            tags: parsed.channels[id]?.tags || [],
-            addedAt: new Date().toISOString(),
+            handle: channels[id]?.handle || '',
+            displayName: channels[id]?.displayName || '',
+            avatar: channels[id]?.avatar || parsed.channels[id]?.avatar || '',
+            tags: parsed.channels[id]?.tags || channels[id]?.tags || [],
+            addedAt: channels[id]?.addedAt || new Date().toISOString(),
           };
         }
       }
@@ -3374,7 +3376,6 @@ document.addEventListener('DOMContentLoaded', function() {
       saveChannels();
       renderChannelPanel();
       inp.value = '';
-      showToast(t('preset-imported'));
       // バックグラウンドでDB未登録チャンネルをrefresh（アイコン・名前を補完）
       const missingIds = importIds.filter(id => !dbMap[id]);
       if (missingIds.length > 0) {
@@ -3403,7 +3404,10 @@ document.addEventListener('DOMContentLoaded', function() {
             const fin = _list.querySelector(`.sidebar-channel-item[data-key="${id}"]`);
             if (fin) fin.classList.remove('m-ch-refreshing');
           }
+          showToast(t('preset-imported'));
         })();
+      } else {
+        showToast(t('preset-imported'));
       }
     } catch (e) {
       inp.classList.add('error');

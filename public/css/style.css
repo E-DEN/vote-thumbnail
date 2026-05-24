@@ -2328,7 +2328,6 @@ header {
 .sidebar-folder-preview-img:nth-child(1) { top: 0; left: 0; }
 .sidebar-folder-preview-img:nth-child(2) { bottom: 0; right: 0; }
 .sidebar-folder-preview-ph { background: var(--surface2); }
-.sidebar-folder-preview-ph--refreshing { position: relative; }
 .sidebar-folder-preview-ph--refreshing::after {
   content: '';
   position: absolute;

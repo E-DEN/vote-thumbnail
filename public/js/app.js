@@ -4210,12 +4210,14 @@ document.getElementById('sidebarSearchBtn').addEventListener('click', () => {
             tags: parsed.channels[id]?.tags || channels[id]?.tags || [],
             addedAt: channels[id]?.addedAt || new Date().toISOString(),
           };
-        } else if (!channels[id]) {
+        } else {
           channels[id] = {
             key: id, channelId: id,
-            handle: '', displayName: '', avatar: parsed.channels[id]?.avatar || '',
-            tags: parsed.channels[id]?.tags || [],
-            addedAt: new Date().toISOString(),
+            handle: channels[id]?.handle || '',
+            displayName: channels[id]?.displayName || '',
+            avatar: channels[id]?.avatar || parsed.channels[id]?.avatar || '',
+            tags: parsed.channels[id]?.tags || channels[id]?.tags || [],
+            addedAt: channels[id]?.addedAt || new Date().toISOString(),
           };
         }
       }
@@ -4223,7 +4225,6 @@ document.getElementById('sidebarSearchBtn').addEventListener('click', () => {
       saveChannels();
       renderSidebar();
       inp.value = '';
-      showToast(t('preset-imported'));
       // バックグラウンドでDB未登録チャンネルをrefresh（アイコン・名前を補完）
       const missingIds = importIds.filter(id => !dbMap[id]);
       if (missingIds.length > 0) {
@@ -4269,7 +4270,10 @@ document.getElementById('sidebarSearchBtn').addEventListener('click', () => {
             }
             _updateFolderPreview(id);
           }
+          showToast(t('preset-imported'));
         })();
+      } else {
+        showToast(t('preset-imported'));
       }
     } catch (e) {
       inp.classList.add('error');
