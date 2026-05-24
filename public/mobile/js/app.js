@@ -337,7 +337,9 @@ async function addChannel(input) {
     };
     saveChannels();
     renderChannelPanel();
-    document.getElementById('mChAddInput').value = '';
+    const _inp = document.getElementById('mChAddInput');
+    _inp.value = '';
+    _inp.blur();
     await selectChannel(key);
     showToast(t('ch-added', { name: serverCh.title || ch.value }));
     setTimeout(closeChannelPanel, 400);
@@ -435,6 +437,8 @@ function renderList() {
   const grid = document.getElementById('mListGrid');
   const sentinel = document.getElementById('mListSentinel');
   const sortBar = document.getElementById('mListSortBar');
+  const welcome = document.getElementById('mWelcome');
+  const scrollBody = document.querySelector('#mScreenList .m-list-scroll-body');
 
   // 早期 return しても古い Observer が残らないよう先にリセット
   if (_listObserver) { _listObserver.disconnect(); _listObserver = null; }
@@ -444,9 +448,19 @@ function renderList() {
 
   if (!state.currentChannelKey) {
     sortBar.style.display = 'none';
-    renderNoChannel('mListGrid');
+    const noChannels = Object.keys(channels).length === 0;
+    if (noChannels) {
+      welcome.hidden = false;
+      scrollBody.hidden = true;
+    } else {
+      welcome.hidden = true;
+      scrollBody.hidden = false;
+      renderNoChannel('mListGrid');
+    }
     return;
   }
+  welcome.hidden = true;
+  scrollBody.hidden = false;
   sortBar.style.display = '';
   _updateListSortUI();
 
@@ -1658,6 +1672,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // イベントリスナー: チャンネルパネルボタン
   document.getElementById('mChPanelBtn').addEventListener('click', openChannelPanel);
+  document.getElementById('mWelcomeAddBtn').addEventListener('click', openChannelPanel);
   document.getElementById('mChOverlay').addEventListener('click', closeChannelPanel);
 
   // paste 時に URL エンコード文字を自動デコード
