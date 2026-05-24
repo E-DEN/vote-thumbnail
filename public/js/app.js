@@ -1131,6 +1131,47 @@ function deleteFolder(folderId) {
   renderSidebar();
 }
 
+function deleteFolderWithChannels(folderId) {
+  const idx = sidebarOrder.findIndex(item => item.type === 'folder' && item.id === folderId);
+  if (idx === -1) return;
+  const childKeys = [...sidebarOrder[idx].children];
+  for (const key of childKeys) {
+    fetch('/api/channels/' + key, { method: 'DELETE' }).catch(() => {});
+    delete channels[key];
+  }
+  saveChannels();
+  sidebarOrder.splice(idx, 1);
+  saveSidebarOrder();
+  if (childKeys.includes(state.currentChannelKey)) {
+    state.currentChannelKey = null;
+    document.getElementById('chAvatar').style.display = 'none';
+    document.getElementById('chName').style.display = 'none';
+    document.getElementById('chTabs').style.display = 'none';
+    document.getElementById('catFilter').style.display = 'none';
+    showView('welcome');
+  }
+  renderSidebar();
+}
+
+function _updateFolderPreview(channelKey) {
+  const folder = sidebarOrder.find(item => item.type === 'folder' && item.children.includes(channelKey));
+  if (!folder) return;
+  const wrap = document.querySelector(`.sidebar-folder[data-folder-id="${folder.id}"]`);
+  if (!wrap) return;
+  const preview = wrap.querySelector('.sidebar-folder-preview');
+  if (!preview) return;
+  preview.querySelectorAll('.sidebar-folder-preview-img').forEach(el => el.remove());
+  folder.children.slice(0, 2).forEach(key => {
+    const ch = channels[key];
+    if (!ch) return;
+    const el = ch.avatar
+      ? Object.assign(document.createElement('img'), { className: 'sidebar-folder-preview-img', src: ch.avatar, referrerPolicy: 'no-referrer' })
+      : Object.assign(document.createElement('div'), { className: 'sidebar-folder-preview-img sidebar-folder-preview-ph' + (_refreshingKeys.has(key) ? ' sidebar-folder-preview-ph--refreshing' : '') });
+    if (ch.avatar) el.onerror = () => el.style.display = 'none';
+    preview.insertBefore(el, preview.querySelector('.sidebar-folder-open-icon'));
+  });
+}
+
 function _calcSidebarSlide(el) {
   el.querySelectorAll('.name-inner').forEach(inner => {
     const outer = inner.parentElement;
@@ -1553,7 +1594,7 @@ function buildFolderItem(folder) {
     if (!ch) return;
     const el = ch.avatar
       ? Object.assign(document.createElement('img'), { className: 'sidebar-folder-preview-img', src: ch.avatar, referrerPolicy: 'no-referrer' })
-      : Object.assign(document.createElement('div'), { className: 'sidebar-folder-preview-img sidebar-folder-preview-ph' });
+      : Object.assign(document.createElement('div'), { className: 'sidebar-folder-preview-img sidebar-folder-preview-ph' + (_refreshingKeys.has(key) ? ' sidebar-folder-preview-ph--refreshing' : '') });
     if (ch.avatar) el.onerror = () => el.style.display = 'none';
     preview.appendChild(el);
   });
@@ -1657,7 +1698,7 @@ function buildFolderItem(folder) {
     const fname = folder.name || '';
     const doDelete = () => deleteFolder(fid);
     if (e.shiftKey) {
-      doDelete();
+      deleteFolderWithChannels(fid);
     } else {
       _showChDelPopup(folderDeleteBtn, t('folder-delete-confirm').replace('{name}', fname), doDelete);
     }
@@ -1736,7 +1777,7 @@ function buildFolderItem(folder) {
       { icon: 'x', shiftIcon: 'trash-2', label: t('folder-delete-title'), title: t('folder-delete-title'), danger: true, onClick: (btn, e) => {
         const savedRect = btn.getBoundingClientRect();
         _hideCompactTooltip(0);
-        if (e.shiftKey) { deleteFolder(folder.id); }
+        if (e.shiftKey) { deleteFolderWithChannels(folder.id); }
         else { _showChDelPopup(btn, t('folder-delete-confirm').replace('{name}', folder.name || ''), () => deleteFolder(folder.id), undefined, savedRect); }
       }}
     ]);
@@ -4081,6 +4122,7 @@ document.getElementById('sidebarSearchBtn').addEventListener('click', () => {
     for (const [id, ch] of Object.entries(rawChannels)) {
       const entry = {};
       if (ch.tags && ch.tags.length) entry.tags = ch.tags;
+      if (ch.avatar) entry.avatar = ch.avatar;
       channels[id] = entry;
     }
     const data = {
@@ -4141,14 +4183,14 @@ document.getElementById('sidebarSearchBtn').addEventListener('click', () => {
       const parsed = await _vtDecodeData(raw);
       if (!parsed || typeof parsed.channels !== 'object') throw new Error('invalid data');
       loadChannels();
+      // フォルダ構成を先に復元
       if (parsed.sidebarOrder && Array.isArray(parsed.sidebarOrder)) {
         localStorage.setItem(LS_SIDEBAR_ORDER, JSON.stringify(parsed.sidebarOrder));
       }
       loadSidebarOrder();
-      _vtCodeStatusMsg('', true);
       const importIds = Object.keys(parsed.channels);
-      showToast(t('preset-fetching'), 'loading');
       // DBにある全チャンネルを一括取得
+      showToast(t('preset-fetching'), 'loading');
       let dbMap = {};
       try {
         const allRes = await fetch('/api/channels');
@@ -4157,7 +4199,7 @@ document.getElementById('sidebarSearchBtn').addEventListener('click', () => {
           dbMap = Object.fromEntries(allChannels.map(c => [c.channel_id, c]));
         }
       } catch { /* ignore */ }
-      // DBにあるチャンネルをLocalStorageに設定
+      // 全チャンネルをLocalStorageに設定（DB未登録はプレースホルダー）
       for (const id of importIds) {
         if (dbMap[id]) {
           channels[id] = {
@@ -4168,30 +4210,67 @@ document.getElementById('sidebarSearchBtn').addEventListener('click', () => {
             tags: parsed.channels[id]?.tags || channels[id]?.tags || [],
             addedAt: channels[id]?.addedAt || new Date().toISOString(),
           };
+        } else if (!channels[id]) {
+          channels[id] = {
+            key: id, channelId: id,
+            handle: '', displayName: '', avatar: parsed.channels[id]?.avatar || '',
+            tags: parsed.channels[id]?.tags || [],
+            addedAt: new Date().toISOString(),
+          };
         }
       }
-      // DBにないチャンネルをrefreshで登録（直列）
-      const missingIds = importIds.filter(id => !dbMap[id]);
-      for (const id of missingIds) {
-        try {
-          const res = await fetch('/api/channels/' + id + '/refresh', { method: 'POST' });
-          const data = await res.json();
-          if (data.channel) {
-            channels[id] = {
-              key: id, channelId: id,
-              handle: data.channel.handle,
-              displayName: data.channel.title,
-              avatar: data.channel.icon_url,
-              tags: parsed.channels[id]?.tags || [],
-              addedAt: new Date().toISOString(),
-            };
-          }
-        } catch { /* skip */ }
-      }
+      // フォルダ構成+チャンネルアイコンを先に描画
       saveChannels();
       renderSidebar();
       inp.value = '';
       showToast(t('preset-imported'));
+      // バックグラウンドでDB未登録チャンネルをrefresh（アイコン・名前を補完）
+      const missingIds = importIds.filter(id => !dbMap[id]);
+      if (missingIds.length > 0) {
+        const _nav = document.getElementById('sidebarNav');
+        // 全件のスピナーを一括で先付け（プレビューアイコンも即時スピナー）
+        for (const id of missingIds) {
+          _refreshingKeys.add(id);
+          const item = _nav.querySelector(`.sidebar-channel-item[data-key="${id}"]`);
+          if (item) {
+            item.classList.add('compact-refreshing');
+            const btn = item.querySelector('.ch-action-refresh');
+            if (btn) btn.disabled = true;
+          }
+          _updateFolderPreview(id);
+        }
+        (async () => {
+          for (const id of missingIds) {
+            try {
+              const res = await fetch('/api/channels/' + id + '/refresh', { method: 'POST', headers: getRssOnly() ? { 'X-RSS-Only': '1' } : apiKeyHeaders() });
+              const data = await res.json().catch(() => ({}));
+              if (data.channel) {
+                channels[id] = {
+                  ...channels[id],
+                  handle: data.channel.handle,
+                  displayName: data.channel.title,
+                  avatar: data.channel.icon_url,
+                };
+                saveChannels();
+                const newItem = buildChannelItem(channels[id]);
+                const cur = _nav.querySelector(`.sidebar-channel-item[data-key="${id}"]`);
+                if (cur) cur.replaceWith(newItem);
+                else _nav.appendChild(newItem);
+                if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [newItem] });
+                _updateFolderPreview(id);
+              }
+            } catch { /* ignore */ }
+            _refreshingKeys.delete(id);
+            const fin = _nav.querySelector(`.sidebar-channel-item[data-key="${id}"]`);
+            if (fin) {
+              fin.classList.remove('compact-refreshing');
+              const btn = fin.querySelector('.ch-action-refresh');
+              if (btn) btn.disabled = false;
+            }
+            _updateFolderPreview(id);
+          }
+        })();
+      }
     } catch (e) {
       inp.classList.add('error');
       showToast(t('preset-import-err'), 'err');

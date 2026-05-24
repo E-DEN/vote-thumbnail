@@ -3334,14 +3334,14 @@ document.addEventListener('DOMContentLoaded', function() {
     try {
       const parsed = await _vtDecodeData(raw);
       if (!parsed || typeof parsed.channels !== 'object') throw new Error('invalid data');
+      // フォルダ構成を先に復元
       if (parsed.sidebarOrder && Array.isArray(parsed.sidebarOrder)) {
         sidebarOrder = parsed.sidebarOrder;
         saveSidebarOrder();
       }
-      _mCodeStatusMsg('', true);
       const importIds = Object.keys(parsed.channels);
-      showToast(t('preset-fetching'), 'loading');
       // DBにある全チャンネルを一括取得
+      showToast(t('preset-fetching'), 'loading');
       let dbMap = {};
       try {
         const allRes = await fetch('/api/channels');
@@ -3350,7 +3350,7 @@ document.addEventListener('DOMContentLoaded', function() {
           dbMap = Object.fromEntries(allChannels.map(c => [c.channel_id, c]));
         }
       } catch { /* ignore */ }
-      // DBにあるチャンネルをLocalStorageに設定
+      // 全チャンネルをLocalStorageに設定（DB未登録はプレースホルダー）
       for (const id of importIds) {
         if (dbMap[id]) {
           channels[id] = {
@@ -3361,30 +3361,50 @@ document.addEventListener('DOMContentLoaded', function() {
             tags: parsed.channels[id]?.tags || channels[id]?.tags || [],
             addedAt: channels[id]?.addedAt || new Date().toISOString(),
           };
+        } else if (!channels[id]) {
+          channels[id] = {
+            key: id, channelId: id,
+            handle: '', displayName: '', avatar: parsed.channels[id]?.avatar || '',
+            tags: parsed.channels[id]?.tags || [],
+            addedAt: new Date().toISOString(),
+          };
         }
       }
-      // DBにないチャンネルをrefreshで登録（直列）
-      const missingIds = importIds.filter(id => !dbMap[id]);
-      for (const id of missingIds) {
-        try {
-          const res = await fetch('/api/channels/' + id + '/refresh', { method: 'POST' });
-          const data = await res.json();
-          if (data.channel) {
-            channels[id] = {
-              key: id, channelId: id,
-              handle: data.channel.handle,
-              displayName: data.channel.title,
-              avatar: data.channel.icon_url,
-              tags: parsed.channels[id]?.tags || [],
-              addedAt: new Date().toISOString(),
-            };
-          }
-        } catch { /* skip */ }
-      }
+      // フォルダ構成+チャンネルアイコンを先に描画
       saveChannels();
       renderChannelPanel();
       inp.value = '';
       showToast(t('preset-imported'));
+      // バックグラウンドでDB未登録チャンネルをrefresh（アイコン・名前を補完）
+      const missingIds = importIds.filter(id => !dbMap[id]);
+      if (missingIds.length > 0) {
+        (async () => {
+          const _list = document.getElementById('mChList');
+          for (const id of missingIds) {
+            const card = _list.querySelector(`.sidebar-channel-item[data-key="${id}"]`);
+            if (card) card.classList.add('m-ch-refreshing');
+            try {
+              const res = await fetch('/api/channels/' + id + '/refresh', { method: 'POST' });
+              const data = await res.json().catch(() => ({}));
+              if (data.channel) {
+                channels[id] = {
+                  ...channels[id],
+                  handle: data.channel.handle,
+                  displayName: data.channel.title,
+                  avatar: data.channel.icon_url,
+                };
+                saveChannels();
+                const newCard = _makeChCard(id);
+                const cur = _list.querySelector(`.sidebar-channel-item[data-key="${id}"]`);
+                if (cur) cur.replaceWith(newCard);
+                else _list.appendChild(newCard);
+              }
+            } catch { /* ignore */ }
+            const fin = _list.querySelector(`.sidebar-channel-item[data-key="${id}"]`);
+            if (fin) fin.classList.remove('m-ch-refreshing');
+          }
+        })();
+      }
     } catch (e) {
       inp.classList.add('error');
       showToast(t('preset-import-err'), 'err');
