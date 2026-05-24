@@ -442,6 +442,17 @@
             <div id="mDataStatus" class="m-settings-status"></div>
             <p class="m-settings-field-desc" data-i18n="settings-data-desc">サイドバーのチャンネル・フォルダ構成を JSON ファイルとして保存・復元します。</p>
           </div>
+          <div class="m-settings-field">
+            <div class="m-data-code-hdr">
+              <span class="m-settings-field-lbl" data-i18n="settings-data-code-share">コード共有</span>
+              <button id="mDataCopyCodeBtn" class="m-data-code-icon-btn" data-i18n-title="preset-copy-title" title="コードをコピー"><i data-lucide="copy"></i></button>
+            </div>
+            <div class="m-data-code-row">
+              <textarea id="mDataCodeInput" class="m-data-code-input" rows="3" data-i18n-ph="preset-code-ph" placeholder="取込コード（vt~…）を貼り付け"></textarea>
+              <button id="mDataApplyCodeBtn" class="m-settings-action-btn" data-i18n="settings-data-code-load">Load</button>
+            </div>
+            <div id="mDataCodeStatus" class="m-settings-status"></div>
+          </div>
         </div>
       </div>
 

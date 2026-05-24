@@ -235,11 +235,14 @@ async function handleApi(request, env, url, ctx) {
           }
         }
       })());
-      // DB上の総動画数を返す
+      // DB上の総動画数・チャンネル情報を返す
       const countRow = await env.DB.prepare(
         'SELECT COUNT(*) AS cnt FROM videos WHERE channel_id = ?'
       ).bind(channelId).first();
-      return json({ ok: true, added, updated: rssOnly ? rssUpdated : 0, rssStatus, total: countRow?.cnt ?? 0 });
+      const channelRow = await env.DB.prepare(
+        'SELECT channel_id, handle, title, icon_url FROM channels WHERE channel_id = ?'
+      ).bind(channelId).first();
+      return json({ ok: true, added, updated: rssOnly ? rssUpdated : 0, rssStatus, total: countRow?.cnt ?? 0, channel: channelRow });
     }
 
     // --- POST /api/channels/:channelId/videos/batch ---

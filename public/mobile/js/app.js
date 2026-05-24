@@ -495,6 +495,7 @@ function closeChannelPanel() {
     _swipeStartY = e.touches[0].clientY;
   }, { passive: true });
   panel.addEventListener('touchend', e => {
+    if (_mDragging) return;
     const dx = e.changedTouches[0].clientX - _swipeStartX;
     const dy = e.changedTouches[0].clientY - _swipeStartY;
     if (dx < -50 && Math.abs(dy) < Math.abs(dx)) closeChannelPanel();
@@ -591,6 +592,8 @@ let _mOffX = 0, _mOffY = 0;
 let _mDragFolderWasOpen = false;
 let _mScrolling = false;
 let _mScrollLastY = 0;
+let _mAutoScrollDir = 0;
+let _mAutoScrollRaf = null;
 
 function _mShowIndicator(refEl, before) {
   if (!_mIndicator) {
@@ -646,6 +649,12 @@ function _mGetDropInfo(cy) {
 
 function _mUpdateFeedback(cx, cy) {
   if (!_mDragging || !_mSrcEl) return;
+  // パネル外（X座標がサイドバー外）ではインジケーターを非表示
+  const _panelEl = document.getElementById('mChPanel');
+  if (_panelEl) {
+    const _pr = _panelEl.getBoundingClientRect();
+    if (cx < _pr.left || cx > _pr.right) { _mHideIndicator(); return; }
+  }
   document.querySelectorAll('.merge-hover').forEach(el => el.classList.remove('merge-hover'));
   document.querySelectorAll('.drop-bottom').forEach(el => el.classList.remove('drop-bottom'));
 
@@ -784,18 +793,44 @@ function _mSaveSidebarOrderFromDOM() {
   saveSidebarOrder();
 }
 
+function _mAutoScrollStep() {
+  if (!_mDragging || _mAutoScrollDir === 0) { _mAutoScrollRaf = null; return; }
+  document.getElementById('mChList').scrollTop += _mAutoScrollDir * 6;
+  _mAutoScrollRaf = requestAnimationFrame(_mAutoScrollStep);
+}
+
 function _mEndDrag(cx, cy) {
   if (!_mDragging) return;
+  _mAutoScrollDir = 0;
+  if (_mAutoScrollRaf) { cancelAnimationFrame(_mAutoScrollRaf); _mAutoScrollRaf = null; }
   _mDragging = false;
   document.getElementById('mChList').classList.remove('sidebar--dragging');
   document.querySelectorAll('.merge-hover').forEach(el => el.classList.remove('merge-hover'));
   document.querySelectorAll('.drop-bottom').forEach(el => el.classList.remove('drop-bottom'));
   if (_mGhost) { _mGhost.remove(); _mGhost = null; }
+  // パネル外（X座標がサイドバー外）でのリリースはキャンセル
+  const _panelElEnd = document.getElementById('mChPanel');
+  if (_panelElEnd) {
+    const _prEnd = _panelElEnd.getBoundingClientRect();
+    if (cx < _prEnd.left || cx > _prEnd.right) {
+      _mSrcEl.style.touchAction = '';
+      _mSrcEl.classList.remove('dragging');
+      if (_mDragFolderWasOpen) {
+        const childrenEl = _mSrcEl.querySelector('.sidebar-folder-children');
+        if (childrenEl) childrenEl.style.maxHeight = '1200px';
+        _mSrcEl.classList.add('sidebar-folder--open');
+      }
+      _mDragFolderWasOpen = false;
+      _mHideIndicator();
+      _mSrcEl = null;
+      return;
+    }
+  }
   _mSrcEl.style.touchAction = '';
   _mSrcEl.classList.remove('dragging');
   if (_mDragFolderWasOpen) {
     const childrenEl = _mSrcEl.querySelector('.sidebar-folder-children');
-    if (childrenEl) childrenEl.style.maxHeight = '';
+    if (childrenEl) childrenEl.style.maxHeight = '1200px';
     _mSrcEl.classList.add('sidebar-folder--open');
   }
   _mDragFolderWasOpen = false;
@@ -894,12 +929,7 @@ function _mEndDrag(cx, cy) {
       _mDragFolderWasOpen = true;
       srcEl.classList.remove('sidebar-folder--open');
       const childrenEl = srcEl.querySelector('.sidebar-folder-children');
-      if (childrenEl) {
-        childrenEl.style.transition = 'none';
-        childrenEl.style.maxHeight = '0';
-        void childrenEl.offsetHeight;
-        setTimeout(() => { childrenEl.style.transition = ''; }, 0);
-      }
+      if (childrenEl) childrenEl.style.maxHeight = '0';
     }
     srcEl.classList.add('dragging');
     const r = srcEl.getBoundingClientRect();
@@ -914,6 +944,7 @@ function _mEndDrag(cx, cy) {
   }
 
   chList.addEventListener('pointerdown', e => {
+    if (_mDragging) { e.preventDefault(); return; }
     const srcEl = e.target.closest('.sidebar-channel-item, .sidebar-folder');
     if (!srcEl || e.target.closest('.ch-action-btn')) return;
     // ポインターダウン時点で touch-action を none にすることで、
@@ -931,11 +962,15 @@ function _mEndDrag(cx, cy) {
       if (_mLongpressTimer && !_mDragging && !_mScrolling) {
         const dx = Math.abs(ev.clientX - _mDragStartX);
         const dy = Math.abs(ev.clientY - _mDragStartY);
-        if (dx > 8 || dy > 8) {
+        if (dy > dx && dy > 15) {
+          // 縦方向が主体の移動 → スクロール意図と判断
           clearTimeout(_mLongpressTimer); _mLongpressTimer = null;
-          document.body.style.touchAction = '';
           _mScrolling = true;
           _mScrollLastY = ev.clientY;
+        } else if (dx > 20) {
+          // 横方向の移動 → ロングプレスのみキャンセル
+          clearTimeout(_mLongpressTimer); _mLongpressTimer = null;
+          srcEl.style.touchAction = '';
         }
       }
       if (_mScrolling) {
@@ -948,6 +983,19 @@ function _mEndDrag(cx, cy) {
       _mGhost.style.left = (ev.clientX - _mOffX) + 'px';
       _mGhost.style.top  = (ev.clientY - _mOffY) + 'px';
       _mUpdateFeedback(ev.clientX, ev.clientY);
+      // オートスクロール方向の更新
+      const listRect = chList.getBoundingClientRect();
+      const zone = 80;
+      if (ev.clientY < listRect.top + zone) {
+        _mAutoScrollDir = -1;
+      } else if (ev.clientY > listRect.bottom - zone) {
+        _mAutoScrollDir = 1;
+      } else {
+        _mAutoScrollDir = 0;
+      }
+      if (_mAutoScrollDir !== 0 && !_mAutoScrollRaf) {
+        _mAutoScrollRaf = requestAnimationFrame(_mAutoScrollStep);
+      }
     };
     const onEnd = ev => {
       if (ev.pointerId !== _activePid) return;
@@ -972,6 +1020,8 @@ function _mEndDrag(cx, cy) {
       _mScrolling = false;
       // pointercancel はドロップではなく中断 — ゴーストだけ片付ける
       if (_mDragging) {
+        _mAutoScrollDir = 0;
+        if (_mAutoScrollRaf) { cancelAnimationFrame(_mAutoScrollRaf); _mAutoScrollRaf = null; }
         _mDragging = false;
         if (_mGhost) { _mGhost.remove(); _mGhost = null; }
         if (_mSrcEl) {
@@ -979,7 +1029,7 @@ function _mEndDrag(cx, cy) {
           _mSrcEl.classList.remove('dragging');
           if (_mDragFolderWasOpen) {
             const childrenEl = _mSrcEl.querySelector('.sidebar-folder-children');
-            if (childrenEl) childrenEl.style.maxHeight = '';
+            if (childrenEl) childrenEl.style.display = '';
             _mSrcEl.classList.add('sidebar-folder--open');
           }
           _mSrcEl = null;
@@ -2456,7 +2506,7 @@ document.addEventListener('DOMContentLoaded', function() {
   // イベントリスナー: チャンネルパネルボタン
   document.getElementById('mChPanelBtn').addEventListener('click', openChannelPanel);
   document.getElementById('mWelcomeAddBtn').addEventListener('click', openChannelPanel);
-  document.getElementById('mChOverlay').addEventListener('click', closeChannelPanel);
+  document.getElementById('mChOverlay').addEventListener('click', e => { if (_mDragging) return; closeChannelPanel(); });
 
   // paste 時に URL エンコード文字を自動デコード
   (function() {
@@ -3160,6 +3210,7 @@ document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('mDataExportBtn').addEventListener('click', function() {
     const exportData = {
       channels: JSON.parse(localStorage.getItem(LS_CHANNELS) || '{}'),
+      sidebarOrder: JSON.parse(localStorage.getItem(LS_SIDEBAR_ORDER) || 'null'),
     };
     const blob = new Blob(['\uFEFF' + JSON.stringify(exportData, null, 2)], { type: 'application/json;charset=utf-8' });
     const url = URL.createObjectURL(blob);
@@ -3193,6 +3244,10 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!parsed || typeof parsed.channels !== 'object') throw new Error();
         Object.assign(channels, parsed.channels);
         saveChannels();
+        if (parsed.sidebarOrder && Array.isArray(parsed.sidebarOrder)) {
+          sidebarOrder = parsed.sidebarOrder;
+          saveSidebarOrder();
+        }
         renderChannelPanel();
         if (statusEl) {
           statusEl.textContent = typeof t === 'function' ? t('settings-data-imported') : 'インポートしました';
@@ -3208,6 +3263,131 @@ document.addEventListener('DOMContentLoaded', function() {
       setTimeout(() => { if (statusEl) statusEl.textContent = ''; }, 2500);
     };
     reader.readAsText(file);
+  });
+
+  // コードコピー: channels + sidebarOrder を vt~ Base64url に変換してクリップボードへ
+  const _B64U = b => { const arr = new Uint8Array(b); let bin = ''; const CHUNK = 8192; for (let i = 0; i < arr.length; i += CHUNK) bin += String.fromCharCode(...arr.subarray(i, i + CHUNK)); return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, ''); };
+  const _B64D = s => { const b64 = s.replace(/-/g,'+').replace(/_/g,'/'); return Uint8Array.from(atob(b64.padEnd(Math.ceil(b64.length/4)*4,'=')), c => c.charCodeAt(0)); };
+
+  async function _vtEncodeData() {
+    const rawChannels = JSON.parse(localStorage.getItem(LS_CHANNELS) || '{}');
+    const channels = {};
+    for (const [id, ch] of Object.entries(rawChannels)) {
+      const entry = {};
+      if (ch.tags && ch.tags.length) entry.tags = ch.tags;
+      channels[id] = entry;
+    }
+    const data = {
+      channels,
+      sidebarOrder: JSON.parse(localStorage.getItem(LS_SIDEBAR_ORDER) || 'null'),
+    };
+    const cs = new CompressionStream('deflate-raw');
+    const cw = cs.writable.getWriter();
+    cw.write(new TextEncoder().encode(JSON.stringify(data))); cw.close();
+    const chunks = []; const cr = cs.readable.getReader();
+    for (;;) { const {done, value} = await cr.read(); if (done) break; chunks.push(value); }
+    const buf = new Uint8Array(chunks.reduce((n,c) => n+c.length, 0));
+    let off = 0; for (const c of chunks) { buf.set(c, off); off += c.length; }
+    return 'vt~' + _B64U(buf);
+  }
+  async function _vtDecodeData(code) {
+    if (!code.startsWith('vt~')) throw new Error('invalid code');
+    const bytes = _B64D(code.slice(3));
+    const ds = new DecompressionStream('deflate-raw');
+    const dw = ds.writable.getWriter(); dw.write(bytes); dw.close();
+    const chunks = []; const dr = ds.readable.getReader();
+    for (;;) { const {done, value} = await dr.read(); if (done) break; chunks.push(value); }
+    const buf = new Uint8Array(chunks.reduce((n,c) => n+c.length, 0));
+    let off = 0; for (const c of chunks) { buf.set(c, off); off += c.length; }
+    return JSON.parse(new TextDecoder().decode(buf));
+  }
+
+  const _mCodeStatusEl = document.getElementById('mDataCodeStatus');
+  function _mCodeStatusMsg(msg, ok) {
+    if (!_mCodeStatusEl) return;
+    _mCodeStatusEl.textContent = msg;
+    _mCodeStatusEl.style.color = ok ? 'var(--ok)' : 'var(--err)';
+    setTimeout(() => { _mCodeStatusEl.textContent = ''; }, ok ? 3000 : 5000);
+  }
+  document.getElementById('mDataCopyCodeBtn').addEventListener('click', async function() {
+    try {
+      const code = await _vtEncodeData();
+      try {
+        await navigator.clipboard.writeText(code);
+      } catch {
+        const ta = document.createElement('textarea');
+        ta.value = code; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+      }
+      _mCodeStatusMsg(t('preset-copied'), true);
+    } catch (e) {
+      _mCodeStatusMsg(t('preset-import-err'), false);
+    }
+  });
+
+  document.getElementById('mDataApplyCodeBtn').addEventListener('click', async function() {
+    const inp = document.getElementById('mDataCodeInput');
+    const raw = inp.value.trim();
+    inp.classList.remove('error');
+    try {
+      const parsed = await _vtDecodeData(raw);
+      if (!parsed || typeof parsed.channels !== 'object') throw new Error('invalid data');
+      if (parsed.sidebarOrder && Array.isArray(parsed.sidebarOrder)) {
+        sidebarOrder = parsed.sidebarOrder;
+        saveSidebarOrder();
+      }
+      const importIds = Object.keys(parsed.channels);
+      _mCodeStatusMsg(t('preset-fetching'), true);
+      // DBにある全チャンネルを一括取得
+      let dbMap = {};
+      try {
+        const allRes = await fetch('/api/channels');
+        if (allRes.ok) {
+          const allChannels = await allRes.json();
+          dbMap = Object.fromEntries(allChannels.map(c => [c.channel_id, c]));
+        }
+      } catch { /* ignore */ }
+      // DBにあるチャンネルをLocalStorageに設定
+      for (const id of importIds) {
+        if (dbMap[id]) {
+          channels[id] = {
+            key: id, channelId: id,
+            handle: dbMap[id].handle,
+            displayName: dbMap[id].title,
+            avatar: dbMap[id].icon_url,
+            tags: parsed.channels[id]?.tags || channels[id]?.tags || [],
+            addedAt: channels[id]?.addedAt || new Date().toISOString(),
+          };
+        }
+      }
+      // DBにないチャンネルをrefreshで登録（直列）
+      const missingIds = importIds.filter(id => !dbMap[id]);
+      for (const id of missingIds) {
+        try {
+          const res = await fetch('/api/channels/' + id + '/refresh', { method: 'POST' });
+          const data = await res.json();
+          if (data.channel) {
+            channels[id] = {
+              key: id, channelId: id,
+              handle: data.channel.handle,
+              displayName: data.channel.title,
+              avatar: data.channel.icon_url,
+              tags: parsed.channels[id]?.tags || [],
+              addedAt: new Date().toISOString(),
+            };
+          }
+        } catch { /* skip */ }
+      }
+      saveChannels();
+      renderChannelPanel();
+      inp.value = '';
+      _mCodeStatusMsg(t('preset-imported'), true);
+    } catch (e) {
+      inp.classList.add('error');
+      _mCodeStatusMsg(t('preset-import-err'), false);
+    }
   });
 
   // lucide アイコンを初期化

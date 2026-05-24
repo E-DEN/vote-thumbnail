@@ -4071,6 +4071,132 @@ document.getElementById('sidebarSearchBtn').addEventListener('click', () => {
     reader.readAsText(file, 'utf-8');
   });
 
+  // コードコピー / コード取り込み
+  const _B64U = b => { const arr = new Uint8Array(b); let bin = ''; const CHUNK = 8192; for (let i = 0; i < arr.length; i += CHUNK) bin += String.fromCharCode(...arr.subarray(i, i + CHUNK)); return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, ''); };
+  const _B64D = s => { const b64 = s.replace(/-/g,'+').replace(/_/g,'/'); return Uint8Array.from(atob(b64.padEnd(Math.ceil(b64.length/4)*4,'=')), c => c.charCodeAt(0)); };
+
+  async function _vtEncodeData() {
+    const rawChannels = JSON.parse(localStorage.getItem(LS_CHANNELS) || '{}');
+    const channels = {};
+    for (const [id, ch] of Object.entries(rawChannels)) {
+      const entry = {};
+      if (ch.tags && ch.tags.length) entry.tags = ch.tags;
+      channels[id] = entry;
+    }
+    const data = {
+      channels,
+      sidebarOrder: JSON.parse(localStorage.getItem(LS_SIDEBAR_ORDER) || 'null'),
+    };
+    const cs = new CompressionStream('deflate-raw');
+    const cw = cs.writable.getWriter();
+    cw.write(new TextEncoder().encode(JSON.stringify(data))); cw.close();
+    const chunks = []; const cr = cs.readable.getReader();
+    for (;;) { const {done, value} = await cr.read(); if (done) break; chunks.push(value); }
+    const buf = new Uint8Array(chunks.reduce((n,c) => n+c.length, 0));
+    let off = 0; for (const c of chunks) { buf.set(c, off); off += c.length; }
+    return 'vt~' + _B64U(buf);
+  }
+  async function _vtDecodeData(code) {
+    if (!code.startsWith('vt~')) throw new Error('invalid code');
+    const bytes = _B64D(code.slice(3));
+    const ds = new DecompressionStream('deflate-raw');
+    const dw = ds.writable.getWriter(); dw.write(bytes); dw.close();
+    const chunks = []; const dr = ds.readable.getReader();
+    for (;;) { const {done, value} = await dr.read(); if (done) break; chunks.push(value); }
+    const buf = new Uint8Array(chunks.reduce((n,c) => n+c.length, 0));
+    let off = 0; for (const c of chunks) { buf.set(c, off); off += c.length; }
+    return JSON.parse(new TextDecoder().decode(buf));
+  }
+
+  const codeStatusEl = document.getElementById('sidebarCodeStatus');
+  function _vtCodeStatusMsg(msg, ok) {
+    if (!codeStatusEl) return;
+    codeStatusEl.textContent = msg;
+    codeStatusEl.style.color = ok ? 'var(--ok)' : 'var(--err)';
+    setTimeout(() => { codeStatusEl.textContent = ''; }, ok ? 3000 : 5000);
+  }
+  document.getElementById('sidebarCopyCodeBtn').addEventListener('click', async function() {
+    try {
+      const code = await _vtEncodeData();
+      try {
+        await navigator.clipboard.writeText(code);
+      } catch {
+        const ta = document.createElement('textarea');
+        ta.value = code; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+      }
+      _vtCodeStatusMsg(t('preset-copied'), true);
+    } catch (e) {
+      _vtCodeStatusMsg(t('preset-import-err'), false);
+    }
+  });
+
+  document.getElementById('sidebarApplyCodeBtn').addEventListener('click', async function() {
+    const inp = document.getElementById('sidebarCodeInput');
+    const raw = inp.value.trim();
+    inp.classList.remove('error');
+    try {
+      const parsed = await _vtDecodeData(raw);
+      if (!parsed || typeof parsed.channels !== 'object') throw new Error('invalid data');
+      loadChannels();
+      if (parsed.sidebarOrder && Array.isArray(parsed.sidebarOrder)) {
+        localStorage.setItem(LS_SIDEBAR_ORDER, JSON.stringify(parsed.sidebarOrder));
+      }
+      loadSidebarOrder();
+      const importIds = Object.keys(parsed.channels);
+      _vtCodeStatusMsg(t('preset-fetching'), true);
+      // DBにある全チャンネルを一括取得
+      let dbMap = {};
+      try {
+        const allRes = await fetch('/api/channels');
+        if (allRes.ok) {
+          const allChannels = await allRes.json();
+          dbMap = Object.fromEntries(allChannels.map(c => [c.channel_id, c]));
+        }
+      } catch { /* ignore */ }
+      // DBにあるチャンネルをLocalStorageに設定
+      for (const id of importIds) {
+        if (dbMap[id]) {
+          channels[id] = {
+            key: id, channelId: id,
+            handle: dbMap[id].handle,
+            displayName: dbMap[id].title,
+            avatar: dbMap[id].icon_url,
+            tags: parsed.channels[id]?.tags || channels[id]?.tags || [],
+            addedAt: channels[id]?.addedAt || new Date().toISOString(),
+          };
+        }
+      }
+      // DBにないチャンネルをrefreshで登録（直列）
+      const missingIds = importIds.filter(id => !dbMap[id]);
+      for (const id of missingIds) {
+        try {
+          const res = await fetch('/api/channels/' + id + '/refresh', { method: 'POST' });
+          const data = await res.json();
+          if (data.channel) {
+            channels[id] = {
+              key: id, channelId: id,
+              handle: data.channel.handle,
+              displayName: data.channel.title,
+              avatar: data.channel.icon_url,
+              tags: parsed.channels[id]?.tags || [],
+              addedAt: new Date().toISOString(),
+            };
+          }
+        } catch { /* skip */ }
+      }
+      saveChannels();
+      renderSidebar();
+      inp.value = '';
+      _vtCodeStatusMsg(t('preset-imported'), true);
+    } catch (e) {
+      inp.classList.add('error');
+      _vtCodeStatusMsg(t('preset-import-err'), false);
+    }
+  });
+
   updateIndicator();
 }());
 

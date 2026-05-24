@@ -1855,6 +1855,46 @@ html, body {
   gap: 8px;
   flex-wrap: wrap;
 }
+.m-data-code-hdr {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+.m-data-code-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.m-data-code-row {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+.m-data-code-input {
+  flex: 1;
+  min-width: 0;
+  padding: 8px;
+  font-size: 12px;
+  font-family: monospace;
+  background: var(--bg2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  resize: vertical;
+  box-sizing: border-box;
+  word-break: break-all;
+}
+.m-data-code-input.error {
+  border-color: var(--err, #e55);
+}
 
 /* 言語リスト */
 .m-lang-option-list {
@@ -2459,7 +2499,7 @@ html, body {
   color: var(--text-muted);
   transition: background 0.12s, color 0.12s;
   user-select: none;
-  touch-action: pan-y;
+  touch-action: none;
 }
 .sidebar-channel-item.touch-hover { background: var(--surface2); color: var(--text); }
 .sidebar-channel-item.active { background: rgba(0, 176, 244, 0.12); color: var(--accent); }
@@ -2537,6 +2577,7 @@ html, body {
   border-radius: 8px !important;
 }
 .sidebar-folder-header.dragging { opacity: 0.25; pointer-events: none; }
+.sidebar-folder.dragging { opacity: 0.25; pointer-events: none; }
 .sidebar-folder-preview {
   position: relative; width: 44px; height: 44px;
   flex-shrink: 0; border-radius: 50%; overflow: hidden;

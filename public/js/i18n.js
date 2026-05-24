@@ -280,6 +280,14 @@ registerLang('ja', '日本語', {
   'settings-data-exported':  'エクスポートしました',
   'settings-data-imported':  'インポートしました',
   'settings-data-import-err': '読み込みに失敗しました（形式が正しくありません）',
+  'settings-data-code-load':  '読込',
+  'settings-data-code-share': 'コード共有',
+  'preset-copy-title':        'コードをコピー',
+  'preset-copied':            'コードをコピーしました',
+  'preset-fetching':          'チャンネルを取得中...',
+  'preset-imported':          '取り込みました',
+  'preset-import-err':        'コードが正しくありません',
+  'preset-code-ph':           '取込コード（vt~…）を貼り付け',
 });
 
 // ── 組み込み: 英語 ────────────────────────────────────────────
@@ -483,6 +491,14 @@ registerLang('en', 'English', {
   'settings-data-exported':  'Exported',
   'settings-data-imported':  'Imported',
   'settings-data-import-err': 'Failed to load (invalid format)',
+  'settings-data-code-load':  'Load',
+  'settings-data-code-share': 'Code Sharing',
+  'preset-copy-title':        'Copy as code',
+  'preset-copied':            'Code copied',
+  'preset-fetching':          'Fetching channels...',
+  'preset-imported':          'Imported',
+  'preset-import-err':        'Invalid code',
+  'preset-code-ph':           'Paste import code (vt~…)',
 });
 
 // ── 外部言語: JSON インポート ───────────────────────────────────

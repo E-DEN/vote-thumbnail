@@ -541,6 +541,17 @@
             <div id="sidebarDataStatus" class="settings-status"></div>
             <p class="settings-field-desc" data-i18n="settings-data-desc">サイドバーのチャンネル・フォルダ構成を JSON ファイルとして保存・復元します。</p>
           </div>
+          <div class="settings-field">
+            <div class="settings-code-hdr">
+              <span class="settings-field-label" data-i18n="settings-data-code-share">コード共有</span>
+              <button id="sidebarCopyCodeBtn" class="settings-code-icon-btn" data-i18n-title="preset-copy-title" title="コードをコピー"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg></button>
+            </div>
+            <div class="settings-code-row">
+              <textarea id="sidebarCodeInput" class="settings-code-input" rows="3" data-i18n-ph="preset-code-ph" placeholder="取込コード（vt~…）を貼り付け"></textarea>
+              <button id="sidebarApplyCodeBtn" class="settings-data-btn" data-i18n="settings-data-code-load">Load</button>
+            </div>
+            <div id="sidebarCodeStatus" class="settings-status"></div>
+          </div>
         </div>
 
       </div>
