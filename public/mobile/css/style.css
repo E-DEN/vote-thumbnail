@@ -483,12 +483,6 @@ html, body {
 }
 .m-ch-add-btn:active { opacity: 0.8; }
 .m-ch-add-btn i, .m-ch-add-btn svg { width: 16px; height: 16px; }
-.m-ch-add-status {
-  font-size: 11px;
-  color: var(--text-muted);
-  margin-top: 6px;
-  min-height: 16px;
-}
 
 /* =====================
    ボトムナビゲーション
