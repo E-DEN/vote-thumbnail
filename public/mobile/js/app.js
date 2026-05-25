@@ -77,6 +77,7 @@ function syncSidebarOrder() {
 // モバイル固有状態
 let currentTab      = 'list';
 let _currentVotePair = null;
+let _suppressHistory = false; // history.pushState を抑制するフラグ
 
 // 無限スクロール
 let _listPage       = 0;
@@ -1223,6 +1224,18 @@ function switchTab(tab) {
     catBar.hidden = true;
   }
 
+  if (!_suppressHistory) {
+    const vid = tab === 'reaction' ? (_mRsCurrentVideoId || null) : null;
+    const curSt = history.state;
+    const isDuplicate = curSt &&
+      curSt.tab === tab &&
+      curSt.channelKey === state.currentChannelKey &&
+      curSt.vid === (vid || null);
+    if (!isDuplicate) {
+      history.pushState({ tab, channelKey: state.currentChannelKey, vid: vid || null }, '');
+    }
+  }
+
   renderCurrentTab();
 }
 
@@ -1894,6 +1907,7 @@ async function mRsOpenMode(videoId) {
   _mRsActive         = false;
   _mRsLoadedVideoId  = videoId; // 描画済み ID を更新（早い段階でセット）
   _mRsCurrentVideoId = videoId;
+
   _mRsPins          = [];
   _mRsKde           = null;
   const pinsLayer   = document.getElementById('mRsPinsLayer');
@@ -2301,6 +2315,9 @@ function mRsRenderPlaylist() {
       if (v.id === _mRsCurrentVideoId) return;
       listEl.querySelectorAll('.m-rs-playlist-item').forEach(el => el.classList.remove('selected'));
       item.classList.add('selected');
+      if (!_suppressHistory) {
+        history.pushState({ tab: 'reaction', channelKey: state.currentChannelKey, vid: v.id }, '');
+      }
       mRsOpenMode(v.id);
     });
     frag.appendChild(item);
@@ -2496,11 +2513,25 @@ function mApikeySettingsOpen() {
 
 // --- 初期化 ---
 document.addEventListener('DOMContentLoaded', function() {
-  // ブラウザのスワイプバック（左端スワイプで戻る）を防止するためダミー履歴エントリを積む。
-  // popstate が発生した場合は再度積み直して同一ページに留まる。
-  history.pushState({ swipeGuard: true }, '');
-  window.addEventListener('popstate', function() {
-    history.pushState({ swipeGuard: true }, '');
+  // ブラウザバック / スワイプバックで前の画面に戻る
+  window.addEventListener('popstate', async function(e) {
+    const st = e.state;
+    if (!st || st.swipeGuard) return;
+    _suppressHistory = true;
+    try {
+      if (st.channelKey && st.channelKey !== state.currentChannelKey) {
+        await selectChannel(st.channelKey);
+      }
+      if (st.tab && st.tab !== currentTab) {
+        switchTab(st.tab);
+      }
+      // リアクションタブで動画が指定されていれば切り替え
+      if (st.tab === 'reaction' && st.vid && st.vid !== _mRsCurrentVideoId) {
+        mRsOpenMode(st.vid);
+      }
+    } finally {
+      _suppressHistory = false;
+    }
   });
 
   // テーマ・言語を localStorage から復元
@@ -3486,10 +3517,18 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // 前回のチャンネルを復元
   const lastChannel = localStorage.getItem('m-last-channel');
+  const _initialTab = currentTab; // selectChannel 開始前のタブを保存（非同期中に変わる可能性があるため）
+  _suppressHistory = true;
   if (lastChannel && channels[lastChannel]) {
-    selectChannel(lastChannel);
+    selectChannel(lastChannel).then(() => {
+      // currentTab は selectChannel の非同期中に変わっている可能性があるため _initialTab を使う
+      history.replaceState({ tab: _initialTab, channelKey: state.currentChannelKey, vid: null }, '');
+      _suppressHistory = false;
+    });
   } else {
     // チャンネル未選択時も初期描画を行い「チャンネルを選択してください」を表示する
     renderCurrentTab();
+    history.replaceState({ tab: currentTab, channelKey: null, vid: null }, '');
+    _suppressHistory = false;
   }
 });
