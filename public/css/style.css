@@ -2096,7 +2096,6 @@ header {
   background: var(--surface2);
   cursor: pointer;
   position: relative;
-  transition: filter 0.5s, opacity 0.5s, box-shadow 0.3s;
 }
 /* 9:16の縦長比率で先にトリム */
 #listGrid.mode-shorts .gallery-cell--short .short-crop {
@@ -2111,14 +2110,9 @@ header {
   object-fit: cover;
   object-position: center top;
   display: block;
-  transform: scale(1.08);
-  transform-origin: center center;
-  transition: transform 0.45s;
+  transition: transform 0.3s ease;
 }
-/* 視野に完全に入ったセル */
-#listGrid.mode-shorts .gallery-cell--short.inbound .short-crop img {
-  transform: scale(1);
-}
+#listGrid.mode-shorts .gallery-cell--short:hover .short-crop img { transform: scale(1.05); }
 #listGrid.mode-shorts .gallery-cell--short .gallery-overlay {
   opacity: 0;
   transition: opacity 0.25s;
@@ -2129,29 +2123,10 @@ header {
   align-items: flex-start;
   justify-content: flex-end;
 }
-#listGrid.mode-shorts .gallery-cell--short.inbound:hover .gallery-overlay { opacity: 1; }
+#listGrid.mode-shorts .gallery-cell--short:hover .gallery-overlay { opacity: 1; }
 #listGrid.mode-shorts .gallery-cell--short .gallery-title {
   font-size: 11px;
   -webkit-line-clamp: 3;
-}
-/* ダークモード */
-:root[data-theme="dark"] #listGrid.mode-shorts .gallery-cell--short {
-  filter: saturate(0) blur(3px);
-  opacity: 0.02;
-  background: var(--bg);
-}
-:root[data-theme="dark"] #listGrid.mode-shorts .gallery-cell--short.inbound {
-  filter: saturate(1) blur(0px);
-  opacity: 1;
-}
-/* ライトモード */
-:root[data-theme="light"] #listGrid.mode-shorts .gallery-cell--short {
-  filter: saturate(0) blur(3px);
-  opacity: 0.1;
-}
-:root[data-theme="light"] #listGrid.mode-shorts .gallery-cell--short.inbound {
-  filter: saturate(1) blur(0px);
-  opacity: 1;
 }
 .list-card {
   background: transparent;

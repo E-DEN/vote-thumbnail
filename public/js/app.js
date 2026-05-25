@@ -687,14 +687,7 @@ function renderList() {
   if (sentinel) { _listScrollObserver.observe(sentinel); }
 
   if (state.currentCat === 'shorts') {
-    // ショート: waterfall + IntersectionObserver
     grid.classList.add('mode-shorts');
-    if (_shortsObserver) { _shortsObserver.disconnect(); }
-    _shortsObserver = new IntersectionObserver(function(entries) {
-      entries.forEach(function(entry) {
-        entry.target.classList.toggle('inbound', entry.intersectionRatio >= 1);
-      });
-    }, { root: document.getElementById('listScrollBody'), threshold: [0, 1], rootMargin: '100px 0px' });
   } else {
     grid.classList.remove('mode-shorts');
   }
@@ -753,7 +746,6 @@ function _appendGalleryPage() {
         return function() { openModalReactions(vid); };
       }(v)));
       grid.appendChild(cell);
-      if (_shortsObserver) { _shortsObserver.observe(cell); }
     });
   } else {
     // 通常: galleryレイアウト（行パターン）
