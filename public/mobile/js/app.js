@@ -1004,12 +1004,15 @@ function _mEndDrag(cx, cy) {
     if (!_mEditMode) {
       const startX = touch.clientX, startY = touch.clientY;
       _mDragStartX = startX; _mDragStartY = startY;
+      let _longpressFired = false;
       const longpressTimer = setTimeout(() => {
+        _longpressFired = true;
         _mEditMode = true;
         const _editBtn = document.getElementById('mEditModeBtn');
         if (_editBtn) _editBtn.classList.add('edit-active');
         chList.classList.add('edit-mode');
-        cleanup();
+        // touchmove のみ削除（touchend は残し、指を離した時に edit-mode を解除できるようにする）
+        document.removeEventListener('touchmove', onLongpressMove);
       }, 500);
       const cleanup = () => {
         clearTimeout(longpressTimer);
@@ -1022,14 +1025,24 @@ function _mEndDrag(cx, cy) {
         if (!t) return;
         if (Math.abs(t.clientX - startX) > 10 || Math.abs(t.clientY - startY) > 10) cleanup();
       };
-      const onLongpressEnd = () => cleanup();
+      const onLongpressEnd = () => {
+        cleanup();
+        // ロングプレス成立後に指を離した場合 → edit-mode を外してスクロール可能に戻す
+        // （_mEditMode = true は維持。次のタッチで 400ms 長押しするとドラッグ可能）
+        if (_longpressFired) {
+          chList.classList.remove('edit-mode');
+        }
+      };
       document.addEventListener('touchmove', onLongpressMove, { passive: true });
-      document.addEventListener('touchend', onLongpressEnd, { once: true });
-      document.addEventListener('touchcancel', onLongpressEnd, { once: true });
+      document.addEventListener('touchend', onLongpressEnd);
+      document.addEventListener('touchcancel', onLongpressEnd);
       return; // e.preventDefault() は呼ばない → ネイティブスクロール維持
     }
-    // touchstart で preventDefault → ネイティブスクロールを禁止して touchcancel を防ぐ
-    e.preventDefault();
+    // edit-mode クラスがある時のみ preventDefault（スクロール禁止）
+    // edit-mode クラスがない時（ドラッグ後）はスクロール可能にして touchcancel を受け入れる
+    if (chList.classList.contains('edit-mode')) {
+      e.preventDefault();
+    }
     const touchId = touch.identifier;
     const startX = touch.clientX, startY = touch.clientY;
     _mDragStartX = startX; _mDragStartY = startY;
@@ -1050,7 +1063,9 @@ function _mEndDrag(cx, cy) {
     const onMove = ev => {
       const t = [...ev.touches].find(t => t.identifier === touchId);
       if (!t) return;
-      ev.preventDefault();
+      if (_mDragging || chList.classList.contains('edit-mode')) {
+        ev.preventDefault();
+      }
       if (_mLongpressTimer && !_mDragging) {
         const dx = Math.abs(t.clientX - _mDragStartX);
         const dy = Math.abs(t.clientY - _mDragStartY);
@@ -1059,8 +1074,9 @@ function _mEndDrag(cx, cy) {
         }
       }
       if (!_mDragging) {
-        // 編集モード中はスクロール禁止
-        if (_mEditMode) return;
+        // edit-mode クラスがない時はネイティブスクロールに任せる
+        if (!chList.classList.contains('edit-mode')) return;
+        // edit-mode あり（長押し待機中）→ 手動スクロール
         const now = performance.now();
         const dt = Math.max(1, now - _prevScrollTime);
         const dy = t.clientY - _prevScrollY;
@@ -1104,25 +1120,25 @@ function _mEndDrag(cx, cy) {
       clearTimeout(_mLongpressTimer); _mLongpressTimer = null;
       if (_mDragging) {
         _mEndDrag(t.clientX, t.clientY);
-        // ドラッグ完了後、編集モードを自動でOFF
-        _mEditMode = false;
-        const _editBtn2 = document.getElementById('mEditModeBtn');
-        if (_editBtn2) _editBtn2.classList.remove('edit-active');
+        // ドラッグ後は touch-action を解除してスクロール可能に（EditMode は維持して次もすぐ掴める）
         chList.classList.remove('edit-mode');
       } else {
         const _tapDx = Math.abs(t.clientX - _mDragStartX);
         const _tapDy = Math.abs(t.clientY - _mDragStartY);
         if (_tapDx < 10 && _tapDy < 10) {
-          // タップ判定: preventDefault で click が消えているので手動で発火
-          if (srcEl.classList.contains('sidebar-folder')) {
-            const hdr = srcEl.querySelector('.sidebar-folder-header');
-            if (hdr) hdr.click();
-          } else {
-            srcEl.click();
+          // タップ判定: edit-mode 中のみ手動 click（preventDefault でネイティブが消えているため）
+          // edit-mode なし（ドラッグ後）はネイティブ click に任せる
+          if (chList.classList.contains('edit-mode')) {
+            if (srcEl.classList.contains('sidebar-folder')) {
+              const hdr = srcEl.querySelector('.sidebar-folder-header');
+              if (hdr) hdr.click();
+            } else {
+              srcEl.click();
+            }
           }
         } else {
-          // 慣性スクロール（編集モード中は禁止）
-          if (!_mEditMode) {
+          // 慣性スクロール（edit-mode クラスがある時のみ。なし = ネイティブに任せる）
+          if (chList.classList.contains('edit-mode')) {
             cancelAnimationFrame(_mListMomentumRaf);
             let v = _scrollVY * 16;
             const step = () => {
@@ -1164,10 +1180,7 @@ function _mEndDrag(cx, cy) {
         document.querySelectorAll('.merge-hover').forEach(el => el.classList.remove('merge-hover'));
         document.querySelectorAll('.drop-bottom').forEach(el => el.classList.remove('drop-bottom'));
         _mHideIndicator();
-        // キャンセル時も編集モードをOFF
-        _mEditMode = false;
-        const _editBtn3 = document.getElementById('mEditModeBtn');
-        if (_editBtn3) _editBtn3.classList.remove('edit-active');
+        // キャンセル時も touch-action を解除（EditMode は維持）
         chList.classList.remove('edit-mode');
       }
     };
