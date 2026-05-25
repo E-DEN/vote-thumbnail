@@ -740,9 +740,11 @@ function _appendGalleryPage() {
       cell.className = 'gallery-cell--short';
       var _meta = _buildVideoMeta(v) + _buildPinDot(v);
       cell.innerHTML =
-        '<img src="' + v.thumb + '" alt="" loading="lazy"' +
-        ' onerror="this.src=\'https://i.ytimg.com/vi/' + v.id + '/hqdefault.jpg\'"' +
-        ' referrerpolicy="no-referrer">' +
+        '<div class="short-crop">' +
+          '<img src="' + v.thumb + '" alt="" loading="lazy"' +
+          ' onerror="this.src=\'https://i.ytimg.com/vi/' + v.id + '/hqdefault.jpg\'"' +
+          ' referrerpolicy="no-referrer">' +
+        '</div>' +
         '<div class="gallery-overlay">' +
           '<div class="gallery-title">' + v.title + '</div>' +
           (_meta ? '<div class="gallery-meta">' + _meta + '</div>' : '') +

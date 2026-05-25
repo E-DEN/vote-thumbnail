@@ -2077,15 +2077,19 @@ header {
 /* ショートギャラリーモード（waterfall + IntersectionObserver） */
 #listGrid.mode-shorts {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   grid-gap: 8px;
   grid-auto-flow: row dense;
-  grid-auto-rows: 68px;
+  grid-auto-rows: 90px;
 }
-/* 3パターンの高さでリズムを作る */
-#listGrid.mode-shorts .gallery-cell--short:nth-of-type(3n+1) { grid-row: auto / span 3; }
-#listGrid.mode-shorts .gallery-cell--short:nth-of-type(3n+2) { grid-row: auto / span 4; }
-#listGrid.mode-shorts .gallery-cell--short:nth-of-type(3n+3) { grid-row: auto / span 5; }
+/* 3パターンの高さでリズムを作る（9:16縦長を基準にそれぞれ異なる比率でトリム） */
+#listGrid.mode-shorts .gallery-cell--short:nth-of-type(7n+1) { grid-row: auto / span 3; }
+#listGrid.mode-shorts .gallery-cell--short:nth-of-type(7n+2) { grid-row: auto / span 5; }
+#listGrid.mode-shorts .gallery-cell--short:nth-of-type(7n+3) { grid-row: auto / span 4; }
+#listGrid.mode-shorts .gallery-cell--short:nth-of-type(7n+4) { grid-row: auto / span 3; }
+#listGrid.mode-shorts .gallery-cell--short:nth-of-type(7n+5) { grid-row: auto / span 5; }
+#listGrid.mode-shorts .gallery-cell--short:nth-of-type(7n+6) { grid-row: auto / span 4; }
+#listGrid.mode-shorts .gallery-cell--short:nth-of-type(7n+7) { grid-row: auto / span 3; }
 #listGrid.mode-shorts .gallery-cell--short {
   overflow: hidden;
   border-radius: 0;
@@ -2094,17 +2098,25 @@ header {
   position: relative;
   transition: filter 0.5s, opacity 0.5s, box-shadow 0.3s;
 }
-#listGrid.mode-shorts .gallery-cell--short img {
+/* 9:16の縦長比率で先にトリム */
+#listGrid.mode-shorts .gallery-cell--short .short-crop {
+  width: 100%;
+  aspect-ratio: 9 / 16;
+  overflow: hidden;
+  position: relative;
+}
+#listGrid.mode-shorts .gallery-cell--short .short-crop img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  object-position: center top;
   display: block;
-  transform: scale(0.75);
-  transform-origin: bottom center;
+  transform: scale(1.08);
+  transform-origin: center center;
   transition: transform 0.45s;
 }
 /* 視野に完全に入ったセル */
-#listGrid.mode-shorts .gallery-cell--short.inbound img {
+#listGrid.mode-shorts .gallery-cell--short.inbound .short-crop img {
   transform: scale(1);
 }
 #listGrid.mode-shorts .gallery-cell--short .gallery-overlay {
