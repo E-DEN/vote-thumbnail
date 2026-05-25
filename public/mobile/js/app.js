@@ -626,7 +626,7 @@ function _mHideIndicator() {
   if (_mIndicator) _mIndicator.style.display = 'none';
 }
 
-function _mGetDropInfo(cy) {
+function _mGetDropInfo(cy, noMerge = false) {
   const chList = document.getElementById('mChList');
   const items = [...chList.querySelectorAll(':scope > .sidebar-channel-item:not(.dragging), :scope > .sidebar-folder:not(.dragging)')];
   if (!items.length) return null;
@@ -644,6 +644,7 @@ function _mGetDropInfo(cy) {
       } else if (relY > 0.7) {
         return { after: items[i] };
       } else {
+        if (noMerge) return { after: items[i] }; // フォルダドラッグ時は merge zone を after として扱う
         return null; // merge zone
       }
     }
@@ -851,12 +852,7 @@ function _mEndDrag(cx, cy) {
   }
   _mSrcEl.style.touchAction = '';
   _mSrcEl.classList.remove('dragging');
-  if (_mDragFolderWasOpen) {
-    const childrenEl = _mSrcEl.querySelector('.sidebar-folder-children');
-    if (childrenEl) { childrenEl.style.display = ''; childrenEl.style.maxHeight = 'none'; }
-    _mSrcEl.classList.add('sidebar-folder--open');
-  }
-  _mDragFolderWasOpen = false;
+  // NOTE: _mDragFolderWasOpen の children 復元はドロップ先確定後に行う（位置計算がズレるのを防ぐ）
   _mHideIndicator();
 
   // リスト全体の最後のアイテムより下にドロップ → フォルダ内外問わずトップレベル末尾へ
@@ -865,6 +861,12 @@ function _mEndDrag(cx, cy) {
     const _dropItems  = [..._dropChList.querySelectorAll(':scope > .sidebar-channel-item, :scope > .sidebar-folder')].filter(el => el !== _mSrcEl);
     if (_dropItems.length && cy > _dropItems[_dropItems.length - 1].getBoundingClientRect().bottom) {
       _dropChList.appendChild(_mSrcEl);
+      if (_mDragFolderWasOpen) {
+        const childrenEl = _mSrcEl.querySelector('.sidebar-folder-children');
+        if (childrenEl) { childrenEl.style.display = ''; childrenEl.style.maxHeight = 'none'; }
+        _mSrcEl.classList.add('sidebar-folder--open');
+        _mDragFolderWasOpen = false;
+      }
       _mSaveSidebarOrderFromDOM();
       _mSrcEl = null; return;
     }
@@ -944,17 +946,25 @@ function _mEndDrag(cx, cy) {
     }
     _mSrcEl = null; return;
   }
-  const info = _mGetDropInfo(cy);
+  const _srcIsFolder = _mSrcEl.classList.contains('sidebar-folder');
+  const info = _mGetDropInfo(cy, _srcIsFolder);
   const chList = document.getElementById('mChList');
   if (info) {
     if (info.before && info.before !== _mSrcEl) chList.insertBefore(_mSrcEl, info.before);
     else if (info.after && info.after !== _mSrcEl) info.after.after(_mSrcEl);
+  }
+  if (_mDragFolderWasOpen) {
+    const childrenEl = _mSrcEl.querySelector('.sidebar-folder-children');
+    if (childrenEl) { childrenEl.style.display = ''; childrenEl.style.maxHeight = 'none'; }
+    _mSrcEl.classList.add('sidebar-folder--open');
+    _mDragFolderWasOpen = false;
   }
   _mSaveSidebarOrderFromDOM(); _mSrcEl = null;
 }
 
 (function() {
   const chList = document.getElementById('mChList');
+  let _mListMomentumRaf = null;
 
   function _mStartDrag(srcEl, startX, startY) {
     if (_mLongpressHint) { _mLongpressHint.remove(); _mLongpressHint = null; }
@@ -985,9 +995,39 @@ function _mEndDrag(cx, cy) {
 
   chList.addEventListener('touchstart', e => {
     if (_mDragging) { e.preventDefault(); return; }
+    // 慣性スクロール中でも即座に反応できるようキャンセル
+    if (_mListMomentumRaf) { cancelAnimationFrame(_mListMomentumRaf); _mListMomentumRaf = null; }
     const touch = e.touches[0];
     const srcEl = e.target.closest('.sidebar-channel-item, .sidebar-folder');
-    if (!srcEl || e.target.closest('.ch-action-btn')) return;
+    if (!srcEl || e.target.closest('.ch-action-btn, .m-ch-card-menu-btn')) return;
+    // 編集モードOFFの時：ネイティブスクロールを維持しつつ長押し検知のみ行う
+    if (!_mEditMode) {
+      const startX = touch.clientX, startY = touch.clientY;
+      _mDragStartX = startX; _mDragStartY = startY;
+      const longpressTimer = setTimeout(() => {
+        _mEditMode = true;
+        const _editBtn = document.getElementById('mEditModeBtn');
+        if (_editBtn) _editBtn.classList.add('edit-active');
+        chList.classList.add('edit-mode');
+        cleanup();
+      }, 500);
+      const cleanup = () => {
+        clearTimeout(longpressTimer);
+        document.removeEventListener('touchmove', onLongpressMove);
+        document.removeEventListener('touchend', onLongpressEnd);
+        document.removeEventListener('touchcancel', onLongpressEnd);
+      };
+      const onLongpressMove = ev => {
+        const t = [...ev.touches].find(t => t.identifier === touch.identifier);
+        if (!t) return;
+        if (Math.abs(t.clientX - startX) > 10 || Math.abs(t.clientY - startY) > 10) cleanup();
+      };
+      const onLongpressEnd = () => cleanup();
+      document.addEventListener('touchmove', onLongpressMove, { passive: true });
+      document.addEventListener('touchend', onLongpressEnd, { once: true });
+      document.addEventListener('touchcancel', onLongpressEnd, { once: true });
+      return; // e.preventDefault() は呼ばない → ネイティブスクロール維持
+    }
     // touchstart で preventDefault → ネイティブスクロールを禁止して touchcancel を防ぐ
     e.preventDefault();
     const touchId = touch.identifier;
@@ -996,7 +1036,6 @@ function _mEndDrag(cx, cy) {
     let _prevScrollY = startY;
     let _prevScrollTime = performance.now();
     let _scrollVY = 0;
-    let _momentumRaf = null;
     _mLongpressTimer = setTimeout(() => {
       // 長押しで自動的に編集モードを有効化
       if (!_mEditMode) {
@@ -1084,15 +1123,15 @@ function _mEndDrag(cx, cy) {
         } else {
           // 慣性スクロール（編集モード中は禁止）
           if (!_mEditMode) {
-            cancelAnimationFrame(_momentumRaf);
+            cancelAnimationFrame(_mListMomentumRaf);
             let v = _scrollVY * 16;
             const step = () => {
               v *= 0.92;
-              if (Math.abs(v) < 0.5) return;
+              if (Math.abs(v) < 0.5) { _mListMomentumRaf = null; return; }
               chList.scrollTop -= v;
-              _momentumRaf = requestAnimationFrame(step);
+              _mListMomentumRaf = requestAnimationFrame(step);
             };
-            _momentumRaf = requestAnimationFrame(step);
+            _mListMomentumRaf = requestAnimationFrame(step);
           }
         }
       }
