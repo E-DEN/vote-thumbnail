@@ -1825,6 +1825,7 @@ html, body {
   transition: border-color 0.15s;
 }
 .m-apikey-input:focus { border-color: var(--accent); }
+.m-apikey-input--masked { -webkit-text-security: disc; }
 .m-apikey-toggle {
   width: 34px;
   height: 34px;
