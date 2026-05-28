@@ -56,6 +56,27 @@ function syncSidebarOrder() {
 
 // モバイル固有状態
 let currentTab      = 'list';
+
+// --- URL ハッシュ管理（PC版と同様） ---
+function buildHash(channelKey, tab, vid) {
+  if (!channelKey) return location.pathname;
+  const p = new URLSearchParams();
+  p.set('ch', channelKey);
+  p.set('tab', tab || 'list');
+  if (vid) p.set('vid', vid);
+  return '#' + p.toString();
+}
+
+function parseHash() {
+  const hash = location.hash.slice(1);
+  if (!hash) return { channelKey: null, tab: null, vid: null };
+  try {
+    const p = new URLSearchParams(hash);
+    return { channelKey: p.get('ch') || null, tab: p.get('tab') || null, vid: p.get('vid') || null };
+  } catch {
+    return { channelKey: null, tab: null, vid: null };
+  }
+}
 let _currentVotePair = null;
 
 // 無限スクロール
@@ -468,6 +489,10 @@ function openChannelPanel() {
   renderChannelPanel();
   document.getElementById('mChPanel').classList.add('open');
   document.getElementById('mChOverlay').classList.add('open');
+  // パネルを開いたとき、戻るボタンで閉じられるよう履歴を追加
+  if (!_suppressHistory) {
+    history.pushState({ ...(history.state || {}), panelOpen: true }, '');
+  }
 }
 
 function closeChannelPanel() {
@@ -1340,7 +1365,7 @@ function switchTab(tab) {
       curSt.channelKey === state.currentChannelKey &&
       curSt.vid === (vid || null);
     if (!isDuplicate) {
-      history.pushState({ tab, channelKey: state.currentChannelKey, vid: vid || null }, '');
+      history.pushState({ tab, channelKey: state.currentChannelKey, vid: vid || null }, '', buildHash(state.currentChannelKey, tab, vid));
     }
   }
 
@@ -1882,17 +1907,30 @@ document.addEventListener('DOMContentLoaded', function() {
   window.addEventListener('popstate', async function(e) {
     const st = e.state;
     if (!st || st.swipeGuard) return;
+    // チャンネルパネルが開いているとき → 閉じるだけ
+    if (document.getElementById('mChPanel').classList.contains('open')) {
+      closeChannelPanel();
+      return;
+    }
     setSuppressHistory(true);
     try {
-      if (st.channelKey && st.channelKey !== state.currentChannelKey) {
-        await selectChannel(st.channelKey);
-      }
-      if (st.tab && st.tab !== currentTab) {
-        switchTab(st.tab);
-      }
-      // リアクションタブで動画が指定されていれば切り替え
-      if (st.tab === 'reaction' && st.vid && st.vid !== _mRsCurrentVideoId) {
-        mRsOpenMode(st.vid);
+      if (!st.channelKey) {
+        // チャンネル未選択状態（welcome）に戻る
+        state.currentChannelKey = null;
+        state.allVideos = [];
+        document.getElementById('mChNameDisplay').textContent = t('m-select-channel');
+        renderCurrentTab();
+      } else {
+        if (st.channelKey !== state.currentChannelKey) {
+          await selectChannel(st.channelKey);
+        }
+        if (st.tab && st.tab !== currentTab) {
+          switchTab(st.tab);
+        }
+        // リアクションタブで動画が指定されていれば切り替え
+        if (st.tab === 'reaction' && st.vid && st.vid !== _mRsCurrentVideoId) {
+          mRsOpenMode(st.vid);
+        }
       }
     } finally {
       setSuppressHistory(false);
@@ -2473,20 +2511,38 @@ document.addEventListener('DOMContentLoaded', function() {
   const catBar = document.getElementById('mCatBar');
   catBar.hidden = false;
 
-  // 前回のチャンネルを復元
-  const lastChannel = localStorage.getItem('m-last-channel');
-  const _initialTab = currentTab; // selectChannel 開始前のタブを保存（非同期中に変わる可能性があるため）
-  setSuppressHistory(true);
-  if (lastChannel && channels[lastChannel]) {
-    selectChannel(lastChannel).then(() => {
-      // currentTab は selectChannel の非同期中に変わっている可能性があるため _initialTab を使う
-      history.replaceState({ tab: _initialTab, channelKey: state.currentChannelKey, vid: null }, '');
+  // URL から初期状態を復元（ページリロード対応）、なければ前回チャンネルを使用
+  (async function _restoreFromUrl() {
+    const st = parseHash();
+    setSuppressHistory(true);
+    try {
+      if (st.channelKey && channels[st.channelKey]) {
+        // URL にチャンネルが指定されている → 復元
+        await selectChannel(st.channelKey);
+        if (st.tab && st.tab !== currentTab) switchTab(st.tab);
+        if (st.tab === 'reaction' && st.vid) mRsOpenMode(st.vid);
+        history.replaceState(
+          { tab: currentTab, channelKey: state.currentChannelKey, vid: st.vid || null },
+          '',
+          location.hash || buildHash(state.currentChannelKey, currentTab, null)
+        );
+      } else {
+        const lastChannel = localStorage.getItem('m-last-channel');
+        if (lastChannel && channels[lastChannel]) {
+          await selectChannel(lastChannel);
+          history.replaceState(
+            { tab: currentTab, channelKey: state.currentChannelKey, vid: null },
+            '',
+            buildHash(state.currentChannelKey, currentTab, null)
+          );
+        } else {
+          // チャンネル未選択時も初期描画を行い「チャンネルを選択してください」を表示する
+          renderCurrentTab();
+          history.replaceState({ tab: currentTab, channelKey: null, vid: null }, '', location.pathname);
+        }
+      }
+    } finally {
       setSuppressHistory(false);
-    });
-  } else {
-    // チャンネル未選択時も初期描画を行い「チャンネルを選択してください」を表示する
-    renderCurrentTab();
-    history.replaceState({ tab: currentTab, channelKey: null, vid: null }, '');
-    setSuppressHistory(false);
-  }
+    }
+  })();
 });
