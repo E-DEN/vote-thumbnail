@@ -1171,10 +1171,15 @@ function _mEndDrag(cx, cy) {
 let _chMenuTarget = null;
 
 
+let _chMenuIconsCreated = false;
 function _openChMenu(key, anchorEl) {
   _chMenuTarget = { key };
   const menu = document.getElementById('mChCardMenu');
   menu.hidden = false;
+  if (!_chMenuIconsCreated) {
+    if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [menu] });
+    _chMenuIconsCreated = true;
+  }
   const r = anchorEl.getBoundingClientRect();
   const mw = menu.offsetWidth || 148;
   const mh = menu.offsetHeight || 120;
