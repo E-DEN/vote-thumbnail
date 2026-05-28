@@ -161,7 +161,7 @@ function _gtInit() {
     if (_gtDragY === null) return;
     const dy = e.clientY - _gtDragY;
     _gtDragY = null;
-    if (Math.abs(dy) > 30) {
+    if (Math.abs(dy) > 30 && _gtType !== 'loading') {
       _gtSwipeDismiss(dy);
     } else {
       wrap.style.transition = 'transform 250ms ease';

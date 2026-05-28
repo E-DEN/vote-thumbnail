@@ -943,7 +943,6 @@ function renderRanking() {
   const range = maxRating - minRating || 1;
 
   rankShowCount = RANK_PAGE;
-  document.getElementById('rankSubtitle').textContent = t('rank-subtitle', { count: pool.length, cat: state.currentCat });
   const list = document.getElementById('rankList');
   list.innerHTML = '';
   const _rankHeader = document.querySelector('.ranking-header');
@@ -3189,6 +3188,7 @@ async function addChannelFromSidebarInput() {
       return;
     }
     const ch = data.channel;
+    const isExisting = !!channels[ch.channel_id];
     // channels に保存 (既存の tags/addedAt を維持)
     channels[ch.channel_id] = {
       key:         ch.channel_id,
@@ -3221,7 +3221,9 @@ async function addChannelFromSidebarInput() {
         const count = await importAllChannelVideos(ch.channel_id, msg => { showToast(msg, 'loading'); });
         state.allVideos = await fetchChannelVideos(ch.channel_id);
         renderCurrentView();
-        showToast(t('import-done', { count }));
+        showToast(isExisting
+          ? t('refresh-done-api').replace('{total}', count)
+          : t('import-done', { count }));
       } catch (importErr) {
         if (importErr.code === 'API_KEY_INVALID') {
           markApiKeyError();
@@ -3230,6 +3232,11 @@ async function addChannelFromSidebarInput() {
           showToast(importErr.message, 'err');
         }
       }
+    } else {
+      // RSS Only または API キーなしの場合は loading トーストを成功表示に切り替える
+      showToast(isExisting
+        ? t('refresh-done-rss').replace('{changed}', 0)
+        : t('ch-added', { name: ch.title || postBody.handle || ch.channel_id }));
     }
   } catch (e) {
     showToast(t('error-msg', { msg: e.message }), 'err');
