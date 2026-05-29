@@ -60,7 +60,7 @@
         <polyline points="6 9 12 15 18 9"/>
       </svg>
     </button>
-    <!-- カテゴリボタン（一覧・投票・ランキング表示時のみ表示） -->
+    <!-- カテゴリフィルタ -->
     <div class="m-header-cats" id="mCatBar" hidden>
       <button class="m-cat-btn active" data-cat="videos" data-i18n-aria="cat-videos" aria-label="動画">
         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
@@ -74,10 +74,10 @@
     </div>
   </header>
 
-  <!-- メインコンテンツ領域 -->
+  <!-- メインエリア -->
   <main class="m-content" id="mContent">
 
-    <!-- Tab1: 一覧（2列グリッド） -->
+    <!-- 一覧画面 -->
     <div class="m-screen active" id="mScreenList">
       <div class="m-list-area">
         <div class="m-list-sort-bar" id="mListSortBar">
@@ -90,7 +90,7 @@
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 16 4 4 4-4"/><path d="M7 20V4"/><path d="M11 4h10"/><path d="M11 8h7"/><path d="M11 12h4"/></svg>
           </button>
         </div>
-        <!-- ウェルカム画面（チャンネル未登録時） -->
+        <!-- ウェルカム画面（チャンネル未選択時） -->
         <div id="mWelcome" class="m-welcome" hidden>
           <div class="m-wf-scroll">
             <div class="m-wf-cta">
@@ -102,7 +102,7 @@
               </button>
             </div>
             <div class="wf-cards">
-              <!-- 投票 -->
+              <!-- 投票カード -->
               <div class="wf-card">
                 <div class="wf-anim-area">
                   <div class="wf-vote-wrap">
@@ -120,7 +120,7 @@
                   <div class="wf-card-desc" data-i18n="wf-desc-vote">サムネイルを見比べて好きな方に投票。結果はリアルタイムで集計。</div>
                 </div>
               </div>
-              <!-- ランキング -->
+              <!-- ランキングカード -->
               <div class="wf-card">
                 <div class="wf-anim-area">
                   <div class="wf-rank-anim">
@@ -135,7 +135,7 @@
                   <div class="wf-card-desc" data-i18n="wf-desc-rank">投票結果をもとにサムネイルの順位を閲覧。</div>
                 </div>
               </div>
-              <!-- ここ好き -->
+              <!-- ここ好きカード -->
               <div class="wf-card">
                 <div class="wf-anim-area">
                   <div class="wf-reaction-anim">
@@ -162,7 +162,7 @@
       </div>
     </div>
 
-    <!-- Tab2: 投票（縦並び A/B） -->
+    <!-- 投票画面 -->
     <div class="m-screen" id="mScreenVote">
       <div id="mVoteWrap" class="m-vote-wrap"></div>
       <div class="m-vote-options-bar">
@@ -187,14 +187,14 @@
       </div>
     </div>
 
-    <!-- Tab3: ランキング（1列リスト） -->
+    <!-- ランキング画面 -->
     <div class="m-screen" id="mScreenRanking">
       <div id="mRankList" class="m-rank-list"></div>
     </div>
 
-    <!-- Tab4: リアクション（ReactionPin） -->
+    <!-- リアクション画面 -->
     <div class="m-screen" id="mScreenReaction">
-      <!-- サムネイル + ピン重ね表示エリア -->
+      <!-- サムネ表示エリア -->
       <div class="m-rs-img-wrap" id="mRsImgWrap">
         <img id="mRsImg" src="" alt="" referrerpolicy="no-referrer" draggable="false">
         <div class="reactions-heatmap-layer" id="mRsHeatmapLayer"></div>
@@ -210,7 +210,7 @@
           <span class="reactions-my-pin-label" data-i18n="reactions-you">あなた</span>
         </div>
         <div class="m-rs-placeholder" id="mRsPlaceholder"></div>
-        <!-- トランスポートオーバーレイ（ブラー背景・フェードイン/アウト） -->
+        <!-- トランスポートオーバーレイ -->
         <div class="m-rs-overlay" id="mRsOverlay">
           <div class="m-rs-overlay-center">
         <button class="m-rs-overlay-btn" id="mRsPrevBtn" data-i18n-aria="prev-video" aria-label="前の動画">
@@ -225,7 +225,7 @@
             </button>
           </div>
         </div>
-        <!-- シークバー（動画下端オーバーレイ・YouTube Mobile スタイル） -->
+        <!-- シークバー -->
         <div class="m-rs-seek" id="mRsSeek" hidden>
           <div class="m-rs-seek-info">
             <span class="m-rs-seek-time" id="mRsSeekTime">0:00 / 0:00</span>
@@ -237,17 +237,17 @@
         </div>
       </div>
 
-      <!-- パネル＋プレイリスト（パネルとソートは常時表示、リストのみスクロール） -->
+      <!-- コントロール + プレイリスト -->
       <div class="m-rs-list-area">
 
-      <!-- コントロールパネル（タイトル・メタ・モードボタン・スウォッチ・スライダー・トランスポート） -->
+      <!-- コントロールパネル -->
       <div class="m-rs-panel" id="mRsToolbar" hidden>
         <!-- タイトル + メタ -->
         <div class="m-rs-info">
           <a class="m-rs-video-title" id="mRsVideoTitle" href="#" target="_blank" rel="noopener noreferrer"></a>
           <div class="m-rs-video-meta" id="mRsVideoMeta"></div>
         </div>
-        <!-- モードボタン + 設定ボタン（左）/ ソートキー + 方向（右） -->
+        <!-- モードボタン -->
         <div class="m-rs-controls-row">
           <div class="m-rs-mode-group">
             <button class="m-rs-mode-btn active" id="mRsPinsBtn">
@@ -272,7 +272,7 @@
             </svg>
           </button>
         </div>
-        <!-- 表示設定パネル（アコーディオン） -->
+        <!-- 表示設定パネル -->
         <div class="m-rs-settings-panel" id="mRsSettingsPanel">
           <div class="m-rs-settings-inner">
           <!-- ソートセクション -->
@@ -315,7 +315,7 @@
             </div>
           </div>
 
-          </div><!-- /m-rs-settings-inner -->
+          </div><!-- /.m-rs-settings-inner -->
         </div>
       </div>
 
@@ -323,7 +323,7 @@
       <div class="m-rs-scroll-body">
         <div id="mRsPlaylist" class="m-rs-playlist"></div>
       </div>
-      </div><!-- / m-rs-list-area -->
+      </div><!-- /.m-rs-list-area -->
     </div>
 
   </main>
