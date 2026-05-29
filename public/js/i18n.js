@@ -94,7 +94,7 @@ registerLang('ja', '日本語', {
   'm-select-channel':  'チャンネルを選択',
   'select-channel-prompt': 'チャンネルを選択してください',
   'no-channels-registered': 'チャンネルが未登録です。下の入力欄から追加してください。',
-  'ch-add-placeholder': '@handle またはURL',
+  'ch-add-placeholder': '@handle または URL',
   'add-aria':          '追加',
   'refresh-videos':    '動画を再取得',
   'delete-label':      '削除',

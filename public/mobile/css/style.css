@@ -169,6 +169,10 @@ html, body {
   right: 0;
   overflow: hidden;
 }
+/* フッター非表示時はデッドゾーンを解消 */
+body:has(.m-bottom-nav[hidden]) .m-content {
+  bottom: env(safe-area-inset-bottom, 0px);
+}
 
 /* =====================
    タブ画面
