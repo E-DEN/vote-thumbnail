@@ -1443,20 +1443,31 @@ function renderList() {
 
   if (!state.currentChannelKey) {
     sortBar.style.display = 'none';
+    document.getElementById('mCatBar').hidden = true;
     const noChannels = Object.keys(channels).length === 0;
     if (noChannels) {
+      document.getElementById('mChPanelBtn').hidden = true;
+      document.getElementById('mHeaderAppName').hidden = false;
+      document.getElementById('mBottomNav').hidden = true;
       welcome.hidden = false;
       scrollBody.hidden = true;
     } else {
+      document.getElementById('mChPanelBtn').hidden = false;
+      document.getElementById('mHeaderAppName').hidden = true;
+      document.getElementById('mBottomNav').hidden = false;
       welcome.hidden = true;
       scrollBody.hidden = false;
       renderNoChannel('mListGrid');
     }
     return;
   }
+  document.getElementById('mChPanelBtn').hidden = false;
+  document.getElementById('mHeaderAppName').hidden = true;
+  document.getElementById('mBottomNav').hidden = false;
   welcome.hidden = true;
   scrollBody.hidden = false;
   sortBar.style.display = '';
+  document.getElementById('mCatBar').hidden = false;
   _updateListSortUI();
 
   const pool = _buildListPool();
@@ -1956,8 +1967,29 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // イベントリスナー: チャンネルパネルボタン
   document.getElementById('mChPanelBtn').addEventListener('click', openChannelPanel);
-  document.getElementById('mWelcomeAddBtn').addEventListener('click', openChannelPanel);
   document.getElementById('mChOverlay').addEventListener('click', e => { if (_mDragging) return; closeChannelPanel(); });
+
+  // ウェルカム入力フォーム
+  document.getElementById('mWelcomeAddSubmitBtn').addEventListener('click', () => {
+    const val = document.getElementById('mWelcomeAddInput').value.trim();
+    if (val) addChannel(val);
+  });
+  document.getElementById('mWelcomeAddInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') { const val = e.target.value.trim(); if (val) addChannel(val); }
+  });
+  (function() {
+    const el = document.getElementById('mWelcomeAddInput');
+    el.addEventListener('paste', e => {
+      const text = (e.clipboardData || window.clipboardData).getData('text');
+      let decoded; try { decoded = decodeURIComponent(text); } catch { decoded = text; }
+      if (decoded !== text) {
+        e.preventDefault();
+        const start = el.selectionStart, end = el.selectionEnd;
+        el.value = el.value.slice(0, start) + decoded + el.value.slice(end);
+        el.selectionStart = el.selectionEnd = start + decoded.length;
+      }
+    });
+  })();
 
   // paste 時に URL エンコード文字を自動デコード
   (function() {

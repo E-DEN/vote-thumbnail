@@ -54,7 +54,8 @@
 
   <!-- ヘッダー -->
   <header class="m-header" id="mHeader">
-    <button class="m-ch-panel-btn" id="mChPanelBtn">
+    <span class="m-header-app-name" id="mHeaderAppName" hidden data-i18n="sidebar-logo">ラブ♥ねいる</span>
+    <button class="m-ch-panel-btn" id="mChPanelBtn" hidden>
       <span id="mChNameDisplay" data-i18n="m-select-channel">チャンネルを選択</span>
       <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
         <polyline points="6 9 12 15 18 9"/>
@@ -95,11 +96,13 @@
           <div class="m-wf-scroll">
             <div class="m-wf-cta">
               <div class="m-wf-cta-label" data-i18n="welcome-add-label">チャンネルを追加してはじめる</div>
-              <div class="m-wf-cta-sub" data-i18n="wf-add-hint">メニューから YouTube チャンネルを追加するとすべての機能が使えます</div>
-              <button class="m-wf-add-btn" id="mWelcomeAddBtn">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                <span data-i18n="wf-add-btn">チャンネルを追加</span>
-              </button>
+              <div class="m-ch-add-wrap m-wf-add-form">
+                <input type="text" id="mWelcomeAddInput" class="m-ch-add-input"
+                  data-i18n-ph="ch-add-placeholder" autocomplete="off">
+                <button id="mWelcomeAddSubmitBtn" class="m-ch-add-btn" data-i18n-aria="add-aria" aria-label="追加">
+                  <i data-lucide="plus"></i>
+                </button>
+              </div>
             </div>
             <div class="wf-cards">
               <!-- 投票カード -->
@@ -153,6 +156,7 @@
                 </div>
               </div>
             </div>
+            <a class="m-wf-help-link" href="../help.html" target="_blank" data-i18n="welcome-help-link">使い方ガイドを見る →</a>
           </div>
         </div>
         <div class="m-list-scroll-body">

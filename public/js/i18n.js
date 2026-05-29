@@ -120,8 +120,6 @@ registerLang('ja', '日本語', {
   'wf-desc-rank':      '投票結果をもとに\nサムネイルの順位を閲覧できます。\nレーティングはGlicko-2で算出。',
   'wf-label-pin':      'ここ好き',
   'wf-desc-pin':       '「ここ好き」な地点に\nピンを立てて投稿できます。\nみんなの人気エリアに注目。',
-  'wf-add-hint':       'メニューから YouTube チャンネルを追加するとすべての機能が使えます',
-  'wf-add-btn':        'チャンネルを追加',
   // 投票
   'vote-counter-pre':  'これまでの投票: ',
   'vote-counter-post': ' 回',
@@ -331,8 +329,6 @@ registerLang('en', 'English', {
   'wf-desc-rank':      'Browse thumbnail rankings\nbased on vote results.\nRatings calculated with Glicko-2.',
   'wf-label-pin':      'Favorites',
   'wf-desc-pin':       'Drop a pin on your\nfavorite moment and share it.\nSee popular spots at a glance.',
-  'wf-add-hint':       'Add a YouTube channel from the menu to unlock all features.',
-  'wf-add-btn':        'Add Channel',
   // Vote
   'vote-counter-pre':  'Votes so far: ',
   'vote-counter-post': '',
