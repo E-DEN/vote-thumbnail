@@ -1,5 +1,10 @@
 // mobile/js/reaction.js
 // リアクション機能（ピン・ヒートマップ・トランスポート・プレイリスト）
+
+const _M_PLACEHOLDER_SVG_MONITOR = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>';
+function _mRsPlaceholderHtml(text) {
+  return _M_PLACEHOLDER_SVG_MONITOR + '<p>' + text + '</p>';
+}
 import { state } from '../../js/state.js';
 import { filteredVideos } from '../../js/storage.js';
 import { getRating } from '../../js/rating.js';
@@ -26,6 +31,7 @@ var _mRsSessionId = (function() {
 
 let _mRsCurrentVideoId = null;
 let _mRsLoadedVideoId  = null; // mRsOpenMode が実際に初期化した動画 ID
+let _mRsCatVideoState  = {};    // カテゴリ別の最後に選択した動画 ID
 let _mRsActive         = false;
 let _mRsPinsVisible    = true;
 let _mRsHeatmapVisible = false;
@@ -352,6 +358,7 @@ async function mRsOpenMode(videoId) {
   const titleEl     = document.getElementById('mRsVideoTitle');
   if (v) {
     img.src     = v.thumb;
+    img.hidden  = false;
     img.onerror = function() { this.src = 'https://i.ytimg.com/vi/' + v.id + '/hqdefault.jpg'; };
     if (placeholder) placeholder.hidden = true;
     if (toolbar)  toolbar.hidden = false;
@@ -409,42 +416,86 @@ function openVideoInReaction(v) {
 }
 
 // リアクションタブ描画
+function _mRsClearMyPin() {
+  // spawnOne setTimeout チェーンを停止
+  _mRsActive = false;
+  // transport モードの RAF を停止
+  if (_mRsRafId) { cancelAnimationFrame(_mRsRafId); _mRsRafId = null; }
+  _mRsPlaying   = false;
+  _mRsLastRafTs = null;
+  // 自分ピンの落下 RAF / animationend を停止
+  if (_mRsMyPinOnDrop) {
+    const pin = document.getElementById('mRsMyPin');
+    if (pin) pin.removeEventListener('animationend', _mRsMyPinOnDrop);
+    _mRsMyPinOnDrop = null;
+  }
+  if (_mRsMyPinAnimRaf) { cancelAnimationFrame(_mRsMyPinAnimRaf); _mRsMyPinAnimRaf = 0; }
+  const myPin = document.getElementById('mRsMyPin');
+  const myPinShadow = document.getElementById('mRsMyPinShadow');
+  if (myPin) { myPin.getAnimations().forEach(a => a.cancel()); myPin.hidden = true; }
+  if (myPinShadow) myPinShadow.hidden = true;
+  // コミュニティピンレイヤーをクリア
+  const pinsLayer = document.getElementById('mRsPinsLayer');
+  if (pinsLayer) pinsLayer.innerHTML = '';
+}
+
 function renderReaction() {
   if (!state.currentChannelKey) {
     const placeholder = document.getElementById('mRsPlaceholder');
     const toolbar     = document.getElementById('mRsToolbar');
-    if (placeholder) { placeholder.hidden = false; placeholder.textContent = t('select-channel-prompt'); }
+    if (placeholder) { placeholder.hidden = false; placeholder.innerHTML = _mRsPlaceholderHtml(t('select-channel-prompt')); }
     if (toolbar) toolbar.hidden = true;
     const seekElNoC = document.getElementById('mRsSeek');
     if (seekElNoC) seekElNoC.hidden = true;
+    _mRsClearMyPin();
     document.getElementById('mRsImg').src = '';
     mRsRenderPlaylist();
     return;
   }
-  mRsRenderPlaylist();
   _mRsUpdateSortUI();
   const pool = _mRsBuildSortedPool();
   if (pool.length === 0) {
     const placeholder = document.getElementById('mRsPlaceholder');
-    if (placeholder) { placeholder.hidden = false; placeholder.textContent = t('no-videos-in-cat'); }
+    if (placeholder) { placeholder.hidden = false; placeholder.innerHTML = _mRsPlaceholderHtml(t('no-videos-in-cat')); }
     const toolbar = document.getElementById('mRsToolbar');
     if (toolbar) toolbar.hidden = true;
     const seekElNoV = document.getElementById('mRsSeek');
     if (seekElNoV) seekElNoV.hidden = true;
-    document.getElementById('mRsImg').src = '';
+    const imgElNoV = document.getElementById('mRsImg');
+    imgElNoV.src = '';
+    _mRsClearMyPin();
+    _mRsPins = [];
+    _mRsKde  = null;
+    const hmLayerNoV = document.getElementById('mRsHeatmapLayer');
+    if (hmLayerNoV) { hmLayerNoV.style.cssText = 'opacity:0;visibility:hidden;'; hmLayerNoV.innerHTML = ''; }
+    _mRsHeatmapVisible = false;
+    const hmBtnNoV = document.getElementById('mRsHeatmapBtn');
+    if (hmBtnNoV) hmBtnNoV.classList.remove('active');
     _mRsCurrentVideoId = null;
     _mRsLoadedVideoId  = null;
     const titleEl = document.getElementById('mRsVideoTitle');
     if (titleEl) { titleEl.textContent = ''; titleEl.removeAttribute('href'); }
     const metaEl = document.getElementById('mRsVideoMeta');
     if (metaEl) metaEl.innerHTML = '';
+    mRsRenderPlaylist();
     return;
   }
+  // カテゴリ復元: 前回このカテゴリで選んだ動画があればそれを優先
+  const savedId  = _mRsCatVideoState[state.currentCat];
   const targetId = (_mRsCurrentVideoId && pool.find(v => v.id === _mRsCurrentVideoId))
     ? _mRsCurrentVideoId
+    : (savedId && pool.find(v => v.id === savedId))
+    ? savedId
     : pool[0].id;
+  // targetId を先にセットしてからプレイリストを描画（着色のため）
+  _mRsCurrentVideoId = targetId;
+  mRsRenderPlaylist();
   if (targetId !== _mRsLoadedVideoId) {
     mRsOpenMode(targetId);
+  } else {
+    // 既にロード済みの場合も placeholder を確実に隠す
+    const placeholder = document.getElementById('mRsPlaceholder');
+    if (placeholder) placeholder.hidden = true;
   }
 }
 
@@ -770,6 +821,12 @@ export { _mRsMyPins, _mRsPinColor, _mRsMaxPins, _mRsPinOpacity, _mRsTransportVis
 export function resetCurrentVideo() {
   _mRsCurrentVideoId = null;
   _mRsLoadedVideoId  = null;
+  _mRsCatVideoState  = {};
+}
+
+// カテゴリ切り替え前に呼び出し: 現在の選択動画を cat にひも付けて保存
+export function mRsSaveCatState(cat) {
+  if (_mRsCurrentVideoId) _mRsCatVideoState[cat] = _mRsCurrentVideoId;
 }
 
 export function initReactionUI() {

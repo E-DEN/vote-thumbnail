@@ -1,4 +1,4 @@
-// i18n 翻訳エンジン
+﻿// i18n 翻訳エンジン
 // 組み込み言語: ja（日本語）、en（英語）
 //
 // 言語を追加するには、別スクリプトで registerLang('XX', '表示名', {...}) を呼び、
@@ -120,14 +120,15 @@ registerLang('ja', '日本語', {
   'wf-desc-rank':      '投票結果をもとに\nサムネイルの順位を閲覧できます。\nレーティングはGlicko-2で算出。',
   'wf-label-pin':      'ここ好き',
   'wf-desc-pin':       '「ここ好き」な地点に\nピンを立てて投稿できます。\nみんなの人気エリアに注目。',
+  // 共通
+  'no-videos-in-cat':  'このカテゴリには動画がありません。',
   // 投票
   'vote-counter-pre':  'これまでの投票: ',
   'vote-counter-post': ' 回',
-  'no-videos-in-cat':  'このカテゴリには動画がありません。',
-  'reactions-select-prompt': 'リストから動画を選んでください。',
-  'ranking-settled':   'すべての組み合わせの評価が確定しました。',
   'tutorial-vote-text': '好きなサムネイルをクリックして投票。結果はランキングに反映されます。',
   'tutorial-got-it':    'わかった',
+  'vote-all-done':   '全組み合わせの評価が確定しました。',
+  'vote-need-more':  '動画が2本以上必要です。',
   // 投票ペースゲージ
   'pace-stable':  '安定',
   'pace-fast':    '速い',
@@ -144,7 +145,6 @@ registerLang('ja', '日本語', {
   'wins-label':     '勝利',
   'winrate-label':  '勝率',
   'rank-label':     '順位',
-
   // ステータス
   'invalid-url':                'URLの形式が不正です',
   'fetching-channel':           'チャンネル情報を取得中...',
@@ -164,6 +164,7 @@ registerLang('ja', '日本語', {
   'yt-btn':      'YouTube で見る',
   // リアクション
   'reactions-open':    'リアクション',
+  'reactions-select-prompt': 'リストから動画を選んでください。',
   'reactions-pins':    '好き',
   'reactions-heatmap': '人気',
   'reactions-you':     'あなた',
@@ -190,8 +191,6 @@ registerLang('ja', '日本語', {
   'open-channel':    'チャンネルを開く',
   'copy-success':    'URLをコピーしました',
   'copy-failed':     'コピーに失敗しました',
-  'vote-all-done':   '全組み合わせの評価が確定しました',
-  'vote-need-more':  '動画が2本以上必要です',
   'overview-label':  '概要',
   'views-stat-label': '視聴',
   'show-more':       'もっと見る',
@@ -329,14 +328,15 @@ registerLang('en', 'English', {
   'wf-desc-rank':      'Browse thumbnail rankings\nbased on vote results.\nRatings calculated with Glicko-2.',
   'wf-label-pin':      'Favorites',
   'wf-desc-pin':       'Drop a pin on your\nfavorite moment and share it.\nSee popular spots at a glance.',
+  // 共通
+  'no-videos-in-cat': 'No videos in this category.',
   // Vote
   'vote-counter-pre':  'Votes so far: ',
   'vote-counter-post': '',
-  'no-videos-in-cat': 'No videos in this category.',
-  'reactions-select-prompt': 'Select a video from the list.',
-  'ranking-settled':  'All matchups have been settled.',
   'tutorial-vote-text': 'Click the thumbnail you prefer to vote. Results are reflected in the ranking.',
   'tutorial-got-it':    'Got it',
+  'vote-all-done':   'All matchups have been rated',
+  'vote-need-more':  'Need at least 2 videos',
   // Vote pace gauge
   'pace-stable':  'Steady',
   'pace-fast':    'Fast',
@@ -372,6 +372,7 @@ registerLang('en', 'English', {
   'yt-btn':      'Watch on YouTube',
   // リアクション
   'reactions-open':    'Reaction',
+  'reactions-select-prompt': 'Select a video from the list.',
   'reactions-pins':    'Like',
   'reactions-heatmap': 'Popular',
   'reactions-you':     'You',
@@ -398,8 +399,6 @@ registerLang('en', 'English', {
   'open-channel':    'Open Channel',
   'copy-success':    'URL copied',
   'copy-failed':     'Failed to copy',
-  'vote-all-done':   'All matchups have been rated',
-  'vote-need-more':  'Need at least 2 videos',
   'overview-label':  'Description',
   'views-stat-label': 'Views',
   'show-more':       'Show more',

@@ -359,14 +359,14 @@ function loadChannelVideos(key) {
 
 
 // カテゴリに動画が0件のとき共通の空状態UIを指定コンテナに描画する
-function _renderEmptyCat(container) {
+function _renderEmptyCat(container, text) {
   container.innerHTML =
     '<div class="cat-empty-state">' +
       '<svg class="cat-empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">' +
         '<path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>' +
         '<path d="M22 12h-6l-2 3H10l-2-3H2"/>' +
       '</svg>' +
-      '<p class="cat-empty-text">' + t('no-videos-in-cat') + '</p>' +
+      '<p class="cat-empty-text">' + (text || t('no-videos-in-cat')) + '</p>' +
     '</div>';
 }
 
@@ -428,7 +428,10 @@ function renderVote() {
     if (_tutEl) _tutEl.style.display = 'none';
     if (filteredVideos().length >= 2) {
       // 全組み合わせ評価確定済み
-      container.innerHTML = '<p style="color:var(--text-muted);text-align:center;grid-column:1/-1;padding:60px 0;font-size:14px;">' + t('ranking-settled') + '</p>';
+      _renderEmptyCat(container, t('vote-all-done'));
+    } else if (filteredVideos().length > 0) {
+      // 動画が1本以下
+      _renderEmptyCat(container, t('vote-need-more'));
     } else {
       _renderEmptyCat(container);
     }
@@ -3008,19 +3011,16 @@ function renderReactionsPlaylist(selectedId) {
   body.style.justifyContent = '';
   body.style.overflowY      = '';
   var selectedInPool = selectedId && pool.some(function(v) { return v.id === selectedId; });
-  if (selectedInPool) {
-    if (rsImgWrap)   rsImgWrap.style.display   = '';
-    if (rsToolbar)   rsToolbar.style.display   = '';
-    if (rsVideoInfo) rsVideoInfo.style.display = '';
-    if (placeholder) placeholder.style.display = 'none';
-  } else {
-    if (rsImgWrap)   rsImgWrap.style.display   = '';
-    if (rsToolbar)   rsToolbar.style.display   = '';
-    if (rsVideoInfo) rsVideoInfo.style.display = 'none';
-    if (placeholder) placeholder.style.display = '';
-    _stopMyPin();
-    closeVideoDesc();
+  // 未選択かつ動画がある場合は先頭を自動選択してプレイリストを再描画
+  if (!selectedInPool) {
+    openReactionsMode(pool[0].id);
+    renderReactionsPlaylist(pool[0].id);
+    return;
   }
+  if (rsImgWrap)   rsImgWrap.style.display   = '';
+  if (rsToolbar)   rsToolbar.style.display   = '';
+  if (rsVideoInfo) rsVideoInfo.style.display = '';
+  if (placeholder) placeholder.style.display = 'none';
   pool.forEach(function(v, i) {
     var card = document.createElement('div');
     card.className = 'rs-playlist-card' + (v.id === selectedId ? ' selected' : '');

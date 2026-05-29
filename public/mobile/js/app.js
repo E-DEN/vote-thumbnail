@@ -7,7 +7,7 @@ import { formatViews, formatRelTime, formatViewsShort } from '../../js/format.js
 import { showToast, showToastPromise, closeToast } from '../../js/toast.js';
 import { _M_SVG_EYE, _M_SVG_CLK, _M_SVG_STAR, _M_SVG_PLAY, _M_SVG_PAUSE, _M_SVG_FULLSCREEN, _M_SVG_FULLSCREEN_EXIT, _M_SVG_PIN, _mBuildMeta, _mBuildPinDot } from './ui-helpers.js';
 import { _suppressHistory, setSuppressHistory } from './shared-state.js';
-import { loadMyPins, mRsApplyPalette, mRsShowMyPin, mRsOpenMode, openVideoInReaction, renderReaction, mRsRenderPlaylist, _mRsMyPins, _mRsPinColor, _mRsMaxPins, _mRsPinOpacity, _mRsTransportVisible, _mRsCurrentVideoId, _mRsUpdateSortUI, initReaction, resetCurrentVideo, initReactionUI } from './reaction.js';
+import { loadMyPins, mRsApplyPalette, mRsShowMyPin, mRsOpenMode, openVideoInReaction, renderReaction, mRsRenderPlaylist, mRsSaveCatState, _mRsMyPins, _mRsPinColor, _mRsMaxPins, _mRsPinOpacity, _mRsTransportVisible, _mRsCurrentVideoId, _mRsUpdateSortUI, initReaction, resetCurrentVideo, initReactionUI } from './reaction.js';
 
 const LS_LIST_SORT_DIR = 'thumb-sort-dir';
 const LS_VOTE_SHOW_TITLE = 'thumb-vote-show-title';
@@ -1471,7 +1471,7 @@ function renderList() {
   _updateListSortUI();
 
   const pool = _buildListPool();
-  if (pool.length === 0) { renderNoCat('mListGrid'); return; }
+  if (pool.length === 0) { sortBar.style.display = 'none'; renderNoCat('mListGrid'); return; }
 
   _listPage = 0;
   _listPool = pool;
@@ -1566,9 +1566,12 @@ function renderVote() {
 
   if (!pair) {
     const pool = filteredVideos();
+    if (optBtn) optBtn.hidden = true;
     wrap.innerHTML = pool.length >= 2
       ? _emptyHtml('m-vote-empty', t('vote-all-done'))
-      : _emptyHtml('m-vote-empty', t('vote-need-more'));
+      : pool.length > 0
+      ? _emptyHtml('m-vote-empty', t('vote-need-more'))
+      : _emptyHtml('m-vote-empty', t('no-videos-in-cat'));
     return;
   }
 
@@ -2049,6 +2052,8 @@ document.addEventListener('DOMContentLoaded', function() {
     btn.addEventListener('click', () => {
       const cat = btn.dataset.cat;
       if (cat === state.currentCat) return;
+      // リアクションタブにいる場合、切り替え前に現在の選択動画を保存
+      if (currentTab === 'reaction') mRsSaveCatState(state.currentCat);
       state.currentCat = cat;
       localStorage.setItem(LS_CAT, cat);
       document.querySelectorAll('.m-cat-btn').forEach(b => {
