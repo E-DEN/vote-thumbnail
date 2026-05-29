@@ -55,6 +55,22 @@
       flex: 1;
     }
 
+    /* ---- footer ---- */
+    .site-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 56px;
+      padding-top: 24px;
+      border-top: 1px solid var(--border);
+      font-size: 13px;
+    }
+    .site-footer a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+    .site-footer a:hover { text-decoration: underline; }
+
     /* ---- nav ---- */
     .toc {
       background: var(--surface);
@@ -620,6 +636,11 @@
       以上で API キーの制限設定が完了です。
     </div>
   </section>
+
+  <footer class="site-footer">
+    <a href="/">&larr; アプリに戻る</a>
+    <a href="#">ページ上部へ &uarr;</a>
+  </footer>
 
 </div>
 </body>
