@@ -1058,7 +1058,7 @@ header {
   width: 100%;
 }
 
-.welcome-card {
+.welcome-features .welcome-card {
   width: 230px;
   display: flex;
   flex-direction: column;

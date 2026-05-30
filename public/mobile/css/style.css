@@ -2378,7 +2378,7 @@ body:has(.m-bottom-nav[hidden]) .m-content {
 }
 [data-theme="light"] .m-wf-add-form .m-ch-add-btn { background: #f1f3f4; color: #555; }
 /* wf-cards: モバイル用カードレイアウト */
-.m-welcome .welcome-cards {
+.m-welcome .wf-cards {
   display: flex;
   flex-direction: column;
   gap: 12px;

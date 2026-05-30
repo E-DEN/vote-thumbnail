@@ -280,7 +280,6 @@ registerLang('ja', '日本語', {
   'folder-refresh-ok': '再取得',
   'folder-delete-ok': '削除',
   'folder-color': 'フォルダの色',
-  'folder-color-none': '無垢',
   // チャンネル
   'ch-refresh-title': '動画を再取得',
   'ch-delete-title': '削除',
@@ -492,7 +491,6 @@ registerLang('en', 'English', {
   'folder-refresh-ok': 'Refresh',
   'folder-delete-ok': 'Delete',
   'folder-color': 'Folder color',
-  'folder-color-none': '無垢',
   // Channel
   'ch-refresh-title': 'Refresh videos',
   'ch-delete-title': 'Delete',
