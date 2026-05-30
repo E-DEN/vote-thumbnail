@@ -2038,7 +2038,7 @@ document.addEventListener('DOMContentLoaded', function() {
         b.classList.toggle('active', b.dataset.cat === cat);
       });
       _currentVotePair = null;
-      renderCurrentTab();
+      requestAnimationFrame(() => renderCurrentTab());
     });
   });
 

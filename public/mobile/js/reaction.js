@@ -489,7 +489,7 @@ function renderReaction() {
     : pool[0].id;
   // targetId を先にセットしてからプレイリストを描画（着色のため）
   _mRsCurrentVideoId = targetId;
-  mRsRenderPlaylist();
+  mRsRenderPlaylist(pool);
   if (targetId !== _mRsLoadedVideoId) {
     mRsOpenMode(targetId);
   } else {
@@ -758,47 +758,93 @@ function _mRsUpdateSortUI() {
 }
 
 // プレイリストを描画
-function mRsRenderPlaylist() {
+const _MRS_PAGE_SIZE = 30;
+let _mRsPlaylistPage = 0;
+let _mRsPlaylistPool = [];
+let _mRsPlaylistObs  = null;
+
+function _mRsPlaylistItem(v, listEl) {
+  const item = document.createElement('div');
+  item.className = 'm-rs-playlist-item' + (v.id === _mRsCurrentVideoId ? ' selected' : '');
+  const thumb = document.createElement('img');
+  thumb.className       = 'm-rs-playlist-thumb';
+  thumb.src             = v.thumb;
+  thumb.alt             = '';
+  thumb.loading         = 'lazy';
+  thumb.referrerPolicy  = 'no-referrer';
+  thumb.onerror = function() { this.src = 'https://i.ytimg.com/vi/' + v.id + '/hqdefault.jpg'; };
+  const info = document.createElement('div');
+  info.className = 'm-rs-playlist-info';
+  const title = document.createElement('div');
+  title.className   = 'm-rs-playlist-title';
+  title.textContent = v.title;
+  const meta = document.createElement('div');
+  meta.className = 'm-rs-playlist-meta';
+  meta.innerHTML = _mBuildMeta(v) + _mBuildPinDot(v, _mRsMyPins, _mRsPinColor);
+  info.appendChild(title);
+  info.appendChild(meta);
+  item.appendChild(thumb);
+  item.appendChild(info);
+  item.addEventListener('click', () => {
+    if (v.id === _mRsCurrentVideoId) return;
+    listEl.querySelectorAll('.m-rs-playlist-item').forEach(el => el.classList.remove('selected'));
+    item.classList.add('selected');
+    if (!_suppressHistory) {
+      history.pushState({ tab: 'reaction', channelKey: state.currentChannelKey, vid: v.id }, '');
+    }
+    mRsOpenMode(v.id);
+  });
+  return item;
+}
+
+function _mRsPlaylistAppendPage(listEl) {
+  const start = _mRsPlaylistPage * _MRS_PAGE_SIZE;
+  const slice = _mRsPlaylistPool.slice(start, start + _MRS_PAGE_SIZE);
+  if (!slice.length) return;
+  const frag = document.createDocumentFragment();
+  slice.forEach(v => frag.appendChild(_mRsPlaylistItem(v, listEl)));
+  // センチネルが既にあれば取り除いてから追加
+  const old = listEl.querySelector('.m-rs-sentinel');
+  if (old) old.remove();
+  listEl.appendChild(frag);
+  _mRsPlaylistPage++;
+  // まだ続きがあればセンチネルを追加
+  if (_mRsPlaylistPage * _MRS_PAGE_SIZE < _mRsPlaylistPool.length) {
+    const sentinel = document.createElement('div');
+    sentinel.className = 'm-rs-sentinel';
+    listEl.appendChild(sentinel);
+    if (_mRsPlaylistObs) _mRsPlaylistObs.observe(sentinel);
+  } else {
+    if (_mRsPlaylistObs) { _mRsPlaylistObs.disconnect(); }
+  }
+}
+
+function mRsRenderPlaylist(prebuiltPool) {
   const listEl = document.getElementById('mRsPlaylist');
   if (!listEl) return;
-  const pool = _mRsBuildSortedPool();
+
+  // Observer 破棄
+  if (_mRsPlaylistObs) { _mRsPlaylistObs.disconnect(); _mRsPlaylistObs = null; }
+
+  _mRsPlaylistPool = prebuiltPool || _mRsBuildSortedPool();
+  _mRsPlaylistPage = 0;
   listEl.innerHTML = '';
-  if (!pool.length) return;
-  const frag = document.createDocumentFragment();
-  pool.forEach(v => {
-    const item = document.createElement('div');
-    item.className = 'm-rs-playlist-item' + (v.id === _mRsCurrentVideoId ? ' selected' : '');
-    const thumb = document.createElement('img');
-    thumb.className       = 'm-rs-playlist-thumb';
-    thumb.src             = v.thumb;
-    thumb.alt             = '';
-    thumb.loading         = 'lazy';
-    thumb.referrerPolicy  = 'no-referrer';
-    thumb.onerror = function() { this.src = 'https://i.ytimg.com/vi/' + v.id + '/hqdefault.jpg'; };
-    const info = document.createElement('div');
-    info.className = 'm-rs-playlist-info';
-    const title = document.createElement('div');
-    title.className   = 'm-rs-playlist-title';
-    title.textContent = v.title;
-    const meta = document.createElement('div');
-    meta.className = 'm-rs-playlist-meta';
-    meta.innerHTML = _mBuildMeta(v) + _mBuildPinDot(v, _mRsMyPins, _mRsPinColor);
-    info.appendChild(title);
-    info.appendChild(meta);
-    item.appendChild(thumb);
-    item.appendChild(info);
-    item.addEventListener('click', () => {
-      if (v.id === _mRsCurrentVideoId) return;
-      listEl.querySelectorAll('.m-rs-playlist-item').forEach(el => el.classList.remove('selected'));
-      item.classList.add('selected');
-      if (!_suppressHistory) {
-        history.pushState({ tab: 'reaction', channelKey: state.currentChannelKey, vid: v.id }, '');
+  if (!_mRsPlaylistPool.length) return;
+
+  // スクロールコンテナを取得（親の .m-rs-scroll-body）
+  const scrollEl = listEl.closest('.m-rs-scroll-body') || listEl.parentElement;
+
+  _mRsPlaylistObs = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        entry.target.remove();
+        _mRsPlaylistAppendPage(listEl);
       }
-      mRsOpenMode(v.id);
     });
-    frag.appendChild(item);
-  });
-  listEl.appendChild(frag);
+  }, { root: scrollEl, rootMargin: '120px' });
+
+  _mRsPlaylistAppendPage(listEl);
+
   // 選択中アイテムをスクロール位置に調整
   requestAnimationFrame(() => {
     const selected = listEl.querySelector('.m-rs-playlist-item.selected');
