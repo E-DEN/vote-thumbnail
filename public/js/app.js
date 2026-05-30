@@ -4331,6 +4331,11 @@ document.getElementById('catFilter').addEventListener('click', e => {
   state.currentCat = newCat;
   localStorage.setItem(LS_CAT, state.currentCat);
   document.querySelectorAll('.cat-seg-btn').forEach(b => b.classList.toggle('active', b === btn));
+  // URL hash のカテゴリを更新（リフレッシュ時に旧カテゴリが復元されないように）
+  if (!_suppressHistory && state.currentChannelKey) {
+    const _catHash = buildHash(state.currentChannelKey, currentView, currentView === 'reaction' ? (_reactionsCurrentVideoId || null) : null);
+    history.replaceState({ channelKey: state.currentChannelKey, view: currentView, vid: currentView === 'reaction' ? (_reactionsCurrentVideoId || null) : null }, '', _catHash);
+  }
   // 動画選択・ピンをリセット
   _reactionsCurrentVideoId = null;
   _stopMyPin();
