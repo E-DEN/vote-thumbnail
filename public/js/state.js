@@ -31,3 +31,19 @@ export const state = {
   /** 現在選択中のカテゴリ */
   currentCat:         localStorage.getItem(LS_CAT) || 'videos',
 };
+
+// --- フォルダカラーパレット（PC・モバイル共通） ---
+export const WASHOKU_PALETTE = [
+  { hue: null, name: '無垢', en: 'Muku' },
+  { hue:   0, name: '茜',   en: 'Madder' },
+  { hue:  15, name: '柿',   en: 'Persimmon' },
+  { hue:  32, name: '山吹', en: 'Yamabuki' },
+  { hue:  68, name: '萌黄', en: 'Moegi' },
+  { hue: 105, name: '若竹', en: 'Wakatake' },
+  { hue: 155, name: '木賊', en: 'Tokusa' },
+  { hue: 185, name: '浅葱', en: 'Asagi' },
+  { hue: 208, name: '縹',   en: 'Hanada' },
+  { hue: 228, name: '瑠璃', en: 'Ruri' },
+  { hue: 258, name: '桔梗', en: 'Kikyo' },
+  { hue: 292, name: '牡丹', en: 'Botan' },
+];

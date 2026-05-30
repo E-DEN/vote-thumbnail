@@ -41,12 +41,13 @@ const _GT_ICONS = {
 };
 
 function _gtTypeInfo(type) {
+  const _t = (key, fallback) => typeof t === 'function' ? t(key) : fallback;
   switch (type) {
-    case 'err':     return { color: '#f85149', title: 'エラー' };
-    case 'warn':    return { color: '#f59e0b', title: '注意' };
-    case 'info':    return { color: '#3b82f6', title: '情報' };
-    case 'loading': return { color: '#8e8e93', title: '処理中' };
-    default:        return { color: '#3fb950', title: '完了' };
+    case 'err':     return { color: '#f85149', title: _t('toast-err',     'エラー') };
+    case 'warn':    return { color: '#f59e0b', title: _t('toast-warn',    '注意') };
+    case 'info':    return { color: '#3b82f6', title: _t('toast-info',    '情報') };
+    case 'loading': return { color: '#8e8e93', title: _t('toast-loading', '処理中') };
+    default:        return { color: '#3fb950', title: _t('toast-ok',      '完了') };
   }
 }
 

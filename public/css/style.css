@@ -559,6 +559,23 @@ header {
 .ch-tooltip-btn:hover { background: var(--drop-hover); }
 .ch-tooltip-btn.danger { color: var(--err, #f87171); }
 .ch-tooltip-btn.danger:hover { background: rgba(248, 113, 113, 0.12); }
+.ch-tooltip-color-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 26px);
+  gap: 5px;
+  padding: 0 8px;
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: max-height 0.2s ease, opacity 0.15s ease, padding 0.2s ease;
+}
+.ch-tooltip-color-grid.open {
+  max-height: 120px;
+  opacity: 1;
+  padding: 4px 8px 4px;
+  overflow: visible;
+}
+.ch-tooltip-color-grid .folder-color-swatch { width: 26px; height: 26px; }
 /* ツールチップ内インラインリネーム入力 */
 .ch-tooltip-rename-input {
   flex: 1;

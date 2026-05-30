@@ -1,4 +1,4 @@
-import { state, LS_CHANNELS, LS_VIDEOS, LS_RATING, LS_CAT, LS_VOTE_PAIR, LS_SORT, LS_SIDEBAR_ORDER, LS_API_KEY, LS_RSS_ONLY, LS_HEATMAP_VISIBLE } from './state.js';
+import { state, LS_CHANNELS, LS_VIDEOS, LS_RATING, LS_CAT, LS_VOTE_PAIR, LS_SORT, LS_SIDEBAR_ORDER, LS_API_KEY, LS_RSS_ONLY, LS_HEATMAP_VISIBLE, WASHOKU_PALETTE } from './state.js';
 import { G2_SETTLED_RD, loadRating as loadRatingCore, applyVoteLocal, syncVoteToServer, getVotePair, setVotePair, pickPair, _playedPairs, _pairKey, getRating, getRd, getWins, getBattles } from './rating.js';
 import { loadChannels, saveChannels, loadVideosForChannel, saveVideosForChannel, fetchChannelVideos, filteredVideos } from './storage.js';
 import { formatViews, formatRelTime, formatViewsShort, formatDuration } from './format.js';
@@ -1283,28 +1283,15 @@ function _showFolderColorPop(anchorRect, folder) {
   }
   _folderColorPop.innerHTML = '';
 
-  // 色なし
-  const noneBtn = document.createElement('button');
-  noneBtn.className = 'folder-color-swatch folder-color-swatch--none' + (folder.color == null ? ' active' : '');
-  noneBtn.title = t('folder-color-none');
-  noneBtn.addEventListener('click', function(e) {
-    e.stopPropagation();
-    folder.color = null;
-    saveSidebarOrder();
-    renderSidebar();
-    _hideFolderColorPop();
-  });
-  _folderColorPop.appendChild(noneBtn);
-
-  // 和\u8272ス\u30A6\u30A9\u30C3\u30C1
   WASHOKU_PALETTE.forEach(function(entry) {
     const sw = document.createElement('button');
-    sw.className = 'folder-color-swatch' + (folder.color === entry.hue ? ' active' : '');
-    sw.style.background = 'hsl(' + entry.hue + ',40%,52%)';
-    sw.title = entry.name;
+    const isNone = entry.hue == null;
+    sw.className = 'folder-color-swatch' + (isNone ? ' folder-color-swatch--none' : '') + (isNone ? (folder.color == null ? ' active' : '') : (folder.color === entry.hue ? ' active' : ''));
+    if (!isNone) sw.style.background = 'hsl(' + entry.hue + ',40%,52%)';
+    sw.title = _lang === 'ja' ? entry.name : entry.en;
     sw.addEventListener('click', function(e) {
       e.stopPropagation();
-      folder.color = entry.hue;
+      folder.color = isNone ? null : entry.hue;
       saveSidebarOrder();
       renderSidebar();
       _hideFolderColorPop();
@@ -1551,22 +1538,10 @@ function buildChannelItem(ch) {
   return item;
 }
 
-const WASHOKU_PALETTE = [
-  { hue:   0, name: '茜' },
-  { hue:  15, name: '柿' },
-  { hue:  32, name: '山吹' },
-  { hue:  68, name: '萌黄' },
-  { hue: 105, name: '若竹' },
-  { hue: 155, name: '木賊' },
-  { hue: 185, name: '浅葱' },
-  { hue: 208, name: '縹' },
-  { hue: 228, name: '瑠璃' },
-  { hue: 258, name: '桔梗' },
-  { hue: 292, name: '牡丹' },
-];
 
 function randomFolderColor() {
-  return WASHOKU_PALETTE[Math.floor(Math.random() * WASHOKU_PALETTE.length)].hue;
+  const colored = WASHOKU_PALETTE.filter(e => e.hue != null);
+  return colored[Math.floor(Math.random() * colored.length)].hue;
 }
 
 function buildFolderItem(folder) {
@@ -1766,9 +1741,40 @@ function buildFolderItem(folder) {
         folderRefreshBtn.dispatchEvent(new MouseEvent('click', { shiftKey: true }));
       }},
       { icon: 'palette', label: t('folder-color'), title: t('folder-color'), onClick: (btn) => {
-        const savedRect = btn.getBoundingClientRect();
-        _hideCompactTooltip(0);
-        _showFolderColorPop(savedRect, folder);
+        const existing = _chTooltipActionsEl.querySelector('.ch-tooltip-color-grid');
+        if (existing) { existing.remove(); return; }
+        const folderWrap = document.querySelector(`.sidebar-folder[data-folder-id="${folder.id}"]`);
+        const applyColor = (hue) => {
+          folder.color = hue;
+          saveSidebarOrder();
+          if (folderWrap) {
+            if (hue == null) folderWrap.style.removeProperty('--folder-tint');
+            else folderWrap.style.setProperty('--folder-tint', 'hsla(' + hue + ',60%,45%,0.18)');
+          }
+          // active 状態を更新
+          grid.querySelectorAll('.folder-color-swatch').forEach(s => s.classList.remove('active'));
+          if (hue == null) grid.querySelector('.folder-color-swatch--none')?.classList.add('active');
+          else grid.querySelector(`[data-hue="${hue}"]`)?.classList.add('active');
+        };
+        const grid = document.createElement('div');
+        grid.className = 'ch-tooltip-color-grid';
+        WASHOKU_PALETTE.forEach(function(entry) {
+          const sw = document.createElement('button');
+          const isNone = entry.hue == null;
+          sw.className = 'folder-color-swatch' + (isNone ? ' folder-color-swatch--none' : '') + (isNone ? (folder.color == null ? ' active' : '') : (folder.color === entry.hue ? ' active' : ''));
+          if (!isNone) sw.style.background = 'hsl(' + entry.hue + ',40%,52%)';
+          sw.title = _lang === 'ja' ? entry.name : entry.en;
+          if (!isNone) sw.dataset.hue = entry.hue;
+          sw.addEventListener('click', function(e) { e.stopPropagation(); applyColor(isNone ? null : entry.hue); });
+          grid.appendChild(sw);
+        });
+        btn.insertAdjacentElement('afterend', grid);
+        requestAnimationFrame(() => {
+          grid.classList.add('open');
+          const th = _chTooltip.offsetHeight;
+          const maxTop = window.innerHeight - th - 4;
+          if (parseFloat(_chTooltip.style.top) > maxTop) _chTooltip.style.top = Math.max(4, maxTop) + 'px';
+        });
       }},
       { icon: 'x', shiftIcon: 'trash-2', label: t('folder-delete'), title: t('folder-delete'), danger: true, onClick: (btn, e) => {
         const savedRect = btn.getBoundingClientRect();

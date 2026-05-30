@@ -1,6 +1,6 @@
 // mobile/js/app.js
 // モバイル専用アプリケーションロジック
-import { state, LS_CAT, LS_SORT, LS_CHANNELS, LS_API_KEY, LS_RSS_ONLY, LS_SIDEBAR_ORDER } from '../../js/state.js';
+import { state, LS_CAT, LS_SORT, LS_CHANNELS, LS_API_KEY, LS_RSS_ONLY, LS_SIDEBAR_ORDER, WASHOKU_PALETTE } from '../../js/state.js';
 import { loadRating, applyVoteLocal, syncVoteToServer, getVotePair, setVotePair, pickPair, _playedPairs, _pairKey, getRating, getRd, getWins, getBattles } from '../../js/rating.js';
 import { loadChannels, saveChannels, loadVideosForChannel, saveVideosForChannel, fetchChannelVideos, filteredVideos } from '../../js/storage.js';
 import { formatViews, formatRelTime, formatViewsShort } from '../../js/format.js';
@@ -163,20 +163,6 @@ function syncChannelMeta(key, ch) {
 }
 
 
-// --- フォルダカラーパレット ---
-const WASHOKU_PALETTE = [
-  { hue:   0, name: '茜' },
-  { hue:  15, name: '柿' },
-  { hue:  32, name: '山吹' },
-  { hue:  68, name: '萌黄' },
-  { hue: 105, name: '若竹' },
-  { hue: 155, name: '木賊' },
-  { hue: 185, name: '浅葱' },
-  { hue: 208, name: '縹' },
-  { hue: 228, name: '瑠璃' },
-  { hue: 258, name: '桔梗' },
-  { hue: 292, name: '牡丹' },
-];
 
 // --- チャンネルパネル ---
 
@@ -263,26 +249,18 @@ function _openFolderMenu(item, anchorEl) {
     e.stopPropagation();
     colorRow.hidden = !colorRow.hidden;
   });
-  const noneBtn = document.createElement('button');
-  noneBtn.className = 'm-folder-color-swatch m-folder-color-swatch--none' + (item.hue == null ? ' active' : '');
-  noneBtn.title = t('folder-color-none');
-  noneBtn.addEventListener('click', e => {
-    e.stopPropagation();
-    const it = sidebarOrder.find(it => it.type === 'folder' && it.id === item.id);
-    if (it) { it.hue = null; item.hue = null; saveSidebarOrder(); renderChannelPanel(); }
-    colorRow.querySelectorAll('.m-folder-color-swatch').forEach(s => s.classList.remove('active'));
-    noneBtn.classList.add('active');
-  });
-  colorRow.appendChild(noneBtn);
+  const _isJa = () => (localStorage.getItem('thumb-lang') || 'ja') === 'ja';
   WASHOKU_PALETTE.forEach(entry => {
     const sw = document.createElement('button');
-    sw.className = 'm-folder-color-swatch' + (item.hue === entry.hue ? ' active' : '');
-    sw.style.background = 'hsl(' + entry.hue + ',40%,52%)';
-    sw.title = entry.name;
+    const isNone = entry.hue == null;
+    sw.className = 'm-folder-color-swatch' + (isNone ? ' m-folder-color-swatch--none' : '') + (isNone ? (item.hue == null ? ' active' : '') : (item.hue === entry.hue ? ' active' : ''));
+    if (!isNone) sw.style.background = 'hsl(' + entry.hue + ',40%,52%)';
+    sw.title = _isJa() ? entry.name : entry.en;
     sw.addEventListener('click', e => {
       e.stopPropagation();
+      const hue = isNone ? null : entry.hue;
       const it = sidebarOrder.find(it => it.type === 'folder' && it.id === item.id);
-      if (it) { it.hue = entry.hue; item.hue = entry.hue; saveSidebarOrder(); renderChannelPanel(); }
+      if (it) { it.hue = hue; item.hue = hue; saveSidebarOrder(); renderChannelPanel(); }
       colorRow.querySelectorAll('.m-folder-color-swatch').forEach(s => s.classList.remove('active'));
       sw.classList.add('active');
     });

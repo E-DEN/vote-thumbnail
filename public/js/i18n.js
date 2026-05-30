@@ -155,6 +155,12 @@ registerLang('ja', '日本語', {
   'status-refresh-api': '全件取得完了（{total}件）',
   'status-ch-added': '{name} を追加しました',
   'status-ch-refreshing': '{name} を更新中...',
+  // トーストタイトル
+  'toast-ok':      '完了',
+  'toast-err':     'エラー',
+  'toast-warn':    '注意',
+  'toast-info':    '情報',
+  'toast-loading': '処理中',
   // モーダル
   'modal-close': '閉じる',
   'yt-open': 'YouTube で見る',
@@ -274,7 +280,7 @@ registerLang('ja', '日本語', {
   'folder-refresh-ok': '再取得',
   'folder-delete-ok': '削除',
   'folder-color': 'フォルダの色',
-  'folder-color-none': '色なし',
+  'folder-color-none': '無垢',
   // チャンネル
   'ch-refresh-title': '動画を再取得',
   'ch-delete-title': '削除',
@@ -361,6 +367,12 @@ registerLang('en', 'English', {
   'status-refresh-api': 'Full fetch done ({total} videos)',
   'status-ch-added': '{name} added',
   'status-ch-refreshing': 'Updating {name}...',
+  // Toast titles
+  'toast-ok':      'Done',
+  'toast-err':     'Error',
+  'toast-warn':    'Warning',
+  'toast-info':    'Info',
+  'toast-loading': 'Processing',
   // Modal
   'modal-close': 'Close',
   'yt-open': 'Watch on YouTube',
@@ -480,7 +492,7 @@ registerLang('en', 'English', {
   'folder-refresh-ok': 'Refresh',
   'folder-delete-ok': 'Delete',
   'folder-color': 'Folder color',
-  'folder-color-none': 'No color',
+  'folder-color-none': '無垢',
   // Channel
   'ch-refresh-title': 'Refresh videos',
   'ch-delete-title': 'Delete',
