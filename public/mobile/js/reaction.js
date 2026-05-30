@@ -347,6 +347,14 @@ async function mRsOpenMode(videoId) {
     });
   }
 
+  // history エントリの vid を最新化（タブ切替直後は vid=null のまま残るため、戻る時に正しく復元できるようにする）
+  if (!_suppressHistory) {
+    const curSt = history.state;
+    if (curSt && curSt.tab === 'reaction' && curSt.vid !== videoId) {
+      history.replaceState(Object.assign({}, curSt, { vid: videoId }), '');
+    }
+  }
+
   _mRsPins          = [];
   _mRsKde           = null;
   const pinsLayer   = document.getElementById('mRsPinsLayer');
