@@ -342,9 +342,13 @@ async function mRsOpenMode(videoId) {
   // プレイリストの selected ハイライトを同期（popstate 等で直接呼ばれる場合もクリック時と同じ状態にする）
   const listEl = document.getElementById('mRsPlaylist');
   if (listEl) {
+    let selectedEl = null;
     listEl.querySelectorAll('.m-rs-playlist-item').forEach(el => {
-      el.classList.toggle('selected', el.dataset.vid === videoId);
+      const match = el.dataset.vid === videoId;
+      el.classList.toggle('selected', match);
+      if (match) selectedEl = el;
     });
+    if (selectedEl) requestAnimationFrame(() => selectedEl.scrollIntoView({ block: 'nearest' }));
   }
 
   // history エントリの vid を最新化（タブ切替直後は vid=null のまま残るため、戻る時に正しく復元できるようにする）
