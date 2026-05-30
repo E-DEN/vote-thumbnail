@@ -83,7 +83,7 @@
       <div class="m-list-area">
         <div class="m-list-sort-bar" id="mListSortBar">
           <div class="m-rs-sort-chips">
-            <button class="m-rs-sort-chip active" data-sort="views" data-i18n="sort-views">再生数</button>
+            <button class="m-rs-sort-chip" data-sort="views" data-i18n="sort-views">再生数</button>
             <button class="m-rs-sort-chip" data-sort="date" data-i18n="sort-date">投稿日</button>
             <button class="m-rs-sort-chip" data-sort="rating" data-i18n="sort-rating">得票率</button>
           </div>
@@ -282,7 +282,7 @@
           <!-- ソートセクション -->
           <div class="m-rs-sort-section" id="mRsSortSection">
             <div class="m-rs-sort-chips">
-              <button class="m-rs-sort-chip active" data-sort="views" data-i18n="sort-views">再生数</button>
+              <button class="m-rs-sort-chip" data-sort="views" data-i18n="sort-views">再生数</button>
               <button class="m-rs-sort-chip" data-sort="date" data-i18n="sort-date">投稿日</button>
               <button class="m-rs-sort-chip" data-sort="rating" data-i18n="sort-rating">得票率</button>
             </div>
@@ -550,6 +550,13 @@
   </div>
 
   <script src="../js/i18n.js"></script>
+  <script>
+    // i18n.js 読み込み直後に言語を即時適用（module スクリプトより先に実行してFOUCを防ぐ）
+    (function() {
+      var lang = localStorage.getItem('thumb-lang') || 'ja';
+      if (typeof applyLang === 'function') applyLang(lang);
+    })();
+  </script>
   <script src="../js/reactions-utils.js"></script>
   <script type="module" src="js/app.js"></script>
 

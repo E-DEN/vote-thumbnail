@@ -106,10 +106,17 @@ async function selectChannel(key) {
   state.currentChannelKey = key;
   resetCurrentVideo();
   localStorage.setItem('m-last-channel', key);
+  // チャンネル確定時点でハッシュも即更新（リロード時に旧チャンネルが復元されるのを防ぐ）
+  // _suppressHistory 中（_restoreFromUrl 内）は呼ばない（currentTab が初期値 list のままでタブを上書きしてしまうため）
+  if (!_suppressHistory) {
+    history.replaceState({ tab: currentTab, channelKey: key, vid: null }, '', buildHash(key, currentTab, null));
+  }
 
-  // ヘッダーのチャンネル名を更新
+  // ヘッダーのチャンネル名・表示状態を更新（renderList 以外のタブでリフレッシュした場合も確実に反映）
   const displayName = ch.displayName || ch.handle || key;
   document.getElementById('mChNameDisplay').textContent = displayName;
+  document.getElementById('mChPanelBtn').hidden = false;
+  document.getElementById('mHeaderAppName').hidden = true;
 
   // キャッシュを先に反映して旧チャンネルのコンテンツを即座にクリア
   // 新規チャンネルはキャッシュなし → [] → 空状態を表示
@@ -1894,6 +1901,17 @@ function mApikeySettingsOpen() {
 
 // --- 初期化 ---
 document.addEventListener('DOMContentLoaded', function() {
+  // URL から初期タブを読んでビジュアルを即時設定（FOUC防止: module スクリプトの非同期実行より先に反映）
+  const _initHash = parseHash();
+  if (_initHash.tab && _initHash.tab !== currentTab) {
+    currentTab = _initHash.tab;
+    document.querySelectorAll('.m-nav-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === _initHash.tab));
+    document.querySelectorAll('.m-screen').forEach(s => s.classList.remove('active'));
+    const _initSc = document.getElementById('mScreen' + _initHash.tab.charAt(0).toUpperCase() + _initHash.tab.slice(1));
+    if (_initSc) _initSc.classList.add('active');
+  }
+  // ソート UI をローカルストレージの値で即時反映（HTML デフォルトとのズレを防ぐ）
+  _updateListSortUI();
   initReaction(switchTab);
   // ブラウザバック / スワイプバックで前の画面に戻る
   window.addEventListener('popstate', async function(e) {

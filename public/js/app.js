@@ -3593,6 +3593,12 @@ function init() {
         localStorage.setItem(LS_CAT, state.currentCat);
         document.querySelectorAll('.cat-seg-btn').forEach(b => b.classList.toggle('active', b.dataset.cat === state.currentCat));
       }
+      // await 前にタブ active を正しく設定（FOUC防止: selectChannel が chTabs を表示する前に正しいタブを active にしておく）
+      if (st.view) {
+        document.querySelectorAll('.ch-tab').forEach(btn => {
+          btn.classList.toggle('active', btn.dataset.view === st.view);
+        });
+      }
       _suppressHistory = true;
       try {
         await selectChannel(st.channelKey);
