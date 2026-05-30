@@ -1017,53 +1017,6 @@ export function initReactionUI() {
       } else {
         _mRsHideOverlay();
       }
-      if (_mRsCurrentVideoId) {
-        if (_mRsTransportVisible) {
-          // transport ON: ピンを保持したまま、シーク用データだけ構築（フリ直しなし）
-          if (_mRsRafId) { cancelAnimationFrame(_mRsRafId); _mRsRafId = null; }
-          if (_mRsSeekFadeTimer) { clearTimeout(_mRsSeekFadeTimer); _mRsSeekFadeTimer = null; }
-          _mRsActive  = false;
-          _mRsPlaying = false;
-          var tPinsLayer = document.getElementById('mRsPinsLayer');
-          var tCurrent   = tPinsLayer ? tPinsLayer.querySelectorAll('.reactions-pin').length : 0;
-          // 表示中ピンの位置データを _mRsNormalPlaced から引き継ぎ
-          var tSrc = (_mRsNormalPlaced && _mRsNormalPlaced.length)
-            ? _mRsNormalPlaced.slice(0, tCurrent) : [];
-          _mRsPlacedPins = tSrc.map(p => Object.assign({}, p));
-          // シーク再生用に emitAt / _scale / _floatDur を付与
-          var tStreams = [0, 80, 160, 240, 320];
-          _mRsPlacedPins.forEach(function(p) {
-            var mi = 0;
-            for (var k = 1; k < tStreams.length; k++) if (tStreams[k] < tStreams[mi]) mi = k;
-            p.emitAt    = tStreams[mi] / 1000;
-            p._scale    = 0.6 + 0.8 * p.density + (Math.random() - 0.5) * 0.4;
-            p._floatDur = (2.4 + Math.random() * 0.8).toFixed(2);
-            tStreams[mi] += 80 + Math.random() * 200;
-          });
-          _mRsPlacedPins.sort(function(a, b) { return a.emitAt - b.emitAt; });
-          _mRsEmittedCount = _mRsPlacedPins.length; // 全ピン発射済み扱い
-          var tLastEmit = _mRsPlacedPins.length ? _mRsPlacedPins[_mRsPlacedPins.length - 1].emitAt : 0;
-          _mRsDuration    = Math.min(2.5, Math.max(1.0, tLastEmit + 0.5));
-          _mRsCurrentTime = 0;
-          var tHasSaved = !!(_mRsMyPins[_mRsCurrentVideoId] && _mRsPinsVisible);
-          _mRsMyPinEmitted = tHasSaved;
-          _mRsMyPinEmitAt  = tHasSaved ? 0 : -1;
-          _mRsUpdatePlayBtnUI();
-          _mRsUpdateProgressUI();
-        } else {
-          // transport OFF: RAFを止め、ピンをそのまま保持して通常ループ状態に戻す
-          if (_mRsRafId) { cancelAnimationFrame(_mRsRafId); _mRsRafId = null; }
-          _mRsPlaying = false;
-          _mRsActive  = false;
-          // _mRsPlacedPins の位置データを _mRsNormalPlaced に引き継ぎ（追加枠も補充）
-          var offEmitted = (_mRsPlacedPins || []).slice(0, _mRsEmittedCount);
-          _mRsNormalPlaced = offEmitted.map(p => Object.assign({}, p));
-          if (_mRsNormalPlaced.length < 30) {
-            var offExtras = mRsBuildPlacedPins(30 - _mRsNormalPlaced.length);
-            _mRsNormalPlaced = _mRsNormalPlaced.concat(offExtras);
-          }
-        }
-      }
     });
 
     // イベントリスナー: カラースウォッチ
