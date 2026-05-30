@@ -3074,7 +3074,6 @@ function buildHash(channelKey, view, vid) {
   const p = new URLSearchParams();
   p.set('ch', channelKey);
   p.set('view', view || 'list');
-  if (state.currentCat && state.currentCat !== 'videos') p.set('cat', state.currentCat);
   if (vid) p.set('vid', vid);
   return '#' + p.toString();
 }
@@ -3588,11 +3587,6 @@ function init() {
   (async function _restoreFromUrl() {
     const st = parseHash();
     if (st.channelKey && channels[st.channelKey]) {
-      if (st.cat) {
-        state.currentCat = st.cat;
-        localStorage.setItem(LS_CAT, state.currentCat);
-        document.querySelectorAll('.cat-seg-btn').forEach(b => b.classList.toggle('active', b.dataset.cat === state.currentCat));
-      }
       // await 前にタブ active を正しく設定（FOUC防止: selectChannel が chTabs を表示する前に正しいタブを active にしておく）
       if (st.view) {
         document.querySelectorAll('.ch-tab').forEach(btn => {
@@ -4331,11 +4325,6 @@ document.getElementById('catFilter').addEventListener('click', e => {
   state.currentCat = newCat;
   localStorage.setItem(LS_CAT, state.currentCat);
   document.querySelectorAll('.cat-seg-btn').forEach(b => b.classList.toggle('active', b === btn));
-  // URL hash のカテゴリを更新（リフレッシュ時に旧カテゴリが復元されないように）
-  if (!_suppressHistory && state.currentChannelKey) {
-    const _catHash = buildHash(state.currentChannelKey, currentView, currentView === 'reaction' ? (_reactionsCurrentVideoId || null) : null);
-    history.replaceState({ channelKey: state.currentChannelKey, view: currentView, vid: currentView === 'reaction' ? (_reactionsCurrentVideoId || null) : null }, '', _catHash);
-  }
   // 動画選択・ピンをリセット
   _reactionsCurrentVideoId = null;
   _stopMyPin();
