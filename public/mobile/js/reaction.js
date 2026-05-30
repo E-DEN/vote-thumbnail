@@ -339,6 +339,14 @@ async function mRsOpenMode(videoId) {
   _mRsLoadedVideoId  = videoId; // 描画済み ID を更新（早い段階でセットする）
   _mRsCurrentVideoId = videoId;
 
+  // プレイリストの selected ハイライトを同期（popstate 等で直接呼ばれる場合もクリック時と同じ状態にする）
+  const listEl = document.getElementById('mRsPlaylist');
+  if (listEl) {
+    listEl.querySelectorAll('.m-rs-playlist-item').forEach(el => {
+      el.classList.toggle('selected', el.dataset.vid === videoId);
+    });
+  }
+
   _mRsPins          = [];
   _mRsKde           = null;
   const pinsLayer   = document.getElementById('mRsPinsLayer');
@@ -766,6 +774,7 @@ let _mRsPlaylistObs  = null;
 function _mRsPlaylistItem(v, listEl) {
   const item = document.createElement('div');
   item.className = 'm-rs-playlist-item' + (v.id === _mRsCurrentVideoId ? ' selected' : '');
+  item.dataset.vid = v.id;
   const thumb = document.createElement('img');
   thumb.className       = 'm-rs-playlist-thumb';
   thumb.src             = v.thumb;
