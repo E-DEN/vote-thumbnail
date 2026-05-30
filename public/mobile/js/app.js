@@ -1,4 +1,4 @@
-﻿// mobile/js/app.js
+// mobile/js/app.js
 // モバイル専用アプリケーションロジック
 import { state, LS_CAT, LS_SORT, LS_CHANNELS, LS_API_KEY, LS_RSS_ONLY, LS_SIDEBAR_ORDER } from '../../js/state.js';
 import { loadRating, applyVoteLocal, syncVoteToServer, getVotePair, setVotePair, pickPair, _playedPairs, _pairKey, getRating, getRd, getWins, getBattles } from '../../js/rating.js';
@@ -215,7 +215,7 @@ function _makeChCard(key) {
   // 設定ボタン（⋮）
   const menuBtn = document.createElement('button');
   menuBtn.className = 'm-ch-card-menu-btn';
-  menuBtn.setAttribute('aria-label', t('settings-btn-title'));
+  menuBtn.setAttribute('aria-label', t('settings-open-title'));
   menuBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>';
   menuBtn.addEventListener('click', e => {
     e.stopPropagation();
@@ -242,7 +242,7 @@ function _openFolderMenu(item, anchorEl) {
   // リネーム
   const renameBtn = document.createElement('button');
   renameBtn.className = 'm-ch-card-menu-item';
-  { const _i = document.createElement('i'); _i.setAttribute('data-lucide','pencil'); renameBtn.append(_i, t('folder-rename-title')); }
+  { const _i = document.createElement('i'); _i.setAttribute('data-lucide','pencil'); renameBtn.append(_i, t('folder-rename')); }
   renameBtn.addEventListener('click', e => {
     e.stopPropagation();
     menu.remove();
@@ -255,7 +255,7 @@ function _openFolderMenu(item, anchorEl) {
   // フォルダの色（ボタン＋トグル展開）
   const colorBtn = document.createElement('button');
   colorBtn.className = 'm-ch-card-menu-item';
-  { const _i = document.createElement('i'); _i.setAttribute('data-lucide','palette'); colorBtn.append(_i, t('folder-color-title')); }
+  { const _i = document.createElement('i'); _i.setAttribute('data-lucide','palette'); colorBtn.append(_i, t('folder-color')); }
   const colorRow = document.createElement('div');
   colorRow.className = 'm-folder-color-row';
   colorRow.hidden = true;
@@ -294,7 +294,7 @@ function _openFolderMenu(item, anchorEl) {
   sep1.className = 'm-ch-card-menu-sep';
   const refreshBtn = document.createElement('button');
   refreshBtn.className = 'm-ch-card-menu-item';
-  { const _i = document.createElement('i'); _i.setAttribute('data-lucide','refresh-cw'); refreshBtn.append(_i, t('refresh-videos')); }
+  { const _i = document.createElement('i'); _i.setAttribute('data-lucide','refresh-cw'); refreshBtn.append(_i, t('m-ch-refresh')); }
   refreshBtn.addEventListener('click', e => {
     e.stopPropagation();
     menu.remove();
@@ -317,8 +317,8 @@ function _openFolderMenu(item, anchorEl) {
         } catch (_) { /* ignore */ }
         if (cardEl) cardEl.classList.remove('m-ch-refreshing');
       }
-      showToast(t('refresh-done-api', { total: '?' }));
-    }, t('folder-refresh-confirm-btn'));
+      showToast(t('status-refresh-api', { total: '?' }));
+    }, t('folder-refresh-ok'));
   });
 
   // 削除（フォルダ解除）
@@ -326,13 +326,13 @@ function _openFolderMenu(item, anchorEl) {
   sep2.className = 'm-ch-card-menu-sep';
   const deleteBtn = document.createElement('button');
   deleteBtn.className = 'm-ch-card-menu-item m-ch-menu-danger';
-  { const _i = document.createElement('i'); _i.setAttribute('data-lucide','x'); deleteBtn.append(_i, t('folder-delete-title')); }
+  { const _i = document.createElement('i'); _i.setAttribute('data-lucide','x'); deleteBtn.append(_i, t('folder-delete')); }
   deleteBtn.addEventListener('click', e => {
     e.stopPropagation();
     menu.remove();
     const anchorRect = anchorEl.getBoundingClientRect();
     _mShowDelPopup(anchorEl,
-      t('folder-delete-confirm').replace('{name}', item.name || t('new-folder')),
+      t('folder-delete-confirm').replace('{name}', item.name || t('folder-new-name')),
       () => {
         const idx = sidebarOrder.findIndex(it => it.type === 'folder' && it.id === item.id);
         if (idx !== -1) {
@@ -342,7 +342,7 @@ function _openFolderMenu(item, anchorEl) {
           renderChannelPanel();
         }
       },
-      t('folder-delete-title'),
+      t('folder-delete'),
       anchorRect
     );
   });
@@ -411,13 +411,13 @@ function _makeFolderEl(item) {
 
   const nameEl = document.createElement('span');
   nameEl.className = 'sidebar-folder-name';
-  nameEl.textContent = item.name || t('new-folder');
+  nameEl.textContent = item.name || t('folder-new-name');
   header.appendChild(nameEl);
 
   // ⋮メニューボタン
   const folderMenuBtn = document.createElement('button');
   folderMenuBtn.className = 'm-ch-card-menu-btn';
-  folderMenuBtn.setAttribute('aria-label', t('settings-btn-title'));
+  folderMenuBtn.setAttribute('aria-label', t('settings-open-title'));
   folderMenuBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>';
   folderMenuBtn.addEventListener('click', e => {
     e.stopPropagation();
@@ -471,7 +471,7 @@ function renderChannelPanel() {
     msg.className = 'm-empty-msg';
     msg.style.padding = '24px 16px';
     msg.style.fontSize = '12px';
-    msg.textContent = t('no-channels-registered');
+    msg.textContent = t('m-ch-empty');
     list.appendChild(msg);
     return;
   }
@@ -530,10 +530,10 @@ function _mShowDelPopup(anchorEl, msg, onConfirm, okLabel, anchorRect) {
   btnRow.className = 'ch-del-popup-btns';
   const okBtn = document.createElement('button');
   okBtn.className = 'ch-del-popup-ok';
-  okBtn.textContent = okLabel || t('ch-delete-confirm-btn');
+  okBtn.textContent = okLabel || t('ch-delete-ok');
   const cancelBtn = document.createElement('button');
   cancelBtn.className = 'ch-del-popup-cancel';
-  cancelBtn.textContent = t('ch-delete-cancel-btn');
+  cancelBtn.textContent = t('cancel');
   btnRow.append(okBtn, cancelBtn);
   popup.append(msgEl, btnRow);
   document.body.appendChild(popup);
@@ -580,7 +580,7 @@ function _mCloseFolderDialog() {
   document.getElementById('mFolderOkBtn').addEventListener('click', () => {
     if (!_mFolderDialogCb) return;
     const name = document.getElementById('mFolderNameInput').value.trim();
-    _mFolderDialogCb(name || t('new-folder'));
+    _mFolderDialogCb(name || t('folder-new-name'));
     _mCloseFolderDialog();
   });
   document.getElementById('mFolderCancelBtn').addEventListener('click', _mCloseFolderDialog);
@@ -1224,7 +1224,7 @@ function _closeChMenu() {
 async function _refreshMobileChannel(key) {
   const ch = channels[key];
   if (!ch) return;
-  showToast(t('fetching'), 'loading');
+  showToast(t('status-fetching'), 'loading');
   openChannelPanel();
   // アバターにスピナーを表示
   const cardEl = document.querySelector('.sidebar-channel-item[data-key="' + key + '"]');
@@ -1243,12 +1243,12 @@ async function _refreshMobileChannel(key) {
       }
       return;
     }
-    showToast(t('refresh-done-api', {total: data.total ?? '?'}));
+    showToast(t('status-refresh-api', {total: data.total ?? '?'}));
     state.allVideos = await fetchChannelVideos(key);
     saveVideosForChannel(key, state.allVideos);
     renderCurrentTab();
   } catch (e) {
-    showToast(t('connection-error'), true);
+    showToast(t('status-connection-err'), true);
   } finally {
     // スピナーを除去（renderChannelPanel 再描画前に外しておく）
     const card = document.querySelector('.sidebar-channel-item[data-key="' + key + '"]');
@@ -1267,7 +1267,7 @@ function _deleteMobileChannel(key) {
   if (wasActive) {
     state.currentChannelKey = null;
     state.allVideos = [];
-    document.getElementById('mChNameDisplay').textContent = t('m-select-channel');
+    document.getElementById('mChNameDisplay').textContent = t('m-ch-select');
     renderCurrentTab();
   }
 }
@@ -1278,19 +1278,19 @@ async function addChannel(input) {
   try { raw = decodeURIComponent(input); } catch { raw = input; }
   const ch = channelKeyFromInput(raw);
   if (!ch) {
-    showToast(t('invalid-input'), 'err');
+    showToast(t('status-invalid-input'), 'err');
     return;
   }
   // 既登録チェック（ハンドルの場合）
   if (ch.type === 'handle') {
     const existing = Object.values(channels).find(c => c.handle === ch.value);
     if (existing) {
-      showToast(t('channel-already-added', { name: existing.displayName || ch.value }), 'info');
+      showToast(t('ch-already-added', { name: existing.displayName || ch.value }), 'info');
       return;
     }
   }
 
-  showToast(t('fetching'), 'loading');
+  showToast(t('status-fetching'), 'loading');
   try {
     const body = ch.type === 'handle' ? { handle: ch.value } : { handle: ch.value };
     const res = await fetch('/api/channels', {
@@ -1300,14 +1300,14 @@ async function addChannel(input) {
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      showToast(data.error || t('add-failed'), 'err');
+      showToast(data.error || t('status-add-failed'), 'err');
       return;
     }
     const serverCh = data.channel;
     const key = serverCh.channel_id;
     // 既登録チェック（サーバー応答のチャンネルID基準）
     if (channels[key]) {
-      showToast(t('channel-already-added', { name: channels[key].displayName || ch.value }), 'info');
+      showToast(t('ch-already-added', { name: channels[key].displayName || ch.value }), 'info');
       return;
     }
     channels[key] = {
@@ -1324,10 +1324,10 @@ async function addChannel(input) {
     _inp.value = '';
     _inp.blur();
     await selectChannel(key);
-    showToast(t('ch-added', { name: serverCh.title || ch.value }));
+    showToast(t('status-ch-added', { name: serverCh.title || ch.value }));
     setTimeout(closeChannelPanel, 400);
   } catch (e) {
-    showToast(t('connection-error') + ': ' + e.message, 'err');
+    showToast(t('status-connection-err') + ': ' + e.message, 'err');
   }
 }
 
@@ -1409,12 +1409,12 @@ function _descToHtml(text) {
 // チャンネル未選択・動画なし共通メッセージ
 function renderNoChannel(containerId) {
   const el = document.getElementById(containerId);
-  el.innerHTML = _emptyHtml('m-empty-msg', t('select-channel-prompt'));
+  el.innerHTML = _emptyHtml('m-empty-msg', t('m-ch-select-prompt'));
 }
 
 function renderNoCat(containerId) {
   const el = document.getElementById(containerId);
-  el.innerHTML = _emptyHtml('m-empty-msg', t('no-videos-in-cat'));
+  el.innerHTML = _emptyHtml('m-empty-msg', t('cat-empty'));
 }
 
 // --- Tab1: 一覧 ---
@@ -1547,7 +1547,7 @@ function renderVote() {
   const wrap = document.getElementById('mVoteWrap');
   const optBtn = document.getElementById('mVoteOptionsPanelBtn');
   if (!state.currentChannelKey) {
-    wrap.innerHTML = _emptyHtml('m-vote-empty', t('select-channel-prompt'));
+    wrap.innerHTML = _emptyHtml('m-vote-empty', t('m-ch-select-prompt'));
     if (optBtn) optBtn.hidden = true;
     return;
   }
@@ -1571,7 +1571,7 @@ function renderVote() {
       ? _emptyHtml('m-vote-empty', t('vote-all-done'))
       : pool.length > 0
       ? _emptyHtml('m-vote-empty', t('vote-need-more'))
-      : _emptyHtml('m-vote-empty', t('no-videos-in-cat'));
+      : _emptyHtml('m-vote-empty', t('cat-empty'));
     return;
   }
 
@@ -1707,7 +1707,7 @@ function renderRanking() {
     const score = document.createElement('div');
     score.className = 'm-rank-score';
     const scoreParts = ['<span class="m-meta-item">' + _M_SVG_STAR + Math.round(rating) + '</span>'];
-    if (battles > 0) scoreParts.push('<span>' + t('wins-fmt', {w: wins, b: battles}) + ' (' + wr + '%)</span>');
+    if (battles > 0) scoreParts.push('<span>' + t('rank-wins-fmt', {w: wins, b: battles}) + ' (' + wr + '%)</span>');
     score.innerHTML = scoreParts.join('') + _mBuildPinDot(v, _mRsMyPins, _mRsPinColor);
 
     const barBg = document.createElement('div');
@@ -1756,8 +1756,8 @@ function mOpenVideoMenu(v) {
   if (viewsEl) viewsEl.textContent = v.viewCount ? formatViewsShort(v.viewCount) : '-';
   if (v.publishedAt) {
     const d = new Date(v.publishedAt);
-    if (dateYearEl) dateYearEl.textContent = t('date-year-fmt', {y: d.getFullYear()});
-    if (dateMDEl)   dateMDEl.textContent   = t('date-md-fmt', {m: d.getMonth() + 1, d: d.getDate()});
+    if (dateYearEl) dateYearEl.textContent = t('m-date-year-fmt', {y: d.getFullYear()});
+    if (dateMDEl)   dateMDEl.textContent   = t('m-date-md-fmt', {m: d.getMonth() + 1, d: d.getDate()});
   } else {
     if (dateYearEl) dateYearEl.textContent = '-';
     if (dateMDEl)   dateMDEl.textContent   = '';
@@ -1773,7 +1773,7 @@ function mOpenVideoMenu(v) {
       descEl.hidden = true;
       if (moreBtn) moreBtn.hidden = true;
     } else if (v.description === '') {
-      descEl.textContent = t('no-description');
+      descEl.textContent = t('m-video-no-desc');
       descEl.dataset.empty = '1';
       descEl.hidden = false;
       if (moreBtn) moreBtn.hidden = true;
@@ -1781,7 +1781,7 @@ function mOpenVideoMenu(v) {
       descEl.removeAttribute('data-empty');
       descEl.innerHTML = _descToHtml(v.description);
       descEl.hidden = false;
-      if (moreBtn) { moreBtn.textContent = t('show-more'); moreBtn.hidden = false; }
+      if (moreBtn) { moreBtn.textContent = t('m-video-show-more'); moreBtn.hidden = false; }
     }
   }
 
@@ -1878,7 +1878,7 @@ function mOpenSub(name) {
   if (titleEl) {
     const labels = {
       apikey: typeof t === 'function' ? t('settings-tab-apikey') : 'APIキー',
-      data: typeof t === 'function' ? t('settings-tab-sidebar') : 'データ'
+      data: typeof t === 'function' ? t('settings-tab-data') : 'データ'
     };
     titleEl.textContent = labels[name] || name;
   }
@@ -1932,7 +1932,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // チャンネル未選択状態（welcome）に戻る
         state.currentChannelKey = null;
         state.allVideos = [];
-        document.getElementById('mChNameDisplay').textContent = t('m-select-channel');
+        document.getElementById('mChNameDisplay').textContent = t('m-ch-select');
         renderCurrentTab();
       } else {
         if (st.channelKey !== state.currentChannelKey) {
@@ -2038,7 +2038,7 @@ document.addEventListener('DOMContentLoaded', function() {
     _mShowDelPopup(menuBtn,
       t('ch-delete-confirm').replace('{name}', name),
       () => _deleteMobileChannel(key),
-      t('ch-delete-confirm-btn'),
+      t('ch-delete-ok'),
       anchorRect
     );
   });
@@ -2163,7 +2163,7 @@ document.addEventListener('DOMContentLoaded', function() {
     _mVmenuDescExpanded = !_mVmenuDescExpanded;
     const descEl = document.getElementById('mVmenuDesc');
     if (descEl) descEl.classList.toggle('expanded', _mVmenuDescExpanded);
-    this.textContent = _mVmenuDescExpanded ? t('modal-close') : t('show-more');
+    this.textContent = _mVmenuDescExpanded ? t('modal-close') : t('m-video-show-more');
   });
 
   // 動画概要シート: スワイプで閉じる
@@ -2215,9 +2215,9 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!_mVmenuVideo) return;
     const url = 'https://www.youtube.com/watch?v=' + _mVmenuVideo.id;
     navigator.clipboard.writeText(url).then(() => {
-      showToast(t('copy-success'));
+      showToast(t('m-video-copy-ok'));
     }).catch(() => {
-      showToast(t('copy-failed'), true);
+      showToast(t('m-video-copy-err'), true);
     });
     mCloseVideoMenu();
   });
@@ -2271,18 +2271,18 @@ document.addEventListener('DOMContentLoaded', function() {
     const statusEl = document.getElementById('mApikeyStatus');
     const val = input.value.trim();
     if (!val) {
-      if (statusEl) { statusEl.textContent = typeof t === 'function' ? t('settings-apikey-err-empty') : 'APIキーを入力してください'; statusEl.style.color = 'var(--err)'; }
+      if (statusEl) { statusEl.textContent = typeof t === 'function' ? t('apikey-err-empty') : 'APIキーを入力してください'; statusEl.style.color = 'var(--err)'; }
       return;
     }
     if (!/^AIzaSy[A-Za-z0-9_-]{33}$/.test(val)) {
-      if (statusEl) { statusEl.textContent = typeof t === 'function' ? t('settings-apikey-err-format') : 'APIキーの形式が正しくありません'; statusEl.style.color = 'var(--err)'; }
+      if (statusEl) { statusEl.textContent = typeof t === 'function' ? t('apikey-err-format') : 'APIキーの形式が正しくありません'; statusEl.style.color = 'var(--err)'; }
       return;
     }
     localStorage.setItem(LS_API_KEY, val);
     const delBtn = document.getElementById('mApikeyDelete');
     if (delBtn) delBtn.hidden = false;
     if (statusEl) {
-      statusEl.textContent = typeof t === 'function' ? t('settings-apikey-saved') : '保存しました';
+      statusEl.textContent = typeof t === 'function' ? t('apikey-saved') : '保存しました';
       statusEl.style.color = 'var(--ok)';
       setTimeout(() => { statusEl.textContent = ''; statusEl.style.color = ''; }, 2000);
     }

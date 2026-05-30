@@ -38,7 +38,7 @@ let _mRsHeatmapVisible = false;
 let _mRsPins           = [];
 let _mRsKde            = null;
 let _mRsMyPins         = {};
-let _mRsPinColor       = localStorage.getItem('reactions-pin-color') || '#ec4899';
+let _mRsPinColor       = localStorage.getItem('react-pin-color') || '#ec4899';
 let _mRsMyPinOnDrop    = null;
 let _mRsMyPinAnimRaf   = 0;
 
@@ -443,7 +443,7 @@ function renderReaction() {
   if (!state.currentChannelKey) {
     const placeholder = document.getElementById('mRsPlaceholder');
     const toolbar     = document.getElementById('mRsToolbar');
-    if (placeholder) { placeholder.hidden = false; placeholder.innerHTML = _mRsPlaceholderHtml(t('select-channel-prompt')); }
+    if (placeholder) { placeholder.hidden = false; placeholder.innerHTML = _mRsPlaceholderHtml(t('m-ch-select-prompt')); }
     if (toolbar) toolbar.hidden = true;
     const seekElNoC = document.getElementById('mRsSeek');
     if (seekElNoC) seekElNoC.hidden = true;
@@ -456,7 +456,7 @@ function renderReaction() {
   const pool = _mRsBuildSortedPool();
   if (pool.length === 0) {
     const placeholder = document.getElementById('mRsPlaceholder');
-    if (placeholder) { placeholder.hidden = false; placeholder.innerHTML = _mRsPlaceholderHtml(t('no-videos-in-cat')); }
+    if (placeholder) { placeholder.hidden = false; placeholder.innerHTML = _mRsPlaceholderHtml(t('cat-empty')); }
     const toolbar = document.getElementById('mRsToolbar');
     if (toolbar) toolbar.hidden = true;
     const seekElNoV = document.getElementById('mRsSeek');
@@ -1032,7 +1032,7 @@ export function initReactionUI() {
         document.querySelectorAll('.m-rs-swatch').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         _mRsPinColor = color;
-        localStorage.setItem('reactions-pin-color', color);
+        localStorage.setItem('react-pin-color', color);
         mRsApplyPalette();
         if (_mRsHeatmapVisible) mRsRenderHeatmap();
         document.querySelectorAll('.m-meta-pin-dot').forEach(el => { el.style.background = color; });

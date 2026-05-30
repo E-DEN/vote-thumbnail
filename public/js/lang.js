@@ -68,7 +68,7 @@ function rebuildLangDialog() {
   addBtn.className = 'lang-option-item lang-option-add';
   const _sec = document.getElementById('langAddSection');
 
-  function _addLabel() { return (_sec && !_sec.hidden) ? t('lang-cancel') : t('lang-add'); }
+  function _addLabel() { return (_sec && !_sec.hidden) ? t('cancel') : t('lang-add'); }
 
   addBtn.innerHTML =
     '<span class="lang-option-check"></span>' +
@@ -187,7 +187,7 @@ function closePopover() {
         }
         closePopover();
       } catch (e) {
-        alert(t('lang-import-err'));
+        alert(t('lang-err'));
       }
     }
 

@@ -1041,7 +1041,7 @@ header {
   width: 100%;
 }
 
-.wf-card {
+.welcome-card {
   width: 230px;
   display: flex;
   flex-direction: column;
@@ -1052,13 +1052,13 @@ header {
   border: 1px solid var(--border);
   border-radius: 16px;
 }
-.wf-card-label {
+.welcome-card-label {
   font-size: 12px;
   font-weight: 600;
   color: var(--text);
   letter-spacing: .04em;
 }
-.wf-card-desc {
+.welcome-card-desc {
   font-size: 11px;
   color: var(--text-muted);
   line-height: 1.55;
@@ -1066,7 +1066,7 @@ header {
   margin: 0;
   white-space: pre-line;
 }
-.wf-anim-area {
+.welcome-card-anim {
   flex: 0 0 80px;
   width: 100%;
   display: flex;
