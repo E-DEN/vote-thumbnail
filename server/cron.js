@@ -9,16 +9,22 @@ export default {
     const { results } = await env.DB.prepare(
       `SELECT channel_id, banner_url FROM channels WHERE inactive = 0 AND (last_checked IS NULL OR last_checked < datetime('now', '-1 hour')) ORDER BY last_checked ASC LIMIT ${batchSize}`
     ).all();
+    console.log(`[cron] fired, batch=${results.length}`);
     for (const ch of results) {
       if (!ch.banner_url) {
-        await fetchChannelDetails(ch.channel_id, env).catch(() => {});
+        await fetchChannelDetails(ch.channel_id, env).catch((e) => console.error(`[cron] fetchChannelDetails error ${ch.channel_id}:`, e));
       }
-      const { newVideoIds } = await fetchAndSaveRss(ch.channel_id, env).catch(() => ({ newVideoIds: [] }));
+      const { newVideoIds, added, rssStatus } = await fetchAndSaveRss(ch.channel_id, env).catch((e) => {
+        console.error(`[cron] fetchAndSaveRss error ${ch.channel_id}:`, e);
+        return { newVideoIds: [], added: 0, rssStatus: 0 };
+      });
+      console.log(`[cron] ${ch.channel_id} rss=${rssStatus} added=${added}`);
       if (newVideoIds.length > 0) {
-        await detectShortsCategories(newVideoIds, env).catch(() => {});
-        await fetchVideoDetails(newVideoIds, env).catch(() => {});
+        await detectShortsCategories(newVideoIds, env).catch((e) => console.error(`[cron] detectShorts error:`, e));
+        await fetchVideoDetails(newVideoIds, env).catch((e) => console.error(`[cron] fetchVideoDetails error:`, e));
       }
     }
+    console.log('[cron] done');
   },
 };
 

@@ -1087,8 +1087,6 @@ function _showChDelPopup(anchorBtn, msg, onConfirm, okClass, anchorRect) {
 }
 
 function deleteChannel(key) {
-  // サーバーから論理削除（F5 後の再同期で復活しないように）
-  fetch('/api/channels/' + key, { method: 'DELETE' }).catch(() => {});
   delete channels[key];
   saveChannels();
   // sidebarOrder から対象チャンネルを除去
@@ -1132,7 +1130,6 @@ function deleteFolderWithChannels(folderId) {
   if (idx === -1) return;
   const childKeys = [...sidebarOrder[idx].children];
   for (const key of childKeys) {
-    fetch('/api/channels/' + key, { method: 'DELETE' }).catch(() => {});
     delete channels[key];
   }
   saveChannels();

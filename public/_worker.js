@@ -151,14 +151,10 @@ async function handleApi(request, env, url, ctx) {
       return json(rows.results);
     }
 
-    // --- DELETE /api/channels/:channelId ---
+    // --- DELETE /api/channels/:channelId --- (disabled: channel deletion is client-side only)
     const mDelete = path.match(/^\/channels\/(UC[\w-]{22})$/);
     if (method === 'DELETE' && mDelete) {
-      const channelId = mDelete[1];
-      await env.DB.prepare(
-        "UPDATE channels SET inactive = 1 WHERE channel_id = ?"
-      ).bind(channelId).run();
-      return json({ ok: true });
+      return new Response(null, { status: 404 });
     }
 
     // --- POST /api/channels/:channelId/refresh ---
