@@ -951,19 +951,19 @@ body:has(.m-bottom-nav[hidden]) .m-content {
 .m-rs-fs-btn:active { background: rgba(0, 0, 0, 0.15); }
 .m-rs-seek .m-rs-progress-track {
   margin: 0 24px 8px 24px;  /* 左24px: iOS左端バックジェスチャーゾーン(~20px)を回避、左右均等 */
-  border-radius: 0;
-  height: 3px;
+  border-radius: 999px;
+  height: 2px;
   background: rgba(255, 255, 255, 0.25);
 }
 .m-rs-seek .m-rs-progress-fill {
-  border-radius: 0;
+  border-radius: 999px;
 }
 .m-rs-seek .m-rs-progress-thumb {
   width: 12px;
   height: 12px;
 }
 .m-rs-seek .m-rs-progress-track.dragging .m-rs-progress-thumb {
-  transform: translate(-50%, -50%) scale(1.5);
+  transform: translate(-50%, -50%) scale(1);
 }
 
 /* トランスポートオーバーレイ（ブラー背景・フェードイン/アウト） */
@@ -1344,17 +1344,17 @@ body:has(.m-bottom-nav[hidden]) .m-content {
 }
 .m-rs-progress-track {
   position: relative;
-  height: 4px;
-  border-radius: 2px;
-  background: var(--border);
+  height: 2px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.25);
   overflow: visible;
 }
 .m-rs-progress-fill {
   position: absolute;
   left: 0; top: 0; bottom: 0;
   width: 0%;
-  background: var(--accent);
-  border-radius: 2px;
+  background: #fff;
+  border-radius: 999px;
   pointer-events: none;
 }
 .m-rs-progress-thumb {
@@ -1364,8 +1364,8 @@ body:has(.m-bottom-nav[hidden]) .m-content {
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  background: var(--accent);
-  transform: translate(-50%, -50%);
+  background: #fff;
+  transform: translate(-50%, -50%) scale(0);
   pointer-events: none;
   transition: transform 0.1s;
 }

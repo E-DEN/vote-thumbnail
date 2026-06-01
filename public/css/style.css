@@ -3899,7 +3899,7 @@ a.rs-video-title:hover { color: var(--accent); }
   user-select: none;
   transition: opacity 0.55s ease;
   pointer-events: none;
-  border-radius: 0 0 4px 4px;
+  border-radius: 0 0 14px 14px;
   display: none;
 }
 .rs-transport.visible { display: block; }
@@ -3949,9 +3949,9 @@ a.rs-video-title:hover { color: var(--accent); }
 /* Progress bar */
 .rs-progress-track {
   flex: 1;
-  height: 4px;
+  height: 2px;
   background: rgba(255,255,255,0.25);
-  border-radius: 3px;
+  border-radius: 999px;
   cursor: pointer;
   position: relative;
   margin: 0 4px;
@@ -3967,8 +3967,8 @@ a.rs-video-title:hover { color: var(--accent); }
 .rs-progress-track:hover { transform: scaleY(1.5); }
 .rs-progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, var(--accent), var(--accent2));
-  border-radius: 3px;
+  background: #fff;
+  border-radius: 999px;
   width: 0%;
   pointer-events: none;
 }
@@ -3978,15 +3978,33 @@ a.rs-video-title:hover { color: var(--accent); }
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  background: var(--accent);
+  background: #fff;
   transform: translate(-50%, -50%) scale(0);
   pointer-events: none;
   left: 0%;
   transition: transform 0.12s;
 }
+.rs-progress-thumb::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 32px;
+  height: 32px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0) 75%);
+  opacity: 0;
+  transition: opacity 0.12s;
+  pointer-events: none;
+}
+.rs-progress-track:hover .rs-progress-thumb::after,
+.rs-progress-track.dragging .rs-progress-thumb::after {
+  opacity: 1;
+}
 .rs-progress-track:hover .rs-progress-thumb,
 .rs-progress-track.dragging .rs-progress-thumb {
-  transform: translate(-50%, -50%) scaleY(calc(1 / 1.5));
+  transform: translate(-50%, -50%) scale(1, 0.667);
 }
 
 /* Time label */
@@ -4053,7 +4071,7 @@ a.rs-video-title:hover { color: var(--accent); }
   position: absolute;
   bottom: 0; left: 0; right: 0;
   border-radius: 3px;
-  background: linear-gradient(to top, var(--accent), var(--accent2));
+  background: #fff;
   pointer-events: none;
   height: 100%;
 }
@@ -4063,7 +4081,7 @@ a.rs-video-title:hover { color: var(--accent); }
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  background: var(--accent);
+  background: #fff;
   transform: translate(-50%, 50%) scale(1);
   pointer-events: none;
   bottom: 0%;
