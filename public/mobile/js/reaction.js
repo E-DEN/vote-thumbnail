@@ -219,7 +219,7 @@ function _mRsRefreshPinColors() {
   });
 }
 
-// ピン数調整: アニメーションを維持したまま表示数を増渁E
+// ピン数調整: アニメーションを維持したまま表示数を増減
 function _mRsRefreshPinCount() {
   const pinsLayer = document.getElementById('mRsPinsLayer');
   if (!pinsLayer) return;
@@ -229,19 +229,33 @@ function _mRsRefreshPinCount() {
   const currentCount = existingPins.length;
   if (currentCount > cLimit) {
     for (let i = cLimit; i < currentCount; i++) existingPins[i].remove();
+    if (_mRsEmittedCount > cLimit) _mRsEmittedCount = cLimit;
   } else if (currentCount < cLimit) {
-    // 参考: transport はすでに emit 済みピンデータ、通常は 30 本分前計算済みデータ
-    const src = (_mRsTransportVisible && _mRsPlacedPins && _mRsPlacedPins.length)
-      ? _mRsPlacedPins.slice(0, _mRsEmittedCount)
-      : _mRsNormalPlaced;
-    const toAdd = Math.min(cLimit, src.length);
-    for (let i = currentCount; i < toAdd; i++) {
-      const el = mRsMakePinEl(src[i].x, src[i].y, src[i].density, true, src[i]);
-      // 既存ピンと位相をズラして一斉浮き上がりを防ぁE
-      const m = el.style.animation.match(/reactionsPinFloat\s+([\d.]+)/);
-      const dur = m ? parseFloat(m[1]) : 2.8;
-      el.style.animationDelay = '-' + (Math.random() * dur).toFixed(2) + 's';
-      pinsLayer.appendChild(el);
+    if (_mRsTransportVisible && _mRsPlacedPins && _mRsPlacedPins.length) {
+      // トランスポートモード: PC と同様に emitAt <= 現在時刻 のピンのみ追加
+      const toAdd = Math.min(cLimit, _mRsPlacedPins.length);
+      for (let i = _mRsEmittedCount; i < toAdd; i++) {
+        if (_mRsPlacedPins[i].emitAt <= _mRsCurrentTime) {
+          const el = mRsMakePinEl(_mRsPlacedPins[i].x, _mRsPlacedPins[i].y, _mRsPlacedPins[i].density, true, _mRsPlacedPins[i]);
+          const m = el.style.animation.match(/reactionsPinFloat\s+([\d.]+)/);
+          const dur = m ? parseFloat(m[1]) : 2.8;
+          el.style.animationDelay = '-' + (Math.random() * dur).toFixed(2) + 's';
+          pinsLayer.appendChild(el);
+          _mRsEmittedCount++;
+        } else {
+          break;
+        }
+      }
+    } else {
+      // 通常モード: _mRsNormalPlaced から追加
+      const toAdd = Math.min(cLimit, _mRsNormalPlaced.length);
+      for (let i = currentCount; i < toAdd; i++) {
+        const el = mRsMakePinEl(_mRsNormalPlaced[i].x, _mRsNormalPlaced[i].y, _mRsNormalPlaced[i].density, true, _mRsNormalPlaced[i]);
+        const m = el.style.animation.match(/reactionsPinFloat\s+([\d.]+)/);
+        const dur = m ? parseFloat(m[1]) : 2.8;
+        el.style.animationDelay = '-' + (Math.random() * dur).toFixed(2) + 's';
+        pinsLayer.appendChild(el);
+      }
     }
   }
 }
