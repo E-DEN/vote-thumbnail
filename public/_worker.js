@@ -69,6 +69,21 @@ async function handleApi(request, env, url, ctx) {
     if (method === 'POST' && path === '/channels') {
       const body = await request.json().catch(() => null);
 
+      // channel ID から channel を解決する場合
+      if (body?.channelId && !body?.handle) {
+        const channelId = String(body.channelId).replace(/[^A-Za-z0-9_-]/g, '').slice(0, 24);
+        if (!channelId.startsWith('UC')) return err('channel ID が不正です');
+        const cRes = await fetch(`https://www.youtube.com/channel/${channelId}`, {
+          headers: { 'User-Agent': 'Mozilla/5.0' },
+        });
+        if (!cRes.ok) return err('チャンネルが見つかりません', 404);
+        const cHtml = await cRes.text();
+        const baseUrlMatch = cHtml.match(/"canonicalBaseUrl":"(\/@[^"]+)"/);
+        if (!baseUrlMatch) return err('チャンネル情報の取得に失敗しました', 502);
+        const rawPath = baseUrlMatch[1].replace(/^\//, '');
+        try { body.handle = decodeURIComponent(rawPath); } catch { body.handle = rawPath; }
+      }
+
       // 動画 URL から channel を解決する場合
       if (body?.videoId && !body?.handle) {
         const videoId = String(body.videoId).replace(/[^A-Za-z0-9_-]/g, '').slice(0, 11);

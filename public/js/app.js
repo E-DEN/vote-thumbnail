@@ -3141,21 +3141,25 @@ async function addChannelFromSidebarInput() {
 
   // @handle を正規化 (URL入力にも対応)
   const handleMatch = raw.match(/@([^\s/?#&]+)/);
+  // channel/UCxxx 形式の URL を抽出
+  const channelIdMatch = !handleMatch && raw.match(/youtube\.com\/channel\/(UC[\w-]{22})/);
   // 動画 URL から video ID を抽出
-  const videoIdMatch = !handleMatch && raw.match(
+  const videoIdMatch = !handleMatch && !channelIdMatch && raw.match(
     /(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|shorts\/|live\/|embed\/|v\/))([A-Za-z0-9_-]{11})/
   );
   // @なし・URLなし → 単純文字列をハンドルとして扱う
-  const plainHandle = !handleMatch && !videoIdMatch && /^[^\s/?#&]+$/.test(raw)
+  const plainHandle = !handleMatch && !channelIdMatch && !videoIdMatch && /^[^\s/?#&]+$/.test(raw)
     ? '@' + raw : null;
 
-  if (!handleMatch && !videoIdMatch && !plainHandle) {
+  if (!handleMatch && !channelIdMatch && !videoIdMatch && !plainHandle) {
     statusEl.textContent = t('status-invalid-url');
     return;
   }
 
   const postBody = handleMatch
     ? { handle: '@' + handleMatch[1] }
+    : channelIdMatch
+      ? { channelId: channelIdMatch[1] }
     : plainHandle
       ? { handle: plainHandle }
       : { videoId: videoIdMatch[1] };

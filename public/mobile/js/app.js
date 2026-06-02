@@ -1277,7 +1277,7 @@ async function addChannel(input) {
 
   showToast(t('status-fetching'), 'loading');
   try {
-    const body = ch.type === 'handle' ? { handle: ch.value } : { handle: ch.value };
+    const body = ch.type === 'id' ? { channelId: ch.value } : { handle: ch.value };
     const res = await fetch('/api/channels', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
