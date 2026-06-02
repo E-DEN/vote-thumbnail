@@ -69,19 +69,47 @@ async function handleApi(request, env, url, ctx) {
     if (method === 'POST' && path === '/channels') {
       const body = await request.json().catch(() => null);
 
-      // channel ID から channel を解決する場合
+      // channel ID から channel を登録する場合
+      // HTML スクレイピングは Cloudflare から弾かれるため RSS で title を取得し直接保存する。
+      // ハンドル・アイコンは fetchChannelDetails (API キーあり時) がバックグラウンドで補完する。
       if (body?.channelId && !body?.handle) {
         const channelId = String(body.channelId).replace(/[^A-Za-z0-9_-]/g, '').slice(0, 24);
         if (!channelId.startsWith('UC')) return err('channel ID が不正です');
-        const cRes = await fetch(`https://www.youtube.com/channel/${channelId}`, {
-          headers: { 'User-Agent': 'Mozilla/5.0' },
-        });
-        if (!cRes.ok) return err('チャンネルが見つかりません', 404);
-        const cHtml = await cRes.text();
-        const baseUrlMatch = cHtml.match(/"canonicalBaseUrl":"(\/@[^"]+)"/);
-        if (!baseUrlMatch) return err('チャンネル情報の取得に失敗しました', 502);
-        const rawPath = baseUrlMatch[1].replace(/^\//, '');
-        try { body.handle = decodeURIComponent(rawPath); } catch { body.handle = rawPath; }
+
+        // DB に既存チャンネルがあれば即返し
+        const existingById = await env.DB.prepare(
+          'SELECT channel_id, handle, title, icon_url FROM channels WHERE channel_id = ? AND inactive = 0'
+        ).bind(channelId).first();
+        if (existingById) return json({ ok: true, channel: existingById, cached: true });
+
+        // RSS から title を取得
+        const rssRes = await fetch(
+          `https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`,
+          { headers: { 'User-Agent': 'Mozilla/5.0' } }
+        );
+        if (!rssRes.ok) return err('チャンネルが見つかりません', 404);
+        const rssXml = await rssRes.text();
+        const rssTitleMatch = rssXml.match(/<title>([^<]+)<\/title>/);
+        const title = rssTitleMatch ? rssTitleMatch[1].trim() : channelId;
+
+        // channels に保存（handle は後で fetchChannelDetails が補完）
+        await env.DB.prepare(
+          `INSERT INTO channels (channel_id, handle, title, icon_url, last_accessed)
+           VALUES (?, ?, ?, '', datetime('now'))
+           ON CONFLICT(channel_id) DO UPDATE SET title=excluded.title, last_accessed=datetime('now')`
+        ).bind(channelId, channelId, title).run();
+
+        // RSS から最新動画を即時保存
+        const { newVideoIds } = await fetchAndSaveRss(channelId, effectiveEnv);
+        if (newVideoIds.length > 0) {
+          await detectShortsCategories(newVideoIds, effectiveEnv);
+          await fetchVideoDetails(newVideoIds, effectiveEnv);
+        }
+        // ハンドル・アイコンをバックグラウンドで取得
+        ctx.waitUntil(fetchChannelDetails(channelId, effectiveEnv).catch(() => {}));
+
+        const channel = { channel_id: channelId, handle: channelId, title, icon_url: '' };
+        return json({ ok: true, channel });
       }
 
       // 動画 URL から channel を解決する場合
