@@ -686,7 +686,7 @@ function _mUpdateFeedback(cx, cy) {
         // drop-bottom クラスは使わない（高さ変動でガタつくため）
       }
     }
-    if (inChildren || srcInChildren) {
+    if (inChildren) {
       if (relY < 0.5) {
         const prev = targetCard.previousElementSibling;
         if (prev && prev.classList.contains('sidebar-channel-item') && !prev.classList.contains('dragging')) {
@@ -749,6 +749,14 @@ function _mMergeIntoNewFolder(srcEl, targetEl, name) {
     if (it.type === 'channel' && (it.key === srcKey || it.key === targetKey)) return false;
     return true;
   });
+  // フォルダ children からも src/target を除去（フォルダ内からドラッグした場合に対応）
+  sidebarOrder.forEach(it => {
+    if (it.type === 'folder' && it.id !== fid) {
+      it.children = it.children.filter(k => k !== srcKey && k !== targetKey);
+    }
+  });
+  // 空になったフォルダを除去
+  sidebarOrder = sidebarOrder.filter(it => it.type !== 'folder' || it.children.length > 0);
   // インデックスがずれているので再フィルタ
   const seen = new Set();
   const deduped = [];
@@ -759,6 +767,21 @@ function _mMergeIntoNewFolder(srcEl, targetEl, name) {
   sidebarOrder = deduped;
   saveSidebarOrder();
   renderChannelPanel();
+}
+
+function _mCleanEmptyFolders() {
+  const chList = document.getElementById('mChList');
+  let changed = false;
+  sidebarOrder = sidebarOrder.filter(it => {
+    if (it.type === 'folder' && it.children.length === 0) {
+      const el = chList.querySelector(`.sidebar-folder[data-folder-id="${it.id}"]`);
+      if (el) el.remove();
+      changed = true;
+      return false;
+    }
+    return true;
+  });
+  if (changed) saveSidebarOrder();
 }
 
 function _mFindOrderIdx(key) {
@@ -856,6 +879,7 @@ function _mEndDrag(cx, cy) {
         _mDragFolderWasOpen = false;
       }
       _mSaveSidebarOrderFromDOM();
+      _mCleanEmptyFolders();
       _mSrcEl = null; return;
     }
   }
@@ -873,24 +897,24 @@ function _mEndDrag(cx, cy) {
       const srcInChildren = !!_mSrcEl.closest('.sidebar-folder-children');
       const r = targetCard.getBoundingClientRect();
       const relY = (cy - r.top) / r.height;
-      if (inChildren || srcInChildren) {
+      if (inChildren) {
         if (relY < 0.5) {
           const prev = targetCard.previousElementSibling;
           if (prev && prev.classList.contains('sidebar-channel-item') && !prev.classList.contains('dragging')) {
             prev.after(_mSrcEl);
           } else { targetCard.before(_mSrcEl); }
         } else { targetCard.after(_mSrcEl); }
-        _mSaveSidebarOrderFromDOM(); _mSrcEl = null; return;
+        _mSaveSidebarOrderFromDOM(); _mCleanEmptyFolders(); _mSrcEl = null; return;
       } else {
         if (relY < 0.3) {
           const prev = targetCard.previousElementSibling;
           if (prev && prev.classList.contains('sidebar-channel-item') && !prev.classList.contains('dragging')) {
             prev.after(_mSrcEl);
           } else { targetCard.before(_mSrcEl); }
-          _mSaveSidebarOrderFromDOM(); _mSrcEl = null; return;
+          _mSaveSidebarOrderFromDOM(); _mCleanEmptyFolders(); _mSrcEl = null; return;
         } else if (relY > 0.7) {
           targetCard.after(_mSrcEl);
-          _mSaveSidebarOrderFromDOM(); _mSrcEl = null; return;
+          _mSaveSidebarOrderFromDOM(); _mCleanEmptyFolders(); _mSrcEl = null; return;
         } else {
           // merge
           const paired  = targetCard;
@@ -910,7 +934,7 @@ function _mEndDrag(cx, cy) {
       const lastKid2 = kids2[kids2.length - 1];
       if (lastKid2 && cy > lastKid2.getBoundingClientRect().bottom && lastKid2.nextElementSibling !== _mSrcEl) {
         lastKid2.after(_mSrcEl);
-        _mSaveSidebarOrderFromDOM(); _mSrcEl = null; return;
+        _mSaveSidebarOrderFromDOM(); _mCleanEmptyFolders(); _mSrcEl = null; return;
       }
     }
   }
@@ -929,7 +953,7 @@ function _mEndDrag(cx, cy) {
         } else {
           chList.appendChild(_mSrcEl);
         }
-        _mSaveSidebarOrderFromDOM(); _mSrcEl = null; return;
+        _mSaveSidebarOrderFromDOM(); _mCleanEmptyFolders(); _mSrcEl = null; return;
       }
     }
     _mSrcEl = null; return;
@@ -947,7 +971,7 @@ function _mEndDrag(cx, cy) {
     _mSrcEl.classList.add('sidebar-folder--open');
     _mDragFolderWasOpen = false;
   }
-  _mSaveSidebarOrderFromDOM(); _mSrcEl = null;
+  _mSaveSidebarOrderFromDOM(); _mCleanEmptyFolders(); _mSrcEl = null;
 }
 
 (function() {
