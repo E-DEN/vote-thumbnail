@@ -772,16 +772,25 @@ function _mMergeIntoNewFolder(srcEl, targetEl, name) {
 function _mCleanEmptyFolders() {
   const chList = document.getElementById('mChList');
   let changed = false;
-  sidebarOrder = sidebarOrder.filter(it => {
-    if (it.type === 'folder' && it.children.length === 0) {
-      const el = chList.querySelector(`.sidebar-folder[data-folder-id="${it.id}"]`);
-      if (el) el.remove();
+  // 1子フォルダ → チャンネル直置きに昇格（PCと同じ挙動）
+  for (const folderEl of [...chList.querySelectorAll('.sidebar-folder')]) {
+    const kids = [...folderEl.querySelectorAll(':scope > .sidebar-folder-children > .sidebar-channel-item')];
+    if (kids.length === 1) {
+      folderEl.replaceWith(kids[0]);
       changed = true;
-      return false;
+    } else if (kids.length === 0) {
+      folderEl.remove();
+      changed = true;
     }
-    return true;
-  });
-  if (changed) saveSidebarOrder();
+  }
+  if (changed) {
+    sidebarOrder = sidebarOrder.map(it =>
+      (it.type === 'folder' && it.children.length === 1)
+        ? { type: 'channel', key: it.children[0] } : it
+    );
+    sidebarOrder = sidebarOrder.filter(it => it.type !== 'folder' || it.children.length > 0);
+    saveSidebarOrder();
+  }
 }
 
 function _mFindOrderIdx(key) {
