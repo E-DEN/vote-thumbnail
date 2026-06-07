@@ -720,7 +720,7 @@ async function fetchVideoDetails(videoIds, env) {
   for (let i = 0; i < videoIds.length; i += CHUNK) {
     const chunk = videoIds.slice(i, i + CHUNK);
     try {
-      const apiUrl = `https://www.googleapis.com/youtube/v3/videos?part=statistics%2CcontentDetails%2Csnippet&id=${chunk.join(',')}&key=${env.YOUTUBE_API_KEY}`;
+      const apiUrl = `https://www.googleapis.com/youtube/v3/videos?part=statistics%2CcontentDetails%2Csnippet%2CliveStreamingDetails&id=${chunk.join(',')}&key=${env.YOUTUBE_API_KEY}`;
       const res = await fetch(apiUrl);
       if (!res.ok) {
         if (res.status === 400 || res.status === 403) return { ok: false, apiKeyError: true };
@@ -731,7 +731,9 @@ async function fetchVideoDetails(videoIds, env) {
         const viewCount    = parseInt(item.statistics?.viewCount ?? 0);
         const duration     = parseISODuration(item.contentDetails?.duration);
         const title        = String(item.snippet?.title ?? '').slice(0, 500);
-        const publishedAt  = item.snippet?.publishedAt ?? null;
+        // ライブ配信は実際の開始日時を優先、なければ publishedAt
+        const actualStart  = item.liveStreamingDetails?.actualStartTime ?? null;
+        const publishedAt  = actualStart ?? item.snippet?.publishedAt ?? null;
         const thumbnailUrl = (
           item.snippet?.thumbnails?.maxres?.url ||
           item.snippet?.thumbnails?.high?.url ||
