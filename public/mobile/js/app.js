@@ -1781,11 +1781,11 @@ function mOpenVideoMenu(v) {
   const dateYearEl = document.getElementById('mVmenuDateYear');
   const dateMDEl   = document.getElementById('mVmenuDateMD');
   if (ratingEl) ratingEl.textContent = Math.round(getRating(v.id));
-  if (viewsEl) viewsEl.textContent = v.viewCount ? formatViewsShort(v.viewCount) : '-';
+  if (viewsEl) viewsEl.textContent = v.viewCount ? v.viewCount.toLocaleString() : '-';
   if (v.publishedAt) {
     const d = new Date(v.publishedAt);
-    if (dateYearEl) dateYearEl.textContent = t('m-date-year-fmt', {y: d.getFullYear()});
-    if (dateMDEl)   dateMDEl.textContent   = t('m-date-md-fmt', {m: d.getMonth() + 1, d: d.getDate()});
+    if (dateYearEl) dateYearEl.textContent = t('m-date-md-fmt', {m: d.getMonth() + 1, d: d.getDate()});
+    if (dateMDEl)   dateMDEl.textContent   = t('m-date-year-fmt', {y: d.getFullYear()});
   } else {
     if (dateYearEl) dateYearEl.textContent = '-';
     if (dateMDEl)   dateMDEl.textContent   = '';
