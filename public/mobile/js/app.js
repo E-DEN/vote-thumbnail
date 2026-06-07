@@ -480,6 +480,10 @@ function openChannelPanel() {
   renderChannelPanel();
   document.getElementById('mChPanel').classList.add('open');
   document.getElementById('mChOverlay').classList.add('open');
+  // パネルを開いたとき編集モードを自動的に有効化（すぐ長押しでドラッグできるように）
+  _mEditMode = true;
+  document.getElementById('mEditModeBtn')?.classList.add('edit-active');
+  document.getElementById('mChList')?.classList.add('edit-mode');
   // パネルを開いたとき、戻るボタンで閉じられるよう履歴を追加
   if (!_suppressHistory) {
     history.pushState({ ...(history.state || {}), panelOpen: true }, '');
@@ -489,6 +493,9 @@ function openChannelPanel() {
 function closeChannelPanel() {
   document.getElementById('mChPanel').classList.remove('open');
   document.getElementById('mChOverlay').classList.remove('open');
+  _mEditMode = false;
+  document.getElementById('mEditModeBtn')?.classList.remove('edit-active');
+  document.getElementById('mChList')?.classList.remove('edit-mode');
 }
 
 // サイドバーをスワイプで閉じる
@@ -500,7 +507,7 @@ function closeChannelPanel() {
     _swipeStartY = e.touches[0].clientY;
   }, { passive: true });
   panel.addEventListener('touchend', e => {
-    if (_mDragging || _mEditMode) return;
+    if (_mDragging) return;
     const dx = e.changedTouches[0].clientX - _swipeStartX;
     const dy = e.changedTouches[0].clientY - _swipeStartY;
     if (dx < -50 && Math.abs(dy) < Math.abs(dx)) closeChannelPanel();
@@ -1054,11 +1061,8 @@ function _mEndDrag(cx, cy) {
       };
       const onLongpressEnd = () => {
         cleanup();
-        // ロングプレス成立後に指を離した場合 → edit-mode を外してスクロール可能に戻す
-        // （_mEditMode = true は維持。次のタッチで 400ms 長押しするとドラッグ可能）
-        if (_longpressFired) {
-          chList.classList.remove('edit-mode');
-        }
+        // ロングプレス成立後は edit-mode クラスを維持する
+        // （remove するとネイティブスクロールが優先され次のタッチでドラッグできなくなる）
       };
       document.addEventListener('touchmove', onLongpressMove, { passive: true });
       document.addEventListener('touchend', onLongpressEnd);
@@ -1147,8 +1151,8 @@ function _mEndDrag(cx, cy) {
       clearTimeout(_mLongpressTimer); _mLongpressTimer = null;
       if (_mDragging) {
         _mEndDrag(t.clientX, t.clientY);
-        // ドラッグ後は touch-action を解除してスクロール可能に（EditMode は維持して次もすぐ掴める）
-        chList.classList.remove('edit-mode');
+        // ドラッグ後も edit-mode を維持して次もすぐ掴める状態に保つ
+        chList.classList.add('edit-mode');
       } else {
         const _tapDx = Math.abs(t.clientX - _mDragStartX);
         const _tapDy = Math.abs(t.clientY - _mDragStartY);
