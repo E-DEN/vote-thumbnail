@@ -287,13 +287,18 @@ function _openFolderMenu(item, anchorEl) {
     const count = keys.length;
     if (!count) return;
     const msg = t('folder-refresh-confirm').replace('{name}', item.name || '').replace('{count}', count);
+    const folderEl = document.querySelector('.sidebar-folder[data-folder-id="' + item.id + '"]');
     _mShowDelPopup(anchorEl, msg, async () => {
+      if (folderEl) folderEl.classList.add('m-ch-refreshing');
+      let totalVideos = 0;
       for (const key of keys) {
         if (!channels[key]) continue;
         const cardEl = document.querySelector('.sidebar-channel-item[data-key="' + key + '"]');
         if (cardEl) cardEl.classList.add('m-ch-refreshing');
         try {
           const res = await fetch('/api/channels/' + key + '/refresh', { method: 'POST' });
+          const data = res.ok ? await res.json().catch(() => ({})) : {};
+          if (data.total != null) totalVideos += data.total;
           if (res.ok && key === state.currentChannelKey) {
             state.allVideos = await fetchChannelVideos(key);
             saveVideosForChannel(key, state.allVideos);
@@ -302,8 +307,9 @@ function _openFolderMenu(item, anchorEl) {
         } catch (_) { /* ignore */ }
         if (cardEl) cardEl.classList.remove('m-ch-refreshing');
       }
-      showToast(t('status-refresh-api', { total: '?' }));
-    }, t('folder-refresh-ok'));
+      if (folderEl) folderEl.classList.remove('m-ch-refreshing');
+      showToast(t('status-refresh-api', { total: totalVideos || '?' }));
+    }, t('folder-refresh-ok'), undefined, 'ch-del-popup-ok--refresh');
   });
 
   // 削除（フォルダ解除）
@@ -502,7 +508,7 @@ function closeChannelPanel() {
 })();
 
 // --- 削除確認ポップアップ (PC版 _showChDelPopup と同等) ---
-function _mShowDelPopup(anchorEl, msg, onConfirm, okLabel, anchorRect) {
+function _mShowDelPopup(anchorEl, msg, onConfirm, okLabel, anchorRect, okClass) {
   const rect = anchorRect || anchorEl.getBoundingClientRect();
   document.querySelectorAll('.ch-del-popup').forEach(p => p.remove());
   const popup = document.createElement('div');
@@ -514,7 +520,7 @@ function _mShowDelPopup(anchorEl, msg, onConfirm, okLabel, anchorRect) {
   const btnRow = document.createElement('div');
   btnRow.className = 'ch-del-popup-btns';
   const okBtn = document.createElement('button');
-  okBtn.className = 'ch-del-popup-ok';
+  okBtn.className = 'ch-del-popup-ok' + (okClass ? ' ' + okClass : '');
   okBtn.textContent = okLabel || t('ch-delete-ok');
   const cancelBtn = document.createElement('button');
   cancelBtn.className = 'ch-del-popup-cancel';
