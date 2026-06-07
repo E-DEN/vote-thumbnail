@@ -1822,8 +1822,8 @@ function mOpenVideoMenu(v) {
   const detailDateEl   = document.getElementById('mVmenuDetailDateVal');
   const detailViewsEl  = document.getElementById('mVmenuDetailViewsVal');
   const detailRatingEl = document.getElementById('mVmenuDetailRatingVal');
-  if (detailDateEl)   detailDateEl.textContent   = v.publishedAt ? new Date(v.publishedAt).toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' }) : '';
-  if (detailViewsEl)  detailViewsEl.textContent  = v.viewCount   ? v.viewCount.toLocaleString() + ' 回' : '';
+  if (detailDateEl) { const _d = v.publishedAt ? new Date(v.publishedAt) : null; detailDateEl.textContent = _d ? `${_d.getFullYear()}/${String(_d.getMonth()+1).padStart(2,'0')}/${String(_d.getDate()).padStart(2,'0')}` : ''; }
+  if (detailViewsEl)  detailViewsEl.textContent  = v.viewCount   ? v.viewCount.toLocaleString() : '';
   if (detailRatingEl) detailRatingEl.textContent = Math.round(getRating(v.id)).toLocaleString();
 
   // シートのtopをサムネ下端にアンカー
