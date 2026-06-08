@@ -269,14 +269,15 @@ function _mRsMovePinDrag(x, y) {
   const tipGap = (45 / 30).toFixed(2);
   if (_mRsMyPinOnDrop) { pin.removeEventListener('animationend', _mRsMyPinOnDrop); _mRsMyPinOnDrop = null; }
   if (_mRsMyPinAnimRaf) { cancelAnimationFrame(_mRsMyPinAnimRaf); _mRsMyPinAnimRaf = 0; }
+  // アニメーションを先に止めてから位置を設定（iOSでのコンポジットずれ防止）
+  pin.style.animation = 'none';
+  svg.style.animation = 'none';
   pin.getAnimations().forEach(a => a.cancel());
   svg.getAnimations().forEach(a => a.cancel());
   pin.style.left      = (x * 100) + '%';
   pin.style.top       = 'calc(' + (y * 100) + '% + ' + tipGap + 'px)';
   pin.style.transform = 'translate(-50%, -100%)';
   pin.style.opacity   = String(_mRsPinOpacity);
-  pin.style.animation = 'none';
-  svg.style.animation = 'none';
   pin.classList.remove('color-cycling', 'rs-floating');
   pin.hidden = false;
   if (shadow) shadow.hidden = true;
