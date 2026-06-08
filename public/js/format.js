@@ -56,3 +56,32 @@ export function formatDuration(sec) {
   if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
   return `${m}:${String(s).padStart(2, '0')}`;
 }
+
+/**
+ * 概要欄テキストを HTML に変換する。
+ * - URL → <a> リンク（YouTube リダイレクト URL は実 URL に解決）
+ * - #タグ → youtube.com/hashtag リンク
+ */
+export function descToHtml(text) {
+  const escaped = text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+  const linked = escaped.replace(/https?:\/\/[^\s<>"]+/g, raw => {
+    let href = raw, display = raw;
+    if (raw.includes('youtube.com/redirect')) {
+      try {
+        const qs = raw.replace(/&amp;/g, '&').split('?')[1] || '';
+        const dest = new URLSearchParams(qs).get('q');
+        if (dest) { href = dest; display = dest; }
+      } catch (_) {}
+    }
+    return `<a href="${href}" target="_blank" rel="noopener noreferrer">${display}</a>`;
+  });
+  return linked.replace(/(<a [^>]+>[\s\S]*?<\/a>)|#([\w\u3041-\u9FFF\uFF10-\uFF5E]+)/g, (match, anchor, tag) => {
+    if (anchor) return anchor;
+    const enc = encodeURIComponent(tag);
+    return `<a class="desc-hashtag" href="https://www.youtube.com/hashtag/${enc}" target="_blank" rel="noopener noreferrer">#${tag}</a>`;
+  });
+}

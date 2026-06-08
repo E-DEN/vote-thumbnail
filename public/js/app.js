@@ -1,8 +1,9 @@
 import { state, LS_CHANNELS, LS_VIDEOS, LS_RATING, LS_CAT, LS_VOTE_PAIR, LS_SORT, LS_SIDEBAR_ORDER, LS_API_KEY, LS_RSS_ONLY, LS_HEATMAP_VISIBLE, WASHOKU_PALETTE } from './state.js';
 import { G2_SETTLED_RD, loadRating as loadRatingCore, applyVoteLocal, syncVoteToServer, getVotePair, setVotePair, pickPair, _playedPairs, _pairKey, getRating, getRd, getWins, getBattles } from './rating.js';
 import { loadChannels, saveChannels, loadVideosForChannel, saveVideosForChannel, fetchChannelVideos, filteredVideos } from './storage.js';
-import { formatViews, formatRelTime, formatViewsShort, formatDuration } from './format.js';
+import { formatViews, formatRelTime, formatViewsShort, formatDuration, descToHtml } from './format.js';
 import { showToast, showToastPromise, closeToast } from './toast.js';
+import { getStoredApiKey, getRssOnly, apiKeyHeaders } from './channel.js';
 
 // ratingData と channels はオブジェクトのエイリアス（参照が同一なので変更は state に反映される）
 const ratingData = state.ratingData;
@@ -16,8 +17,6 @@ const LS_MAX_PINS     = 'thumb-max-pins';
 const LS_PINS_VISIBLE = 'thumb-pins-visible';
 const LS_SETTINGS_TAB = 'thumb-settings-tab';
 
-function getStoredApiKey() { return localStorage.getItem(LS_API_KEY) || ''; }
-function getRssOnly() { return localStorage.getItem(LS_RSS_ONLY) === '1'; }
 let _apiKeyErrorState = false;
 function markApiKeyError() {
   _apiKeyErrorState = true;
@@ -25,10 +24,6 @@ function markApiKeyError() {
   if (ind) ind.style.background = 'var(--err)';
   const badge = document.getElementById('apikeyNavBadge');
   if (badge) badge.hidden = false;
-}
-function apiKeyHeaders() {
-  const k = getStoredApiKey();
-  return k ? { 'X-YouTube-Api-Key': k } : {};
 }
 
 let currentView = 'welcome';
@@ -588,29 +583,7 @@ function _rebuildRatingRankMap() {
   pool.forEach(function(v, i) { _ratingRankMap[v.id] = i + 1; });
 }
 // --- 概要欄ユーティリティ ---
-function _descToHtml(text) {
-  var escaped = text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-  var linked = escaped.replace(/https?:\/\/[^\s<>"]+/g, function(raw) {
-    var href = raw, display = raw;
-    if (raw.includes('youtube.com/redirect')) {
-      try {
-        var qs = raw.replace(/&amp;/g, '&').split('?')[1] || '';
-        var dest = new URLSearchParams(qs).get('q');
-        if (dest) { href = dest; display = dest; }
-      } catch (_) {}
-    }
-    return '<a href="' + href + '" target="_blank" rel="noopener noreferrer">' + display + '</a>';
-  });
-  return linked.replace(/(<a [^>]+>[\s\S]*?<\/a>)|#([\w\u3041-\u9FFF\uFF10-\uFF5E]+)/g, function(match, anchor, tag) {
-    if (anchor) return anchor;
-    var enc = encodeURIComponent(tag);
-    return '<a class="desc-hashtag" href="https://www.youtube.com/hashtag/' + enc + '" target="_blank" rel="noopener noreferrer">#' + tag + '</a>';
-  });
-}
+function _descToHtml(text) { return descToHtml(text); }
 
 function openVideoDesc(v) {
   var descEl = document.getElementById('rsDescText');

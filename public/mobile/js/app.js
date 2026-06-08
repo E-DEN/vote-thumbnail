@@ -3,8 +3,9 @@
 import { state, LS_CAT, LS_SORT, LS_CHANNELS, LS_API_KEY, LS_RSS_ONLY, LS_SIDEBAR_ORDER, WASHOKU_PALETTE } from '../../js/state.js';
 import { loadRating, applyVoteLocal, syncVoteToServer, getVotePair, setVotePair, pickPair, _playedPairs, _pairKey, getRating, getRd, getWins, getBattles } from '../../js/rating.js';
 import { loadChannels, saveChannels, loadVideosForChannel, saveVideosForChannel, fetchChannelVideos, filteredVideos } from '../../js/storage.js';
-import { formatViews, formatRelTime, formatViewsShort } from '../../js/format.js';
+import { formatViews, formatRelTime, formatViewsShort, descToHtml } from '../../js/format.js';
 import { showToast, showToastPromise, closeToast } from '../../js/toast.js';
+import { getStoredApiKey, getRssOnly, apiKeyHeaders, channelKeyFromInput } from '../../js/channel.js';
 import { _M_SVG_EYE, _M_SVG_CLK, _M_SVG_STAR, _M_SVG_PLAY, _M_SVG_PAUSE, _M_SVG_FULLSCREEN, _M_SVG_FULLSCREEN_EXIT, _M_SVG_PIN, _mBuildMeta, _mBuildPinDot } from './ui-helpers.js';
 import { _suppressHistory, setSuppressHistory } from './shared-state.js';
 import { loadMyPins, mRsApplyPalette, mRsShowMyPin, mRsOpenMode, openVideoInReaction, renderReaction, mRsRenderPlaylist, mRsSaveCatState, _mRsMyPins, _mRsPinColor, _mRsMaxPins, _mRsPinOpacity, _mRsTransportVisible, _mRsCurrentVideoId, _mRsUpdateSortUI, initReaction, resetCurrentVideo, initReactionUI } from './reaction.js';
@@ -29,12 +30,6 @@ function saveSidebarOrder() {
   try { localStorage.setItem(LS_SIDEBAR_ORDER, JSON.stringify(sidebarOrder)); } catch {}
 }
 
-function getStoredApiKey() { return localStorage.getItem(LS_API_KEY) || ''; }
-function getRssOnly() { return localStorage.getItem(LS_RSS_ONLY) === '1'; }
-function apiKeyHeaders() {
-  const k = getStoredApiKey();
-  return k ? { 'X-YouTube-Api-Key': k } : {};
-}
 function syncSidebarOrder() {
   const known = new Set(Object.keys(channels));
   sidebarOrder = sidebarOrder.filter(item => {
@@ -91,26 +86,6 @@ let _listPage       = 0;
 const LIST_PAGE_SIZE = 40;
 let _listPool       = [];
 let _listObserver   = null;
-
-// チャンネルキーをURL/ハンドルから解析
-function channelKeyFromInput(input) {
-  const trimmed = input.trim();
-  // @handle 形式（日本語など Unicode ハンドルにも対応）
-  const mHandle = trimmed.match(/@([^\s/?#&]+)/);
-  if (mHandle) return { type: 'handle', value: '@' + mHandle[1] };
-  // channel/UCxxx URL
-  const mId = trimmed.match(/youtube\.com\/channel\/(UC[\w-]{22})/);
-  if (mId) return { type: 'id', value: mId[1] };
-  // 動画 URL から video ID を抽出
-  const mVideo = trimmed.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|shorts\/|live\/|embed\/|v\/))([A-Za-z0-9_-]{11})/);
-  if (mVideo) return { type: 'videoId', value: mVideo[1] };
-  // plain UCxxx (URL 以外)
-  const mUC = trimmed.match(/UC([\w-]{22})/);
-  if (mUC) return { type: 'id', value: 'UC' + mUC[1] };
-  // 単純ハンドル名（@ なし）
-  if (/^[^\s/?#&]+$/.test(trimmed)) return { type: 'handle', value: '@' + trimmed };
-  return null;
-}
 
 // --- チャンネル選択 ---
 async function selectChannel(key) {
@@ -1450,31 +1425,7 @@ function _emptyHtml(cls, text) {
   return '<div class="' + cls + '">' + _EMPTY_ICON + '<p class="m-empty-text">' + text + '</p></div>';
 }
 
-function _descToHtml(text) {
-  const escaped = text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-  const linked = escaped.replace(/https?:\/\/[^\s<>"]+/g, raw => {
-    let href = raw;
-    let display = raw;
-    // YouTube リダイレクト URL の場合、q= パラメータの実 URL を使う
-    if (raw.includes('youtube.com/redirect')) {
-      try {
-        const qs = raw.replace(/&amp;/g, '&').split('?')[1] || '';
-        const dest = new URLSearchParams(qs).get('q');
-        if (dest) { href = dest; display = dest; }
-      } catch (_) { /* fallthrough */ }
-    }
-    return `<a href="${href}" target="_blank" rel="noopener noreferrer">${display}</a>`;
-  });
-  return linked.replace(/(<a [^>]+>[\s\S]*?<\/a>)|#([\w\u3041-\u9FFF\uFF10-\uFF5E]+)/g, (match, anchor, tag) => {
-    if (anchor) return anchor;
-    const enc = encodeURIComponent(tag);
-    return `<a class="desc-hashtag" href="https://www.youtube.com/hashtag/${enc}" target="_blank" rel="noopener noreferrer">#${tag}</a>`;
-  });
-}
+function _descToHtml(text) { return descToHtml(text); }
 
 // チャンネル未選択・動画なし共通メッセージ
 function renderNoChannel(containerId) {
