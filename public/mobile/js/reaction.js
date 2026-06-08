@@ -975,19 +975,16 @@ export function initReactionUI() {
         _mRsPinDropped    = false;
         _mRsPinDropTarget = { x, y };
         imgWrap.setPointerCapture(e.pointerId);
-        // 既存ピンがある場合: 落下アニメーションをスキップして即ドラッグ開始
-        // （落下アニメーションがノイズの原因になるため）
-        if (_mRsMyPins[_mRsCurrentVideoId]) {
-          _mRsPinDropped = true;
-          _mRsMovePinDrag(x, y);
-        } else {
-          mRsShowMyPin(x, y, true, () => { _mRsPinDropped = true; });
-        }
+        // 落下アニメーション完了後に追従開始（_mRsPinDropped=true になってから pointermove が反応）
+        mRsShowMyPin(x, y, true, () => { _mRsPinDropped = true; });
         e.preventDefault();
       }, { passive: false });
       imgWrap.addEventListener('pointermove', e => {
         if (!_mRsPinDragging || e.pointerId !== _mRsPinDragId) return;
-        if (!_mRsPinDropped) return;
+        // 落下アニメーション中でも指を動かしたら即追従開始
+        if (!_mRsPinDropped) {
+          _mRsPinDropped = true;
+        }
         const { x, y } = _pinCoords(e);
         _mRsMovePinDrag(x, y);
         e.preventDefault();
