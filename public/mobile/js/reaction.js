@@ -269,7 +269,8 @@ function _mRsMovePinDrag(x, y) {
   const tipGap = (45 / 30).toFixed(2);
   if (_mRsMyPinOnDrop) { pin.removeEventListener('animationend', _mRsMyPinOnDrop); _mRsMyPinOnDrop = null; }
   if (_mRsMyPinAnimRaf) { cancelAnimationFrame(_mRsMyPinAnimRaf); _mRsMyPinAnimRaf = 0; }
-  // アニメーションを先に止めてから位置を設定（iOSでのコンポジットずれ防止）
+  // iOS Safari: hidden→repositon→unhide でGPUコンポジット層の残像を確実に破棄
+  pin.hidden = true;
   pin.style.animation = 'none';
   svg.style.animation = 'none';
   pin.getAnimations().forEach(a => a.cancel());
@@ -967,8 +968,6 @@ export function initReactionUI() {
           document.getElementById('mRsPinsBtn').classList.add('active');
           const pinsLayer = document.getElementById('mRsPinsLayer');
           if (pinsLayer) pinsLayer.style.visibility = '';
-          const saved0 = _mRsMyPins[_mRsCurrentVideoId];
-          if (saved0) mRsShowMyPin(saved0.x, saved0.y, true);
         }
         const { x, y } = _pinCoords(e);
         _mRsPinDragging   = true;
@@ -976,7 +975,14 @@ export function initReactionUI() {
         _mRsPinDropped    = false;
         _mRsPinDropTarget = { x, y };
         imgWrap.setPointerCapture(e.pointerId);
-        mRsShowMyPin(x, y, true, () => { _mRsPinDropped = true; });
+        // 既存ピンがある場合: 落下アニメーションをスキップして即ドラッグ開始
+        // （落下アニメーションがノイズの原因になるため）
+        if (_mRsMyPins[_mRsCurrentVideoId]) {
+          _mRsPinDropped = true;
+          _mRsMovePinDrag(x, y);
+        } else {
+          mRsShowMyPin(x, y, true, () => { _mRsPinDropped = true; });
+        }
         e.preventDefault();
       }, { passive: false });
       imgWrap.addEventListener('pointermove', e => {
