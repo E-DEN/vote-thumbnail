@@ -888,8 +888,7 @@ function _appendGridPage() {
     grid.appendChild(card);
   });
 }
-const RANK_PAGE = 100;
-let rankShowCount = RANK_PAGE;
+const RANK_MAX = 100;
 
 function renderRankingItems(sorted, maxRating, minRating, range, from, to) {
   const list = document.getElementById('rankList');
@@ -940,7 +939,6 @@ function renderRanking() {
   const minRating = sorted.length ? getRating(sorted[sorted.length - 1].id) : 1500;
   const range = maxRating - minRating || 1;
 
-  rankShowCount = RANK_PAGE;
   const list = document.getElementById('rankList');
   list.innerHTML = '';
   const _rankHeader = document.querySelector('.ranking-header');
@@ -952,28 +950,7 @@ function renderRanking() {
   }
   if (_rankHeader) _rankHeader.style.display = '';
 
-  renderRankingItems(sorted, maxRating, minRating, range, 0, Math.min(rankShowCount, sorted.length));
-
-  // もっと見るボタン
-  if (sorted.length > rankShowCount) {
-    const btn = document.createElement('button');
-    btn.id = 'rankMoreBtn';
-    btn.textContent = t('rank-more', { n: sorted.length - rankShowCount });
-    btn.style.cssText = 'display:block;width:100%;margin-top:12px;padding:10px;border:1px solid var(--border);border-radius:6px;background:transparent;color:var(--text-muted);font-size:13px;cursor:pointer;transition:all 0.15s;';
-    btn.onmouseenter = () => { btn.style.borderColor = 'var(--accent)'; btn.style.color = 'var(--accent)'; };
-    btn.onmouseleave = () => { btn.style.borderColor = 'var(--border)'; btn.style.color = 'var(--text-muted)'; };
-    btn.addEventListener('click', () => {
-      const prev = rankShowCount;
-      rankShowCount = Math.min(rankShowCount + RANK_PAGE, sorted.length);
-      btn.remove();
-      renderRankingItems(sorted, maxRating, minRating, range, prev, rankShowCount);
-      if (rankShowCount < sorted.length) {
-        btn.textContent = t('rank-more', { n: sorted.length - rankShowCount });
-        list.appendChild(btn);
-      }
-    });
-    list.appendChild(btn);
-  }
+  renderRankingItems(sorted, maxRating, minRating, range, 0, Math.min(RANK_MAX, sorted.length));
 }
 
 // --- 最高レート動画ヘルパー ---
