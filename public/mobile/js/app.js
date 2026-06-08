@@ -1419,7 +1419,7 @@ function _descToHtml(text) {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
-  return escaped.replace(/https?:\/\/[^\s<>"]+/g, raw => {
+  const linked = escaped.replace(/https?:\/\/[^\s<>"]+/g, raw => {
     let href = raw;
     let display = raw;
     // YouTube リダイレクト URL の場合、q= パラメータの実 URL を使う
@@ -1431,6 +1431,11 @@ function _descToHtml(text) {
       } catch (_) { /* fallthrough */ }
     }
     return `<a href="${href}" target="_blank" rel="noopener noreferrer">${display}</a>`;
+  });
+  return linked.replace(/(<a [^>]+>[\s\S]*?<\/a>)|#([\w\u3041-\u9FFF\uFF10-\uFF5E]+)/g, (match, anchor, tag) => {
+    if (anchor) return anchor;
+    const enc = encodeURIComponent(tag);
+    return `<a class="desc-hashtag" href="https://www.youtube.com/hashtag/${enc}" target="_blank" rel="noopener noreferrer">#${tag}</a>`;
   });
 }
 
@@ -1770,6 +1775,7 @@ function mOpenVideoMenu(v) {
   _mVmenuDescExpanded = true;
   const wrap = document.getElementById('mVideoMenu');
   if (!wrap) return;
+  closeChannelPanel();
 
   // タイトル
   const titleEl = document.getElementById('mVmenuTitle');

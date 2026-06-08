@@ -3488,7 +3488,9 @@ header {
   background: var(--surface);
 }
 .rs-desc-text:empty { display: none; }
-.rs-desc-text a { color: var(--accent); }
+.rs-desc-text a { color: var(--accent); text-decoration: none; }
+.rs-desc-text a:hover { opacity: 0.8; }
+.rs-desc-text a.desc-hashtag { color: var(--accent); word-break: initial; }
 
 .rs-video-title {
   font-size: 20px;
@@ -3509,6 +3511,12 @@ a.rs-video-title:hover { color: var(--accent); }
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+}
+.rs-meta-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
 }
 .rs-video-meta .gallery-meta-item {
   color: var(--text-muted);

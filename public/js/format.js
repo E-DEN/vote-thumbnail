@@ -4,17 +4,33 @@
 /** 再生数を短縮表記する（例: 1,234,567 → "123万回視聴"） */
 export function formatViews(n) {
   if (!n) return '';
-  if (n >= 100000000) return t('fmt-views-100m', { n: (n / 100000000).toFixed(1).replace(/\.0$/, '') });
-  if (n >= 10000)     return t('fmt-views-10k',  { n: Math.floor(n / 10000) });
-  if (n >= 1000)      return t('fmt-views-1k',   { n: (n / 1000).toFixed(1).replace(/\.0$/, '') });
+  if (n >= 100000000) {
+    const oku = Math.floor(n / 100000000);
+    if (oku >= 10) return t('fmt-views-100m', { n: oku });
+    return t('fmt-views-100m', { n: (Math.floor(n / 10000000) / 10).toString().replace(/\.0$/, '') });
+  }
+  if (n >= 10000) {
+    const man = Math.floor(n / 10000);
+    if (man >= 10) return t('fmt-views-10k', { n: man });
+    return t('fmt-views-10k', { n: (Math.floor(n / 1000) / 10).toString().replace(/\.0$/, '') });
+  }
+  if (n >= 1000)  return t('fmt-views-1k',  { n: (Math.floor(n / 100) / 10).toString().replace(/\.0$/, '') });
   return t('fmt-views-raw', { n: n.toLocaleString() });
 }
 
 /** 再生数の単位なし短縮表記（ギャラリーオーバーレイ用） */
 export function formatViewsShort(n) {
   if (!n) return '';
-  if (n >= 100000000) return t('fmt-views-short-100m', { n: (n / 100000000).toFixed(1).replace(/\.0$/, '') });
-  if (n >= 10000)     return t('fmt-views-short-10k',  { n: (n / 10000).toFixed(1).replace(/\.0$/, '') });
+  if (n >= 100000000) {
+    const oku = Math.floor(n / 100000000);
+    if (oku >= 10) return t('fmt-views-short-100m', { n: oku });
+    return t('fmt-views-short-100m', { n: (Math.floor(n / 10000000) / 10).toString().replace(/\.0$/, '') });
+  }
+  if (n >= 10000) {
+    const man = Math.floor(n / 10000);
+    if (man >= 10) return t('fmt-views-short-10k', { n: man });
+    return t('fmt-views-short-10k', { n: (Math.floor(n / 1000) / 10).toString().replace(/\.0$/, '') });
+  }
   return t('fmt-views-short-raw', { n: n.toLocaleString() });
 }
 

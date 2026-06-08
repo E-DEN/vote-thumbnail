@@ -232,8 +232,7 @@ body:has(.m-bottom-nav[hidden]) .m-content {
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.3);
-  z-index: 310;
-  -webkit-backdrop-filter: none;
+  z-index: 610;
 }
 .m-ch-overlay.open { display: block; }
 
@@ -244,7 +243,7 @@ body:has(.m-bottom-nav[hidden]) .m-content {
   bottom: 0;
   width: 260px;
   background: var(--surface);
-  z-index: 320;
+  z-index: 620;
   transform: translateX(-100%);
   transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   display: flex;
@@ -2214,6 +2213,8 @@ body:has(.m-bottom-nav[hidden]) .m-content {
   text-decoration: none;
   word-break: break-all;
 }
+.m-desc-text a:hover { opacity: 0.8; }
+.m-desc-text a.desc-hashtag { color: var(--accent); word-break: initial; }
 .m-desc-text a:active {
   text-decoration: underline;
 }

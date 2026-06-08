@@ -594,7 +594,7 @@ function _descToHtml(text) {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
-  return escaped.replace(/https?:\/\/[^\s<>"]+/g, function(raw) {
+  var linked = escaped.replace(/https?:\/\/[^\s<>"]+/g, function(raw) {
     var href = raw, display = raw;
     if (raw.includes('youtube.com/redirect')) {
       try {
@@ -604,6 +604,11 @@ function _descToHtml(text) {
       } catch (_) {}
     }
     return '<a href="' + href + '" target="_blank" rel="noopener noreferrer">' + display + '</a>';
+  });
+  return linked.replace(/(<a [^>]+>[\s\S]*?<\/a>)|#([\w\u3041-\u9FFF\uFF10-\uFF5E]+)/g, function(match, anchor, tag) {
+    if (anchor) return anchor;
+    var enc = encodeURIComponent(tag);
+    return '<a class="desc-hashtag" href="https://www.youtube.com/hashtag/' + enc + '" target="_blank" rel="noopener noreferrer">#' + tag + '</a>';
   });
 }
 
@@ -641,6 +646,23 @@ function _buildPinDot(v) {
   if (!hasPinned) return '';
   var dot = '<span class="gallery-meta-pin-dot" style="background:' + (_reactionsPinColor || '#ec4899') + '"></span>';
   return '<span class="gallery-meta-item">' + _SVG_PIN + dot + '</span>';
+}
+function _buildReactionsVideoMeta(v) {
+  var items = [];
+  if (v.viewCount) {
+    items.push('<span class="gallery-meta-item">' + _SVG_EYE + v.viewCount.toLocaleString() + '</span>');
+  }
+  if (v.publishedAt) {
+    var d = new Date(v.publishedAt);
+    var dateStr = d.getFullYear() + '/' + String(d.getMonth()+1).padStart(2,'0') + '/' + String(d.getDate()).padStart(2,'0');
+    items.push('<span class="gallery-meta-item">' + _SVG_CLK + dateStr + '</span>');
+  }
+  var rating = getRating(v.id);
+  var rank = _ratingRankMap[v.id];
+  var rankStr = rank ? '<span class="gallery-meta-rank">(#' + rank + ')</span>' : '';
+  items.push('<span class="gallery-meta-item">' + _SVG_STAR + Math.round(rating) + rankStr + '</span>');
+  var metaHtml = '<div class="rs-meta-row">' + items.join('') + '</div>';
+  return metaHtml;
 }
 
 // --- 一覧 ---
@@ -2963,7 +2985,7 @@ function openModalReactions(v) {
   var titleEl = document.getElementById('reactionsTitle');
   titleEl.textContent = v.title || '';
   titleEl.href = ytUrl;
-  document.getElementById('reactionsVideoMeta').innerHTML = _buildVideoMeta(v) + _buildPinDot(v);
+  document.getElementById('reactionsVideoMeta').innerHTML = _buildReactionsVideoMeta(v) + _buildPinDot(v);
   if (v.id !== _reactionsCurrentVideoId) openReactionsMode(v.id);
   openVideoDesc(v);
   showView('reaction');
@@ -2972,7 +2994,7 @@ function openModalReactions(v) {
 function _refreshVideoMeta() {
   var v = (state.allVideos || []).find(function(x) { return x.id === _reactionsCurrentVideoId; });
   var el = document.getElementById('reactionsVideoMeta');
-  if (v && el) el.innerHTML = _buildVideoMeta(v) + _buildPinDot(v);
+  if (v && el) el.innerHTML = _buildReactionsVideoMeta(v) + _buildPinDot(v);
 }
 
 function renderReactionsPlaylist(selectedId) {
