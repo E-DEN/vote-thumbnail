@@ -1619,7 +1619,7 @@ body:has(.m-bottom-nav[hidden]) .m-content {
   bottom: calc(70px + env(safe-area-inset-bottom));
   left: 50%;
   transform: translateX(-50%);
-  z-index: 400;
+  z-index: 630;
   pointer-events: none;
   overflow: visible;
 }

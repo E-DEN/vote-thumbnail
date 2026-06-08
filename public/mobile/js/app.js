@@ -28,6 +28,13 @@ function loadSidebarOrder() {
 function saveSidebarOrder() {
   try { localStorage.setItem(LS_SIDEBAR_ORDER, JSON.stringify(sidebarOrder)); } catch {}
 }
+
+function getStoredApiKey() { return localStorage.getItem(LS_API_KEY) || ''; }
+function getRssOnly() { return localStorage.getItem(LS_RSS_ONLY) === '1'; }
+function apiKeyHeaders() {
+  const k = getStoredApiKey();
+  return k ? { 'X-YouTube-Api-Key': k } : {};
+}
 function syncSidebarOrder() {
   const known = new Set(Object.keys(channels));
   sidebarOrder = sidebarOrder.filter(item => {
@@ -91,9 +98,15 @@ function channelKeyFromInput(input) {
   // @handle 形式（日本語など Unicode ハンドルにも対応）
   const mHandle = trimmed.match(/@([^\s/?#&]+)/);
   if (mHandle) return { type: 'handle', value: '@' + mHandle[1] };
-  // channel URL
-  const mId = trimmed.match(/UC([\w-]{22})/);
-  if (mId) return { type: 'id', value: 'UC' + mId[1] };
+  // channel/UCxxx URL
+  const mId = trimmed.match(/youtube\.com\/channel\/(UC[\w-]{22})/);
+  if (mId) return { type: 'id', value: mId[1] };
+  // 動画 URL から video ID を抽出
+  const mVideo = trimmed.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|shorts\/|live\/|embed\/|v\/))([A-Za-z0-9_-]{11})/);
+  if (mVideo) return { type: 'videoId', value: mVideo[1] };
+  // plain UCxxx (URL 以外)
+  const mUC = trimmed.match(/UC([\w-]{22})/);
+  if (mUC) return { type: 'id', value: 'UC' + mUC[1] };
   // 単純ハンドル名（@ なし）
   if (/^[^\s/?#&]+$/.test(trimmed)) return { type: 'handle', value: '@' + trimmed };
   return null;
@@ -296,7 +309,7 @@ function _openFolderMenu(item, anchorEl) {
         const cardEl = document.querySelector('.sidebar-channel-item[data-key="' + key + '"]');
         if (cardEl) cardEl.classList.add('m-ch-refreshing');
         try {
-          const res = await fetch('/api/channels/' + key + '/refresh', { method: 'POST' });
+          const res = await fetch('/api/channels/' + key + '/refresh', { method: 'POST', headers: getRssOnly() ? { 'X-RSS-Only': '1' } : apiKeyHeaders() });
           const data = res.ok ? await res.json().catch(() => ({})) : {};
           if (data.total != null) totalVideos += data.total;
           if (res.ok && key === state.currentChannelKey) {
@@ -1258,7 +1271,7 @@ async function _refreshMobileChannel(key) {
   const cardEl = document.querySelector('.sidebar-channel-item[data-key="' + key + '"]');
   if (cardEl) cardEl.classList.add('m-ch-refreshing');
   try {
-    const res = await fetch('/api/channels/' + key + '/refresh', { method: 'POST' });
+    const res = await fetch('/api/channels/' + key + '/refresh', { method: 'POST', headers: getRssOnly() ? { 'X-RSS-Only': '1' } : apiKeyHeaders() });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
       showToast(data.error || t('fetch-failed'), true);
@@ -1309,21 +1322,30 @@ async function addChannel(input) {
     showToast(t('status-invalid-input'), 'err');
     return;
   }
-  // 既登録チェック（ハンドルの場合）
+  // 既登録チェック → リフレッシュ (PC と同じ挙動)
   if (ch.type === 'handle') {
     const existing = Object.values(channels).find(c => c.handle === ch.value);
     if (existing) {
-      showToast(t('ch-already-added', { name: existing.displayName || ch.value }), 'info');
+      const _inp = document.getElementById('mChAddInput');
+      if (_inp) { _inp.value = ''; _inp.blur(); }
+      await _refreshMobileChannel(existing.key);
       return;
     }
+  } else if (ch.type === 'id' && channels[ch.value]) {
+    const _inp = document.getElementById('mChAddInput');
+    if (_inp) { _inp.value = ''; _inp.blur(); }
+    await _refreshMobileChannel(ch.value);
+    return;
   }
 
   showToast(t('status-fetching'), 'loading');
   try {
-    const body = ch.type === 'id' ? { channelId: ch.value } : { handle: ch.value };
+    const body = ch.type === 'id'      ? { channelId: ch.value }
+               : ch.type === 'videoId' ? { videoId: ch.value }
+               : { handle: ch.value };
     const res = await fetch('/api/channels', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...(getRssOnly() ? { 'X-RSS-Only': '1' } : apiKeyHeaders()) },
       body: JSON.stringify(body),
     });
     const data = await res.json().catch(() => ({}));
@@ -1333,27 +1355,42 @@ async function addChannel(input) {
     }
     const serverCh = data.channel;
     const key = serverCh.channel_id;
-    // 既登録チェック（サーバー応答のチャンネルID基準）
-    if (channels[key]) {
-      showToast(t('ch-already-added', { name: channels[key].displayName || ch.value }), 'info');
-      return;
-    }
     channels[key] = {
       key,
+      channelId:   key,
       handle:      serverCh.handle,
       displayName: serverCh.title,
       avatar:      serverCh.icon_url,
+      tags:        channels[key]?.tags    ?? [],
+      addedAt:     channels[key]?.addedAt ?? new Date().toISOString(),
     };
     saveChannels();
-    syncSidebarOrder();
-    saveSidebarOrder();
+    if (!sidebarOrder.some(i => (i.type === 'channel' && i.key === key) || (i.type === 'folder' && i.children?.includes(key)))) {
+      sidebarOrder.push({ type: 'channel', key });
+      saveSidebarOrder();
+    }
     renderChannelPanel();
     const _inp = document.getElementById('mChAddInput');
-    _inp.value = '';
-    _inp.blur();
+    if (_inp) { _inp.value = ''; _inp.blur(); }
     await selectChannel(key);
     showToast(t('status-ch-added', { name: serverCh.title || ch.value }));
     setTimeout(closeChannelPanel, 400);
+    // API キーがあれば /refresh で全件取得
+    if (getStoredApiKey() && !getRssOnly()) {
+      try {
+        const refRes = await fetch('/api/channels/' + key + '/refresh', {
+          method: 'POST',
+          headers: apiKeyHeaders(),
+        });
+        const refData = await refRes.json().catch(() => ({}));
+        if (refRes.ok) {
+          state.allVideos = await fetchChannelVideos(key);
+          saveVideosForChannel(key, state.allVideos);
+          renderCurrentTab();
+          showToast(t('status-refresh-api', { total: refData.total ?? '?' }));
+        }
+      } catch { /* サイレント失敗 */ }
+    }
   } catch (e) {
     showToast(t('status-connection-err') + ': ' + e.message, 'err');
   }
