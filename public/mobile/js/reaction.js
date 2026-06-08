@@ -959,7 +959,16 @@ export function initReactionUI() {
         if (isNewPin) mRsRenderPlaylist();
       }
       imgWrap.addEventListener('pointerdown', e => {
-        if (!_mRsCurrentVideoId || _mRsTransportVisible || !_mRsPinsVisible) return;
+        if (!_mRsCurrentVideoId || _mRsTransportVisible) return;
+        // 好きOFF時はタップで自動ON（PCと同じ挙動）
+        if (!_mRsPinsVisible) {
+          _mRsPinsVisible = true;
+          document.getElementById('mRsPinsBtn').classList.add('active');
+          const pinsLayer = document.getElementById('mRsPinsLayer');
+          if (pinsLayer) pinsLayer.style.visibility = '';
+          const saved0 = _mRsMyPins[_mRsCurrentVideoId];
+          if (saved0) mRsShowMyPin(saved0.x, saved0.y, true);
+        }
         const { x, y } = _pinCoords(e);
         _mRsPinDragging   = true;
         _mRsPinDragId     = e.pointerId;
