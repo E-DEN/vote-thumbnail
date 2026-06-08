@@ -741,16 +741,18 @@ async function fetchVideoDetails(videoIds, env) {
           `https://i.ytimg.com/vi/${item.id}/maxresdefault.jpg`
         );
         const description  = String(item.snippet?.description ?? '').slice(0, 5000);
+        const rawTags      = item.snippet?.tags;
+        const tags         = Array.isArray(rawTags) && rawTags.length > 0 ? JSON.stringify(rawTags.slice(0, 30)) : null;
         // liveBroadcastContent でライブ判定 (カテゴリはプレイリスト判定優先のため live のみ上書き)
         const lbc = item.snippet?.liveBroadcastContent ?? 'none';
         if (lbc === 'live' || lbc === 'upcoming') {
           await env.DB.prepare(
-            "UPDATE videos SET title = ?, thumbnail_url = ?, published_at = ?, view_count = ?, duration = ?, description = ?, category = 'live' WHERE video_id = ?"
-          ).bind(title, thumbnailUrl, publishedAt, viewCount, duration, description, item.id).run();
+            "UPDATE videos SET title = ?, thumbnail_url = ?, published_at = ?, view_count = ?, duration = ?, description = ?, tags = ?, category = 'live' WHERE video_id = ?"
+          ).bind(title, thumbnailUrl, publishedAt, viewCount, duration, description, tags, item.id).run();
         } else {
           await env.DB.prepare(
-            'UPDATE videos SET title = ?, thumbnail_url = ?, published_at = ?, view_count = ?, duration = ?, description = ? WHERE video_id = ?'
-          ).bind(title, thumbnailUrl, publishedAt, viewCount, duration, description, item.id).run();
+            'UPDATE videos SET title = ?, thumbnail_url = ?, published_at = ?, view_count = ?, duration = ?, description = ?, tags = ? WHERE video_id = ?'
+          ).bind(title, thumbnailUrl, publishedAt, viewCount, duration, description, tags, item.id).run();
         }
       }
     } catch { /* API障害時はスキップ */ }

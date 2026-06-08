@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS videos (
   duration      INTEGER NOT NULL DEFAULT 0,         -- 秒
   view_count    INTEGER NOT NULL DEFAULT 0,
   description   TEXT,                           -- 概要欄 (NULL=未取得, ''=説明なし)
+  tags          TEXT,                           -- YouTube snippet.tags JSON配列 (NULL=未取得)
   published_at  TEXT,
   -- Glicko-2 (videos テーブルが正。votes からの再計算は順序依存のため不可)
   rating        REAL    NOT NULL DEFAULT 1500,
