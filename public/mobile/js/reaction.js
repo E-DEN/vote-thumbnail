@@ -915,6 +915,20 @@ export function mRsSaveCatState(cat) {
 }
 
 export function initReactionUI() {
+    // 言語切替時に動的生成メタを再描画
+    document.addEventListener('langchange', () => {
+      // 上部動画メタ
+      const v = _mRsCurrentVideoId ? _mRsPlaylistPool.find(v => v.id === _mRsCurrentVideoId) : null;
+      if (v) mRsRenderVideoMeta(v);
+      // 再生リスト内のメタ
+      document.querySelectorAll('.m-rs-playlist-item').forEach(item => {
+        const vd = _mRsPlaylistPool.find(v => v.id === item.dataset.vid);
+        if (!vd) return;
+        const meta = item.querySelector('.m-rs-playlist-meta');
+        if (meta) meta.innerHTML = _mBuildMeta(vd) + _mBuildPinDot(vd, _mRsMyPins, _mRsPinColor);
+      });
+    });
+
     // イベントリスナー: リアクション画面タップ → 再生トグル またはピン差し
     document.getElementById('mRsImgWrap').addEventListener('click', e => {
       if (!_mRsCurrentVideoId) return;

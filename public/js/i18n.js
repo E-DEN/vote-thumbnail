@@ -76,6 +76,8 @@ function applyLang(lang) {
     const label = document.getElementById(labelId);
     if (active && label) label.textContent = active.textContent;
   });
+  // 動的生成コンテンツの再描画用イベント
+  document.dispatchEvent(new CustomEvent('langchange'));
 }
 
 // ── 組み込み: 日本語 ──────────────────────────────────────────
@@ -442,7 +444,7 @@ registerLang('en', 'English', {
   'fmt-time-in-day': 'in {n}d',
   'fmt-time-in-week': 'in {n}w',
   'fmt-time-in-month': 'in {n}mo',
-  'fmt-live-scheduled': 'live scheduled',
+  'fmt-live-scheduled': 'scheduled',
   // Language import
   'lang-drop': 'Drop JSON file here',
   'lang-drop-hint': 'or click to select',

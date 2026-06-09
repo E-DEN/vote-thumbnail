@@ -3005,6 +3005,7 @@ function renderReactionsPlaylist(selectedId) {
   pool.forEach(function(v, i) {
     var card = document.createElement('div');
     card.className = 'rs-playlist-card' + (v.id === selectedId ? ' selected' : '');
+    card.dataset.vid = v.id;
     var metaHtml = _buildVideoMeta(v);
     var pinDot = _buildPinDot(v);
     card.innerHTML =
@@ -3498,6 +3499,24 @@ function init() {
   loadSidebarOrder();
   renderSidebar();
   initSidebarDrag();
+
+  // 言語切替時に動的生成メタを再描画
+  document.addEventListener('langchange', function() {
+    if (!state.allVideos || !state.allVideos.length) return;
+    // ギャラリー/グリッド再描画
+    renderList();
+    // リアクション画面: 上部動画メタ
+    _refreshVideoMeta();
+    // リアクション画面: 再生リスト内メタ
+    document.querySelectorAll('.rs-playlist-card').forEach(function(card) {
+      const metaEl = card.querySelector('.rs-playlist-meta');
+      if (!metaEl) return;
+      const vid = card.dataset.vid;
+      const v = state.allVideos.find(function(x) { return x.id === vid; });
+      if (!v) return;
+      metaEl.innerHTML = _buildVideoMeta(v) + _buildPinDot(v);
+    });
+  });
 
   // --- アドレスバーでのハッシュ直接編集 ---
   window.addEventListener('hashchange', async function() {
