@@ -444,7 +444,7 @@ registerLang('en', 'English', {
   'fmt-time-in-day': 'in {n}d',
   'fmt-time-in-week': 'in {n}w',
   'fmt-time-in-month': 'in {n}mo',
-  'fmt-live-scheduled': 'scheduled',
+  'fmt-live-scheduled': 'live scheduled',
   // Language import
   'lang-drop': 'Drop JSON file here',
   'lang-drop-hint': 'or click to select',
