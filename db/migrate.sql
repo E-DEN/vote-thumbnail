@@ -10,3 +10,4 @@
 ALTER TABLE channels ADD COLUMN banner_url TEXT NOT NULL DEFAULT '';
 ALTER TABLE videos   ADD COLUMN description TEXT;
 ALTER TABLE videos   ADD COLUMN description TEXT NOT NULL DEFAULT '';
+ALTER TABLE videos   ADD COLUMN scheduled_at TEXT;

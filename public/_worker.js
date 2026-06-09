@@ -333,8 +333,8 @@ async function handleApi(request, env, url, ctx) {
       const channelId = mVideos[1];
       const category  = url.searchParams.get('category');
       const videosSql = category
-        ? 'SELECT video_id, title, thumbnail_url, category, duration, view_count, published_at, description, rating, rd, volatility, wins, battles FROM videos WHERE channel_id = ? AND category = ? ORDER BY rating DESC, view_count DESC, published_at DESC'
-        : 'SELECT video_id, title, thumbnail_url, category, duration, view_count, published_at, description, rating, rd, volatility, wins, battles FROM videos WHERE channel_id = ? ORDER BY rating DESC, view_count DESC, published_at DESC';
+        ? 'SELECT video_id, title, thumbnail_url, category, duration, view_count, published_at, scheduled_at, description, rating, rd, volatility, wins, battles FROM videos WHERE channel_id = ? AND category = ? ORDER BY rating DESC, view_count DESC, published_at DESC'
+        : 'SELECT video_id, title, thumbnail_url, category, duration, view_count, published_at, scheduled_at, description, rating, rd, volatility, wins, battles FROM videos WHERE channel_id = ? ORDER BY rating DESC, view_count DESC, published_at DESC';
       const videosStmt = category
         ? env.DB.prepare(videosSql).bind(channelId, category)
         : env.DB.prepare(videosSql).bind(channelId);
@@ -745,13 +745,16 @@ async function fetchVideoDetails(videoIds, env) {
         const tags         = Array.isArray(rawTags) && rawTags.length > 0 ? JSON.stringify(rawTags.slice(0, 30)) : null;
         // liveBroadcastContent でライブ判定 (カテゴリはプレイリスト判定優先のため live のみ上書き)
         const lbc = item.snippet?.liveBroadcastContent ?? 'none';
+        const scheduledAt = (lbc === 'upcoming')
+          ? (item.liveStreamingDetails?.scheduledStartTime ?? null)
+          : null;
         if (lbc === 'live' || lbc === 'upcoming') {
           await env.DB.prepare(
-            "UPDATE videos SET title = ?, thumbnail_url = ?, published_at = ?, view_count = ?, duration = ?, description = ?, tags = ?, category = 'live' WHERE video_id = ?"
-          ).bind(title, thumbnailUrl, publishedAt, viewCount, duration, description, tags, item.id).run();
+            "UPDATE videos SET title = ?, thumbnail_url = ?, published_at = ?, view_count = ?, duration = ?, description = ?, tags = ?, scheduled_at = ?, category = 'live' WHERE video_id = ?"
+          ).bind(title, thumbnailUrl, publishedAt, viewCount, duration, description, tags, scheduledAt, item.id).run();
         } else {
           await env.DB.prepare(
-            'UPDATE videos SET title = ?, thumbnail_url = ?, published_at = ?, view_count = ?, duration = ?, description = ?, tags = ? WHERE video_id = ?'
+            'UPDATE videos SET title = ?, thumbnail_url = ?, published_at = ?, view_count = ?, duration = ?, description = ?, tags = ?, scheduled_at = NULL WHERE video_id = ?'
           ).bind(title, thumbnailUrl, publishedAt, viewCount, duration, description, tags, item.id).run();
         }
       }

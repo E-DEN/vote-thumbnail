@@ -605,15 +605,11 @@ function _buildVideoMeta(v) {
   if (v.viewCount) {
     items.push('<span class="gallery-meta-item">' + _SVG_EYE + formatViewsShort(v.viewCount) + '</span>');
   }
-  if (v.publishedAt) {
+  if (v.scheduledAt) {
+    items.push('<span class="gallery-meta-item">' + _SVG_CLK + formatRelTime(v.scheduledAt) + t('fmt-live-scheduled') + '</span>');
+  } else if (v.publishedAt) {
     items.push('<span class="gallery-meta-item">' + _SVG_CLK + formatRelTime(v.publishedAt) + '</span>');
   }
-  var rating = getRating(v.id);
-  var rank = _ratingRankMap[v.id];
-  var rankStr = rank ? '<span class="gallery-meta-rank">(#' + rank + ')</span>' : '';
-  items.push('<span class="gallery-meta-item">' + _SVG_STAR + Math.round(rating) + rankStr + '</span>');
-  return items.join('');
-}
 function _buildPinDot(v) {
   var hasPinned = !!_reactionsMyPins[v.id];
   if (!hasPinned) return '';
@@ -625,7 +621,11 @@ function _buildReactionsVideoMeta(v) {
   if (v.viewCount) {
     items.push('<span class="gallery-meta-item">' + _SVG_EYE + v.viewCount.toLocaleString() + '</span>');
   }
-  if (v.publishedAt) {
+  if (v.scheduledAt) {
+    var sd = new Date(v.scheduledAt);
+    var sdStr = sd.getFullYear() + '/' + String(sd.getMonth()+1).padStart(2,'0') + '/' + String(sd.getDate()).padStart(2,'0');
+    items.push('<span class="gallery-meta-item">' + _SVG_CLK + sdStr + ' ' + t('fmt-live-scheduled') + '</span>');
+  } else if (v.publishedAt) {
     var d = new Date(v.publishedAt);
     var dateStr = d.getFullYear() + '/' + String(d.getMonth()+1).padStart(2,'0') + '/' + String(d.getDate()).padStart(2,'0');
     items.push('<span class="gallery-meta-item">' + _SVG_CLK + dateStr + '</span>');

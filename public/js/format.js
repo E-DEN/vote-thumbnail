@@ -38,6 +38,15 @@ export function formatViewsShort(n) {
 export function formatRelTime(isoStr) {
   if (!isoStr) return '';
   const diff = (Date.now() - new Date(isoStr).getTime()) / 1000;
+  // 未来の日時（配信予定など）
+  if (diff < 0) {
+    const abs = -diff;
+    if (abs < 3600)        return t('fmt-time-in-min',   { n: Math.ceil(abs / 60) });
+    if (abs < 86400)       return t('fmt-time-in-hour',  { n: Math.ceil(abs / 3600) });
+    if (abs < 86400 * 7)   return t('fmt-time-in-day',   { n: Math.ceil(abs / 86400) });
+    if (abs < 86400 * 30)  return t('fmt-time-in-week',  { n: Math.ceil(abs / (86400 * 7)) });
+    return t('fmt-time-in-month', { n: Math.ceil(abs / (86400 * 30)) });
+  }
   if (diff < 60)          return t('fmt-time-now');
   if (diff < 3600)        return t('fmt-time-min',   { n: Math.floor(diff / 60) });
   if (diff < 86400)       return t('fmt-time-hour',  { n: Math.floor(diff / 3600) });

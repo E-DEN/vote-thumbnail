@@ -16,7 +16,9 @@ export const _M_SVG_PIN  = '<svg viewBox="0 0 24 24" fill="none" stroke="current
 export function _mBuildMeta(v) {
   const items = [];
   if (v.viewCount)   items.push('<span class="m-meta-item">' + _M_SVG_EYE + formatViewsShort(v.viewCount) + '</span>');
-  if (v.publishedAt) items.push('<span class="m-meta-item">' + _M_SVG_CLK + formatRelTime(v.publishedAt) + '</span>');
+  if (v.scheduledAt) {
+    items.push('<span class="m-meta-item">' + _M_SVG_CLK + formatRelTime(v.scheduledAt) + (globalThis.t ? globalThis.t('fmt-live-scheduled') : 'にライブ配信予定') + '</span>');
+  } else if (v.publishedAt) items.push('<span class="m-meta-item">' + _M_SVG_CLK + formatRelTime(v.publishedAt) + '</span>');
   items.push('<span class="m-meta-item">' + _M_SVG_STAR + Math.round(getRating(v.id)) + '</span>');
   return items.join('');
 }

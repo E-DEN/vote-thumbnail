@@ -36,6 +36,7 @@ export function apiVideoToFrontend(v) {
     url:         'https://www.youtube.com/watch?v=' + v.video_id,
     viewCount:   v.view_count  ?? 0,
     publishedAt: v.published_at ?? '',
+    scheduledAt: v.scheduled_at ?? null,
     duration:    v.duration    ?? 0,
     description: v.description ?? null,
   };

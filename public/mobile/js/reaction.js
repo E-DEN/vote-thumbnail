@@ -541,7 +541,9 @@ function mRsRenderVideoMeta(v) {
   if (!el || !v) return;
   const parts = [];
   if (v.viewCount)  parts.push('<span class="m-meta-item">' + _M_SVG_EYE  + formatViewsShort(v.viewCount) + '</span>');
-  if (v.publishedAt) parts.push('<span class="m-meta-item">' + _M_SVG_CLK + formatRelTime(v.publishedAt) + '</span>');
+  if (v.scheduledAt) {
+    parts.push('<span class="m-meta-item">' + _M_SVG_CLK + formatRelTime(v.scheduledAt) + (globalThis.t ? globalThis.t('fmt-live-scheduled') : 'にライブ配信予定') + '</span>');
+  } else if (v.publishedAt) parts.push('<span class="m-meta-item">' + _M_SVG_CLK + formatRelTime(v.publishedAt) + '</span>');
   el.innerHTML = parts.join('');
 }
 

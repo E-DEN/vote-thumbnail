@@ -38,7 +38,8 @@ CREATE TABLE IF NOT EXISTS videos (
   volatility    REAL    NOT NULL DEFAULT 0.06,
   wins          INTEGER NOT NULL DEFAULT 0,
   battles       INTEGER NOT NULL DEFAULT 0,
-  rating_updated_at TEXT                            -- 最後にレーティングが更新された日時
+  rating_updated_at TEXT,                           -- 最後にレーティングが更新された日時
+  scheduled_at      TEXT                            -- 配信予定日時 (upcoming ライブのみ)
 );
 
 CREATE INDEX IF NOT EXISTS idx_videos_channel        ON videos(channel_id);

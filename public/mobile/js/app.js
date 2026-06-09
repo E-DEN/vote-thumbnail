@@ -1776,7 +1776,11 @@ function mOpenVideoMenu(v) {
   const dateMDEl   = document.getElementById('mVmenuDateMD');
   if (ratingEl) ratingEl.textContent = Math.round(getRating(v.id));
   if (viewsEl) viewsEl.textContent = v.viewCount ? v.viewCount.toLocaleString() : '-';
-  if (v.publishedAt) {
+  if (v.scheduledAt) {
+    const sd = new Date(v.scheduledAt);
+    if (dateYearEl) dateYearEl.textContent = t('m-date-md-fmt', {m: sd.getMonth() + 1, d: sd.getDate()});
+    if (dateMDEl)   dateMDEl.textContent   = t('fmt-live-scheduled');
+  } else if (v.publishedAt) {
     const d = new Date(v.publishedAt);
     if (dateYearEl) dateYearEl.textContent = t('m-date-md-fmt', {m: d.getMonth() + 1, d: d.getDate()});
     if (dateMDEl)   dateMDEl.textContent   = t('m-date-year-fmt', {y: d.getFullYear()});
@@ -1816,7 +1820,7 @@ function mOpenVideoMenu(v) {
   const detailDateEl   = document.getElementById('mVmenuDetailDateVal');
   const detailViewsEl  = document.getElementById('mVmenuDetailViewsVal');
   const detailRatingEl = document.getElementById('mVmenuDetailRatingVal');
-  if (detailDateEl) { const _d = v.publishedAt ? new Date(v.publishedAt) : null; detailDateEl.textContent = _d ? `${_d.getFullYear()}/${String(_d.getMonth()+1).padStart(2,'0')}/${String(_d.getDate()).padStart(2,'0')}` : ''; }
+  if (detailDateEl) { const _d = v.scheduledAt ? new Date(v.scheduledAt) : (v.publishedAt ? new Date(v.publishedAt) : null); detailDateEl.textContent = _d ? `${_d.getFullYear()}/${String(_d.getMonth()+1).padStart(2,'0')}/${String(_d.getDate()).padStart(2,'0')}` + (v.scheduledAt ? ' ' + t('fmt-live-scheduled') : '') : ''; }
   if (detailViewsEl)  detailViewsEl.textContent  = v.viewCount   ? v.viewCount.toLocaleString() : '';
   if (detailRatingEl) detailRatingEl.textContent = Math.round(getRating(v.id)).toLocaleString();
 
