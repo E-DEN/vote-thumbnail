@@ -606,10 +606,16 @@ function _buildVideoMeta(v) {
     items.push('<span class="gallery-meta-item">' + _SVG_EYE + formatViewsShort(v.viewCount) + '</span>');
   }
   if (v.scheduledAt) {
-    items.push('<span class="gallery-meta-item">' + _SVG_CLK + formatRelTime(v.scheduledAt) + t('fmt-live-scheduled') + '</span>');
+    items.push('<span class="gallery-meta-item">' + _SVG_CLK + formatRelTime(v.scheduledAt) + '</span>');
   } else if (v.publishedAt) {
     items.push('<span class="gallery-meta-item">' + _SVG_CLK + formatRelTime(v.publishedAt) + '</span>');
   }
+  var rating = getRating(v.id);
+  var rank = _ratingRankMap[v.id];
+  var rankStr = rank ? '<span class="gallery-meta-rank">(#' + rank + ')</span>' : '';
+  items.push('<span class="gallery-meta-item">' + _SVG_STAR + Math.round(rating) + rankStr + '</span>');
+  return items.join('');
+}
 function _buildPinDot(v) {
   var hasPinned = !!_reactionsMyPins[v.id];
   if (!hasPinned) return '';

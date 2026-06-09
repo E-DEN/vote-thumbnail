@@ -32,14 +32,14 @@ CREATE TABLE IF NOT EXISTS videos (
   description   TEXT,                           -- 概要欄 (NULL=未取得, ''=説明なし)
   tags          TEXT,                           -- YouTube snippet.tags JSON配列 (NULL=未取得)
   published_at  TEXT,
+  scheduled_at  TEXT,                           -- 配信予定日時 (upcoming ライブのみ)
   -- Glicko-2 (videos テーブルが正。votes からの再計算は順序依存のため不可)
   rating        REAL    NOT NULL DEFAULT 1500,
   rd            REAL    NOT NULL DEFAULT 350,
   volatility    REAL    NOT NULL DEFAULT 0.06,
   wins          INTEGER NOT NULL DEFAULT 0,
   battles       INTEGER NOT NULL DEFAULT 0,
-  rating_updated_at TEXT,                           -- 最後にレーティングが更新された日時
-  scheduled_at      TEXT                            -- 配信予定日時 (upcoming ライブのみ)
+  rating_updated_at TEXT                            -- 最後にレーティングが更新された日時
 );
 
 CREATE INDEX IF NOT EXISTS idx_videos_channel        ON videos(channel_id);
