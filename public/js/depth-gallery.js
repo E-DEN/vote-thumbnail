@@ -107,6 +107,12 @@
     _progressThumb = document.getElementById('dg-progress-thumb');
     _holoOverlay   = document.getElementById('dg-holo-overlay');
     _holoDepth     = 0;
+    // 画像ロード後にフェードイン
+    var _holoImg = new Image();
+    _holoImg.onload = function() {
+      if (_holoOverlay) _holoOverlay.style.opacity = '0.75';
+    };
+    _holoImg.src = '/img/holo.png';
   }
 
   // --- ラベルモード ---
