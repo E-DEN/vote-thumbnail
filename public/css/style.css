@@ -1916,6 +1916,11 @@ header {
   display: flex;
   gap: 12px;
   height: 320px;
+  filter: saturate(0) brightness(0.15) blur(3px);
+  transition: filter 0.5s;
+}
+.gallery-row.inbound {
+  filter: none;
 }
 .gallery-cell {
   position: relative;
@@ -2149,7 +2154,15 @@ header {
   background: var(--surface2);
   cursor: pointer;
   position: relative;
+  /* 初期状態: グレースケール・暗い・ぼかし */
+  filter: saturate(0) brightness(0.15) blur(3px);
+  transition: filter 0.5s, box-shadow 0.3s;
 }
+#listGrid.mode-shorts .gallery-cell--short.inbound {
+  filter: saturate(1) brightness(1) blur(0px);
+  box-shadow: 0 4px 18px rgba(0,0,0,0.4);
+}
+#listGrid.mode-shorts .gallery-cell--short.inbound img { transform: scale(1); }
 /* 9:16の縦長比率で先にトリム */
 #listGrid.mode-shorts .gallery-cell--short .short-crop {
   width: 100%;

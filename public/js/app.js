@@ -648,6 +648,7 @@ function _buildReactionsVideoMeta(v) {
 var _listMode = localStorage.getItem('thumb-list-mode') || 'grid';
 var _rankMode = localStorage.getItem('thumb-rank-mode') || 'list'; // 'list' | 'depth'
 var _shortsObserver = null;
+var _galleryObserver = null;
 var _listSortOrder = localStorage.getItem(LS_SORT) || 'rating';  // 'date' | 'views' | 'rating' | 'random'
 var _sortDir = localStorage.getItem('thumb-sort-dir') || 'desc'; // 'asc' | 'desc'
 var _SVG_SORT_DESC = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 16 4 4 4-4"/><path d="M7 20V4"/><path d="M11 4h10"/><path d="M11 8h7"/><path d="M11 12h4"/></svg>';
@@ -692,6 +693,19 @@ function renderList() {
   }, { rootMargin: '200px' });
   var sentinel = document.getElementById('shortsSentinel');
   if (sentinel) { _listScrollObserver.observe(sentinel); }
+
+  // ギャラリーアニメーション observer（カテゴリ共通）
+  if (_galleryObserver) { _galleryObserver.disconnect(); }
+  var _scrollRoot = document.getElementById('listScrollBody');
+  _galleryObserver = new IntersectionObserver(function(entries) {
+    entries.forEach(function(e) {
+      if (e.intersectionRatio >= 0.15) {
+        e.target.classList.add('inbound');
+      } else {
+        e.target.classList.remove('inbound');
+      }
+    });
+  }, { root: _scrollRoot, threshold: [0, 0.15] });
 
   if (state.currentCat === 'shorts') {
     grid.classList.add('mode-shorts');
@@ -753,6 +767,7 @@ function _appendGalleryPage() {
         return function() { openModalReactions(vid); };
       }(v)));
       grid.appendChild(cell);
+      if (_galleryObserver) { _galleryObserver.observe(cell); }
     });
   } else {
     // 通常: galleryレイアウト（行パターン）
@@ -785,6 +800,7 @@ function _appendGalleryPage() {
         row.appendChild(cell);
       });
       grid.appendChild(row);
+      if (_galleryObserver) { _galleryObserver.observe(row); }
       i += Math.min(count, slice.length - i);
       pat++;
     }
