@@ -1429,9 +1429,7 @@ header {
   display: none;
 }
 /* ランキング: 空状態時はヘッダーを隠して残り高さに中央揃え */
-#rankingScreen:has(.cat-empty-state) {
-  display: flex;
-  flex-direction: column;
+#rankingScreen:has(.cat-empty-state) #rankScrollBody {
   overflow-y: hidden;
   scrollbar-gutter: auto;
 }
@@ -1601,6 +1599,52 @@ header {
 /* =====================
    RANKING SCREEN
 ===================== */
+
+#rankingScreen {
+  position: relative;
+  padding: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  scrollbar-gutter: auto;
+}
+
+#rankScrollBody {
+  flex: 1;
+  overflow-y: scroll;
+  scrollbar-gutter: stable;
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+}
+#rankScrollBody::-webkit-scrollbar { width: 8px; }
+#rankScrollBody::-webkit-scrollbar-track { background: transparent; }
+#rankScrollBody::-webkit-scrollbar-thumb {
+  background: rgba(120,120,120,0.25);
+  border-radius: 4px;
+  min-height: 48px;
+}
+#rankScrollBody:hover::-webkit-scrollbar-thumb { background: rgba(120,120,120,0.45); }
+
+#rankingScreen.depth-mode {
+  overflow: hidden;
+  padding: 0;  /* depth モード時は padding を除去して overlay が全域を覆う */
+}
+
+#rankingScreen.depth-mode #rankViewBar {
+  position: absolute;
+  top: 12px;
+  right: 24px;
+  width: auto;
+  margin-left: 0;
+}
+
+#rankViewBar {
+  position: absolute;
+  top: 12px;
+  right: 24px;
+  z-index: 10;
+}
 
 .ranking-header {
   margin-bottom: 12px;
@@ -2040,7 +2084,7 @@ header {
   position: absolute;
   top: 12px;
   right: 24px;
-  z-index: 4;
+  z-index: 10;
 }
 
 /* 一覧画面 */
@@ -4131,3 +4175,243 @@ a.rs-video-title:hover { color: var(--accent); }
   border-color: transparent;
   pointer-events: none;
 }
+
+/* --- Depth Gallery --- */
+#dgOverlay {
+  display: none;
+  position: absolute;
+  inset: 0;
+  background: #0d0d0d;
+  overflow: hidden;
+  font-family: 'Helvetica Neue', sans-serif;
+  z-index: 2;
+  cursor: default;
+}
+
+#dg-bg {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+#dg-bg-a,
+#dg-bg-b {
+  position: absolute;
+  width: 120%;
+  height: 120%;
+  top: -10%;
+  left: -10%;
+  object-fit: cover;
+  filter: blur(60px) saturate(1.4) brightness(0.6) contrast(0.5);
+  opacity: 0;
+}
+
+/* ショートサムネの黒帯を隠すためズーム */
+#dg-bg-a.is-shorts,
+#dg-bg-b.is-shorts {
+  transform: scale(2.8);
+}
+
+#dg-noise {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.38;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
+  background-size: 160px 160px;
+}
+
+#dg-holo-overlay {
+  position: absolute; inset: 0;
+  pointer-events: none;
+  background-image:
+    url("/img/sparkles.gif"),
+    url("/img/holo.png"),
+    linear-gradient(125deg, #ff008450 15%, #fca40040 30%, #ffff0030 40%, #00ff8a20 60%, #00cfff40 70%, #cc4cfa50 85%);
+  background-size: 200px 200px, 200px 200px, 300% 300%;
+  background-repeat: repeat, repeat, no-repeat;
+  background-position: center, center, center;
+  background-blend-mode: overlay;
+  mix-blend-mode: color-dodge;
+  filter: blur(0.6px) brightness(1.45) contrast(1);
+  opacity: 0.75;
+}
+
+#dg-scene-wrap {
+  position: absolute;
+  inset: 0;
+  perspective: 1400px;
+  perspective-origin: 50% 50%;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+#dg-scene {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+  will-change: transform;
+  backface-visibility: hidden;
+  pointer-events: none;
+}
+
+.dg-card {
+  position: absolute;
+  cursor: default;
+  opacity: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.dg-card.is-focused {
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.dg-card-play {
+  display: none;
+}
+
+.dg-card img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center top;
+  border-radius: 6px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.dg-card--shorts img {
+  object-position: center center;
+  clip-path: inset(0 0.5% 0 0.5% round 6px);
+}
+.dg-card--shorts {
+  overflow: hidden;
+  border-radius: 6px;
+  filter: drop-shadow(0 20px 60px rgba(0, 0, 0, 0.6));
+}
+
+.dg-card-label {
+  position: absolute;
+  bottom: 0;
+  width: 420px;
+  display: grid;
+  gap: 0.2rem;
+  color: rgba(244, 244, 244, 0.85);
+  font-family: 'Impact', 'Arial Black', 'Haettenschweiler', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  pointer-events: none;
+}
+
+.dg-card-label--right { left: calc(100% + 20px); }
+.dg-card-label--left  { right: calc(100% + 20px); text-align: right; }
+.dg-lbl-index { font-size: 48px; opacity: 0.9; line-height: 1; }
+.dg-lbl-title { font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.2; }
+.dg-lbl-sub   { font-size: 11px; opacity: 0.5; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-family: 'SF Mono', 'Consolas', monospace; letter-spacing: 0.1em; }
+.dg-lbl-stats { font-size: 10px; opacity: 0.6; white-space: nowrap; font-family: 'SF Mono', 'Consolas', monospace; letter-spacing: 0.08em; }
+
+.dg-card-label.mode-follow {
+  width: 420px;
+  white-space: normal;
+}
+.dg-card-label.mode-follow .dg-lbl-title,
+.dg-card-label.mode-follow .dg-lbl-sub {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: unset;
+}
+
+#dg-fixed-label {
+  position: absolute;
+  pointer-events: none;
+  display: none;
+  gap: 0.2rem;
+  color: rgba(244, 244, 244, 0.9);
+  font-family: 'Impact', 'Arial Black', 'Haettenschweiler', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  transition: opacity 0.4s ease;
+}
+#dg-fl-index { font-size: 62px; opacity: 0.9; line-height: 1; }
+#dg-fl-title { font-size: 16px; line-height: 1.2; font-family: var(--font-sans, 'Helvetica Neue', sans-serif); font-weight: 700; overflow-wrap: break-word; min-width: 0; }
+#dg-fl-sub   { font-size: 11px; opacity: 0.5; font-family: 'SF Mono', 'Consolas', monospace; letter-spacing: 0.1em; }
+#dg-fl-stats { font-size: 12px; opacity: 0.85; font-family: 'SF Mono', 'Consolas', monospace; letter-spacing: 0.08em; color: rgba(255,255,255,0.9); }
+
+#dg-fixed-label.mode-follow {
+  display: grid;
+}
+
+#dg-fixed-label.mode-bottom {
+  display: grid;
+  bottom: 3rem;
+  left: 50%;
+  transform: translateX(-50%);
+  text-align: center;
+}
+
+#dg-fixed-label.mode-left {
+  display: grid;
+  left: 2.5rem;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+#dg-fixed-label.mode-right {
+  display: grid;
+  right: 2.5rem;
+  top: 50%;
+  transform: translateY(-50%);
+  text-align: right;
+}
+
+#dg-progress {
+  position: absolute;
+  right: 1.2rem;
+  top: 50%;
+  transform: translateY(-50%);
+  height: 60%;
+  width: 2px;
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 2px;
+  z-index: 6;
+  pointer-events: none;
+  /* 右端シェード: チック文字を読みやすくする */
+  filter: drop-shadow(0 0 12px rgba(0,0,0,0.6));
+}
+
+#dg-progress-thumb {
+  position: absolute;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 0 6px rgba(255,255,255,0.5);
+  top: 0%;
+  transition: top 0.15s ease;
+  cursor: grab;
+  touch-action: none;
+}
+#dg-progress-thumb:active { cursor: grabbing; }
+
+.dg-progress-tick {
+  position: absolute;
+  left: calc(100% + 9px);
+  transform: translate(-50%, -50%);
+  font-size: 7px;
+  font-family: 'SF Mono', 'Consolas', monospace;
+  font-variant-numeric: tabular-nums;
+  color: rgba(255, 255, 255, 0.7);
+  white-space: nowrap;
+  pointer-events: none;
+  letter-spacing: 0.05em;
+}
+

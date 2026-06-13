@@ -646,6 +646,7 @@ function _buildReactionsVideoMeta(v) {
 
 // --- 一覧 ---
 var _listMode = localStorage.getItem('thumb-list-mode') || 'grid';
+var _rankMode = localStorage.getItem('thumb-rank-mode') || 'list'; // 'list' | 'depth'
 var _shortsObserver = null;
 var _listSortOrder = localStorage.getItem(LS_SORT) || 'rating';  // 'date' | 'views' | 'rating' | 'random'
 var _sortDir = localStorage.getItem('thumb-sort-dir') || 'desc'; // 'asc' | 'desc'
@@ -667,6 +668,8 @@ var _GALLERY_PATTERNS = [
 function renderList() {
   _rebuildRatingRankMap();
   const _listViewBar = document.getElementById('listViewBar');
+  // depth以外のモードに切り替わったときはdepthを破棄
+  if (typeof destroyDepthGallery === 'function') destroyDepthGallery();
   if (_listMode === 'grid') { _renderGrid(); return; }
   // ギャラリーモード
   var grid = document.getElementById('listGrid');
@@ -894,7 +897,7 @@ function _appendGridPage() {
     grid.appendChild(card);
   });
 }
-const RANK_MAX = 100;
+const RANK_MAX = 30;
 
 function renderRankingItems(sorted, maxRating, minRating, range, from, to) {
   const list = document.getElementById('rankList');
@@ -938,6 +941,19 @@ function renderRankingItems(sorted, maxRating, minRating, range, from, to) {
 }
 
 function renderRanking() {
+  const _rs = document.getElementById('rankingScreen');
+  // ボタン状態をモードに同期
+  const _rlb = document.getElementById('rankModeListBtn');
+  const _rdb = document.getElementById('rankModeDepthBtn');
+  if (_rlb) _rlb.classList.toggle('active', _rankMode === 'list');
+  if (_rdb) _rdb.classList.toggle('active', _rankMode === 'depth');
+  if (_rankMode === 'depth') {
+    if (_rs) _rs.classList.add('depth-mode');
+    _renderRankingDepth();
+    return;
+  }
+  if (typeof destroyDepthGallery === 'function') destroyDepthGallery();
+  if (_rs) _rs.classList.remove('depth-mode');
   _rebuildRatingRankMap();
   const pool = filteredVideos();
   const sorted = [...pool].sort((a, b) => getRating(b.id) - getRating(a.id));
@@ -957,6 +973,34 @@ function renderRanking() {
   if (_rankHeader) _rankHeader.style.display = '';
 
   renderRankingItems(sorted, maxRating, minRating, range, 0, Math.min(RANK_MAX, sorted.length));
+}
+
+// ランキング画面のデプスギャラリーモード
+var _depthScrollSaved = 0;
+var _rankDepthOrder = localStorage.getItem('thumb-rank-depth-order') || 'desc';
+function _renderRankingDepth() {
+  if (typeof initDepthGallery !== 'function') return;
+  var pool = filteredVideos().slice().sort(function(a, b) { return getRating(b.id) - getRating(a.id); });
+  var limited = pool.slice(0, Math.min(RANK_MAX, pool.length));
+  if (!limited.length) return;
+  // 表示順（asc = 1位が手前）
+  var ordered = (_rankDepthOrder === 'asc') ? limited.slice().reverse() : limited;
+  // 統計情報を付加した拡張オブジェクトを渡す
+  const withStats = ordered.map(function(v, i) {
+    var rank = (_rankDepthOrder === 'asc') ? (ordered.length - i) : (i + 1);
+    var wins    = getWins(v.id);
+    var battles = getBattles(v.id);
+    var rating  = Math.round(getRating(v.id));
+    var wr      = battles > 0 ? Math.round(wins / battles * 100) : null;
+    return Object.assign({}, v, { _rank: rank, _wins: wins, _battles: battles, _rating: rating, _wr: wr });
+  });
+  const ch = channels[state.currentChannelKey];
+  const channelTitle = ch ? (ch.name || ch.title || '') : '';
+  const rankingScreen = document.getElementById('rankingScreen');
+  initDepthGallery(withStats, channelTitle, rankingScreen, _depthScrollSaved);
+  _depthScrollSaved = 0;
+  // ラベルモードは follow 固定
+  if (typeof window.setDepthLabelMode === 'function') window.setDepthLabelMode('follow');
 }
 
 // --- 最高レート動画ヘルパー ---
@@ -2925,6 +2969,10 @@ function closeThumbModal() {
 // ギャラリーからリアクション全画面で開く
 function openModalReactions(v) {
   if (currentView !== 'reaction') _prevView = currentView;
+  // デプスギャラリーからの遷移時はスクロール位置を保存
+  if (currentView === 'ranking' && typeof window.getDepthGalleryScroll === 'function') {
+    _depthScrollSaved = window.getDepthGalleryScroll();
+  }
   var img = document.getElementById('reactionsImg');
   img.onload = function() {
     requestAnimationFrame(function() {
@@ -2946,6 +2994,7 @@ function openModalReactions(v) {
   openVideoDesc(v);
   showView('reaction');
 }
+window.openModalReactions = openModalReactions;
 
 function _refreshVideoMeta() {
   var v = (state.allVideos || []).find(function(x) { return x.id === _reactionsCurrentVideoId; });
@@ -3364,6 +3413,11 @@ function init() {
   // 一覧モード切り替えボタンの初期状態を反映
   var _galBtn  = document.getElementById('listModeGalleryBtn');
   var _gridBtn = document.getElementById('listModeGridBtn');
+  // depth は list から撤去済み
+  if (_listMode === 'depth') {
+    _listMode = 'gallery';
+    localStorage.setItem('thumb-list-mode', 'gallery');
+  }
   if (_listMode === 'grid') {
     _galBtn.classList.remove('active');
     _gridBtn.classList.add('active');
@@ -3382,6 +3436,41 @@ function init() {
     _galBtn.classList.remove('active');
     renderList();
   });
+
+  // ランキング画面のデプスボタン
+  var _rankListBtn  = document.getElementById('rankModeListBtn');
+  var _rankDepthBtn = document.getElementById('rankModeDepthBtn');
+  var _rankDepthControls = document.getElementById('rankDepthControls');
+
+  function _syncRankDepthControls() {
+    var isDepth = _rankMode === 'depth';
+    if (_rankDepthControls) _rankDepthControls.style.display = isDepth ? 'flex' : 'none';
+  }
+  _syncRankDepthControls();
+
+  if (_rankListBtn) {
+    _rankListBtn.addEventListener('click', function() {
+      _rankMode = 'list';
+      localStorage.setItem('thumb-rank-mode', 'list');
+      _rankListBtn.classList.add('active');
+      _rankDepthBtn.classList.remove('active');
+      document.getElementById('rankingScreen').classList.remove('depth-mode');
+      if (typeof destroyDepthGallery === 'function') destroyDepthGallery();
+      _syncRankDepthControls();
+      renderRanking();
+    });
+  }
+  if (_rankDepthBtn) {
+    _rankDepthBtn.addEventListener('click', function() {
+      _rankMode = 'depth';
+      localStorage.setItem('thumb-rank-mode', 'depth');
+      _rankDepthBtn.classList.add('active');
+      _rankListBtn.classList.remove('active');
+      document.getElementById('rankingScreen').classList.add('depth-mode');
+      _syncRankDepthControls();
+      _renderRankingDepth();
+    });
+  }
 
   // チャンネル名ツールチップ要素を一度だけ生成
   _chTooltip = document.createElement('div');
