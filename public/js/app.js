@@ -3187,9 +3187,9 @@ async function addChannelFromSidebarInput() {
   const handleMatch = raw.match(/@([^\s/?#&]+)/);
   // channel/UCxxx 形式の URL を抽出
   const channelIdMatch = !handleMatch && raw.match(/youtube\.com\/channel\/(UC[\w-]{22})/);
-  // 動画 URL から video ID を抽出
+  // 動画 URL から video ID を抽出（watch はクエリ順不同に対応）
   const videoIdMatch = !handleMatch && !channelIdMatch && raw.match(
-    /(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|shorts\/|live\/|embed\/|v\/))([A-Za-z0-9_-]{11})/
+    /(?:youtu\.be\/|youtube(?:-nocookie)?\.com\/(?:shorts\/|live\/|embed\/|v\/)|youtube(?:-nocookie)?\.com\/watch\?(?:[^#\s]*?&)?v=)([A-Za-z0-9_-]{11})/
   );
   // @なし・URLなし → 単純文字列をハンドルとして扱う
   const plainHandle = !handleMatch && !channelIdMatch && !videoIdMatch && /^[^\s/?#&]+$/.test(raw)

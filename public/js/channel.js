@@ -31,9 +31,9 @@ export function channelKeyFromInput(input) {
   const mChannelUrl = trimmed.match(/youtube\.com\/channel\/(UC[\w-]{22})/);
   if (mChannelUrl) return { type: 'id', value: mChannelUrl[1] };
 
-  // 動画 URL → videoId（youtu.be / watch?v= / shorts / live / embed / v）
+  // 動画 URL → videoId（youtu.be / watch?v=（クエリ順不同）/ shorts / live / embed / v）
   const mVideo = trimmed.match(
-    /(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|shorts\/|live\/|embed\/|v\/))([A-Za-z0-9_-]{11})/
+    /(?:youtu\.be\/|youtube(?:-nocookie)?\.com\/(?:shorts\/|live\/|embed\/|v\/)|youtube(?:-nocookie)?\.com\/watch\?(?:[^#\s]*?&)?v=)([A-Za-z0-9_-]{11})/
   );
   if (mVideo) return { type: 'videoId', value: mVideo[1] };
 
