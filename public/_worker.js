@@ -116,15 +116,15 @@ async function handleApi(request, env, url, ctx) {
       if (body?.videoId && !body?.handle) {
         const videoId = String(body.videoId).replace(/[^A-Za-z0-9_-]/g, '').slice(0, 11);
         if (videoId.length !== 11) return err('video ID が不正です');
-        const vRes = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
-          headers: { 'User-Agent': 'Mozilla/5.0' },
-        });
+        // oEmbed API でチャンネル handle を取得（HTML スクレイピングより安定）
+        const oEmbedUrl = `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`;
+        const vRes = await fetch(oEmbedUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
         if (!vRes.ok) return err('動画が見つかりません', 404);
-        const vHtml = await vRes.text();
-        const baseUrlMatch = vHtml.match(/"canonicalBaseUrl":"(\/@[^"]+)"/);
-        if (!baseUrlMatch) return err('チャンネル情報の取得に失敗しました', 502);
-        const rawPath = baseUrlMatch[1].replace(/^\//, '');
-        try { body.handle = decodeURIComponent(rawPath); } catch { body.handle = rawPath; }
+        const oEmbed = await vRes.json();
+        const authorUrl = oEmbed?.author_url ?? '';
+        const handleMatch = authorUrl.match(/\/@(.+)$/);
+        if (!handleMatch) return err('チャンネル情報の取得に失敗しました', 502);
+        body.handle = '@' + handleMatch[1];
       }
 
       const handle = body?.handle?.trim();
