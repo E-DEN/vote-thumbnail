@@ -2574,7 +2574,9 @@ async function loadReactionSeeds(videoId) {
     if (!resp.ok) return [];
     const data = await resp.json();
     _reactionsPins = data.pins  || [];
-    if (data.demo_fill) pinFillDummy(_reactionsPins, 30);
+    // 本物のピンが 2 件以上あればダミー補完しない
+    const _realTotal = _reactionsPins.length + (data.my_pin ? 1 : 0);
+    if (data.demo_fill && _realTotal < 2) pinFillDummy(_reactionsPins, 30);
     _reactionsKde  = reactionsComputeKde(_reactionsPins);
     // サーバーから自分のピンを復元（ローカルに未保存の場合）
     if (data.my_pin && !_reactionsMyPins[videoId]) {
@@ -2699,7 +2701,7 @@ function _pinColorFromDensity(d) {
 function updatePinColors() {
   var pinsLayer = document.getElementById('reactionsPinsLayer');
   if (!pinsLayer) return;
-  pinsLayer.querySelectorAll('.reactions-pin').forEach(function(el) {
+  pinsLayer.querySelectorAll('.reactions-pin:not(.reactions-pin--dummy)').forEach(function(el) {
     var d = parseFloat(el.dataset.density) || 0.5;
     var shadeIdx = d >= 0.67 ? 2 : d >= 0.34 ? 1 : 0;
     el.className = 'reactions-pin shade-' + shadeIdx;
@@ -2739,7 +2741,7 @@ function startReactionsLoop() {
       return;
     }
     var pin = placed[emitted++];
-    pinsLayer.appendChild(makeReactionsPinEl(pin.x, pin.y, pin.density));
+    pinsLayer.appendChild(makeReactionsPinEl(pin.x, pin.y, pin.density, false, pin));
     var delay = 80 + Math.random() * 200;
     setTimeout(spawnOne, delay);
   }

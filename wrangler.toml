@@ -4,7 +4,7 @@ compatibility_date = "2025-01-01"
 
 [vars]
 ALLOWED_ORIGIN = "https://vote-thumbnail.pages.dev"
-DEMO_FILL = "0" # 1:ダミーピンを有効化 0: 無効
+DEMO_FILL = "1" # 1:ダミーピンを有効化 0: 無効
 
 # D1 データベース
 [[d1_databases]]

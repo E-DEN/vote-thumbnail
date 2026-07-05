@@ -111,7 +111,7 @@ function pinBuildPlaced(pins, count) {
     return { p, w: Math.sqrt(cellWeight[cx + ',' + cy] || 0.01) };
   });
   weighted.sort((a, b) => Math.pow(Math.random(), 1 / b.w) - Math.pow(Math.random(), 1 / a.w));
-  const placed = weighted.slice(0, count).map(item => ({ x: item.p.x, y: item.p.y, density: 0 }));
+  const placed = weighted.slice(0, count).map(item => ({ x: item.p.x, y: item.p.y, density: 0, dummy: item.p.dummy || false }));
   const BW2 = 0.09 * 0.09;
   let maxKde = 0;
   const kdeDensities = placed.map(pin => {
@@ -229,5 +229,5 @@ function pinFillDummy(pins, target) {
     }));
   }
   const needed = target - pins.length;
-  for (let i = 0; i < needed; i++) pins.push(samplePin(hotspots));
+  for (let i = 0; i < needed; i++) pins.push({ ...samplePin(hotspots), dummy: true });
 }

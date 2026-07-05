@@ -196,7 +196,7 @@ function mRsStartLoop(skipMyPin) {
   function spawnOne() {
     if (!_mRsActive || emitted >= placed.length) { _mRsActive = false; return; }
     const pin = placed[emitted++];
-    pinsLayer.appendChild(mRsMakePinEl(pin.x, pin.y, pin.density));
+    pinsLayer.appendChild(mRsMakePinEl(pin.x, pin.y, pin.density, false, pin));
     setTimeout(spawnOne, 80 + Math.random() * 200);
   }
   for (let s = 0; s < 5; s++) setTimeout(() => { if (_mRsActive) spawnOne(); }, s * 80);
@@ -212,7 +212,7 @@ function _mRsRefreshPinColors() {
   const pinsLayer = document.getElementById('mRsPinsLayer');
   if (!pinsLayer) return;
   const palette = PIN_PALETTES[_mRsPinColor] || PIN_PALETTES['#ec4899'];
-  pinsLayer.querySelectorAll('.reactions-pin').forEach(el => {
+  pinsLayer.querySelectorAll('.reactions-pin:not(.reactions-pin--dummy)').forEach(el => {
     const d = parseFloat(el.dataset.density) || 0.5;
     const balloon = el.querySelector('.pin-balloon');
     if (balloon) balloon.style.fill = pinColorFromDensity(d, palette);
@@ -409,7 +409,9 @@ async function mRsOpenMode(videoId) {
     if (resp.ok) {
       const data = await resp.json();
       _mRsPins = data.pins || [];
-      if (data.demo_fill || /^(localhost|127\.|192\.168\.)/.test(location.hostname)) _mRsFillDummyPins(_mRsPins);
+      // 本物のピンが 2 件以上あればダミー補完しない
+      const _realTotal = _mRsPins.length + (data.my_pin ? 1 : 0);
+      if ((data.demo_fill || /^(localhost|127\.|192\.168\.)/.test(location.hostname)) && _realTotal < 2) _mRsFillDummyPins(_mRsPins);
       _mRsKde  = mRsComputeKde(_mRsPins);
       if (data.my_pin && !_mRsMyPins[videoId]) {
         _mRsMyPins[videoId] = { x: data.my_pin.x, y: data.my_pin.y };
