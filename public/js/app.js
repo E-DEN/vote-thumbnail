@@ -3936,6 +3936,19 @@ function init() {
 
   // 1分ごとに list/ranking 画面の動画を再取得して新着を反映
   setInterval(_pollRefresh, 60000);
+
+  // 5分以上バックグラウンドだったタブが復帰したとき動画を再取得
+  let _hiddenAt = 0;
+  document.addEventListener('visibilitychange', async function() {
+    if (document.hidden) { _hiddenAt = Date.now(); return; }
+    if (!_hiddenAt || Date.now() - _hiddenAt < 5 * 60 * 1000) return;
+    _hiddenAt = 0;
+    if (!state.currentChannelKey) return;
+    try {
+      state.allVideos = await fetchChannelVideos(state.currentChannelKey);
+      renderCurrentView();
+    } catch { /* サイレント失敗 */ }
+  });
 }
 
 // --- URL デコードペースト（全チャンネルURL入力欄共通） ---

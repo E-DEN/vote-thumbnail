@@ -2553,6 +2553,20 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   });
 
+  // 5分以上バックグラウンドだったタブが復帰したとき動画を再取得
+  let _hiddenAt = 0;
+  document.addEventListener('visibilitychange', async function() {
+    if (document.hidden) { _hiddenAt = Date.now(); return; }
+    if (!_hiddenAt || Date.now() - _hiddenAt < 5 * 60 * 1000) return;
+    _hiddenAt = 0;
+    if (!state.currentChannelKey) return;
+    try {
+      state.allVideos = await fetchChannelVideos(state.currentChannelKey);
+      saveVideosForChannel(state.currentChannelKey, state.allVideos);
+      renderCurrentTab();
+    } catch { /* サイレント失敗 */ }
+  });
+
   // lucide アイコンを初期化
   if (typeof lucide !== 'undefined') lucide.createIcons();
 
