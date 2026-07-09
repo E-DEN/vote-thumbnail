@@ -372,8 +372,6 @@ body:has(.m-bottom-nav[hidden]) .m-content {
   inset: 0;
   z-index: 9999;
   background: rgba(0,0,0,0.55);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
   display: flex;
   align-items: flex-end;
   justify-content: center;
@@ -458,7 +456,7 @@ body:has(.m-bottom-nav[hidden]) .m-content {
   border: 1px solid var(--border);
   border-radius: 8px;
   box-shadow: var(--shadow);
-  z-index: 400;
+  z-index: 630;
   overflow: hidden;
   min-width: 148px;
 }
@@ -1811,10 +1809,8 @@ body:has(.m-bottom-nav[hidden]) .m-content {
 .m-settings-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 500;
+  z-index: 700;
   background: rgba(0,0,0,0.55);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
   display: flex;
   align-items: flex-end;
   justify-content: center;

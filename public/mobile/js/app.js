@@ -525,6 +525,82 @@ function closeChannelPanel() {
 })();
 
 // --- 削除確認ポップアップ (PC版 _showChDelPopup と同等) ---
+// 共有コードのインポート共通処理（モジュールスコープ）
+async function _mImportFromShareCode(code) {
+  try {
+    const res = await fetch('/api/share/' + code);
+    if (!res.ok) { showToast(t('share-link-not-found'), 'err'); return; }
+    const data = await res.json();
+    if (!data.channels || typeof data.channels !== 'object') return;
+    let dbMap = {};
+    try {
+      const allRes = await fetch('/api/channels');
+      if (allRes.ok) dbMap = Object.fromEntries((await allRes.json()).map(c => [c.channel_id, c]));
+    } catch { /* ignore */ }
+    const channelIds = Object.keys(data.channels);
+    const chInfos = channelIds.map(id => dbMap[id] || { channel_id: id, title: data.channels[id]?.title || id, icon_url: data.channels[id]?.icon_url || '', handle: '' });
+    await new Promise((resolve, reject) => { _mShowShareImportPopup(chInfos, resolve, reject); }).then(async selectedIds => {
+      if (!selectedIds.length) return;
+      showToast(t('preset-fetching'), 'loading');
+      if (data.sidebarOrder && Array.isArray(data.sidebarOrder)) {
+        for (const item of data.sidebarOrder) {
+          if (!sidebarOrder.some(i => (i.type === item.type && (i.key === item.key || i.id === item.id)))) sidebarOrder.push(item);
+        }
+        saveSidebarOrder();
+      }
+      for (const [id, meta] of Object.entries(data.channels)) {
+        if (!selectedIds.includes(id)) continue;
+        if (dbMap[id]) channels[id] = { key: id, channelId: id, handle: dbMap[id].handle, displayName: dbMap[id].title, avatar: dbMap[id].icon_url, tags: meta.tags || channels[id]?.tags || [], addedAt: channels[id]?.addedAt || new Date().toISOString() };
+        else channels[id] = { key: id, channelId: id, handle: channels[id]?.handle || '', displayName: meta.title || channels[id]?.displayName || '', avatar: meta.icon_url || channels[id]?.avatar || '', tags: meta.tags || channels[id]?.tags || [], addedAt: channels[id]?.addedAt || new Date().toISOString() };
+      }
+      saveChannels();
+      renderChannelPanel();
+      const missingIds = selectedIds.filter(id => !dbMap[id]);
+      if (missingIds.length > 0) {
+        showToast(t('status-ch-fetching'), 'loading');
+        (async () => {
+          const _list = document.getElementById('mChList');
+          const _pending = new Set(missingIds);
+          // missingIds を含むフォルダにスピナーを付与
+          missingIds.forEach(id => {
+            const folder = sidebarOrder.find(i => i.type === 'folder' && i.children?.includes(id));
+            if (folder) _list?.querySelector(`.sidebar-folder[data-folder-id="${folder.id}"]`)?.classList.add('m-ch-refreshing');
+          });
+          for (const id of missingIds) {
+            const card = _list?.querySelector(`.sidebar-channel-item[data-key="${id}"]`);
+            if (card) card.classList.add('m-ch-refreshing');
+            try {
+              const r = await fetch('/api/channels/' + id + '/refresh', { method: 'POST' });
+              const d = r.ok ? await r.json().catch(() => ({})) : {};
+              if (d.channel && channels[id]) {
+                channels[id] = { ...channels[id], handle: d.channel.handle, displayName: d.channel.title, avatar: d.channel.icon_url };
+                saveChannels();
+                const newCard = _makeChCard(id);
+                const cur = _list?.querySelector(`.sidebar-channel-item[data-key="${id}"]`);
+                if (cur) cur.replaceWith(newCard);
+              }
+            } catch { /* ignore */ }
+            const fin = _list?.querySelector(`.sidebar-channel-item[data-key="${id}"]`);
+            if (fin) fin.classList.remove('m-ch-refreshing');
+            _pending.delete(id);
+            // このチャンネルを含むフォルダの未完了が 0 になったらスピナーを外す
+            sidebarOrder.forEach(item => {
+              if (item.type === 'folder' && item.children?.includes(id) && !item.children.some(k => _pending.has(k))) {
+                _list?.querySelector(`.sidebar-folder[data-folder-id="${item.id}"]`)?.classList.remove('m-ch-refreshing');
+              }
+            });
+          }
+          showToast(t('preset-imported'));
+        })();
+      } else {
+        showToast(t('preset-imported'));
+      }
+    });
+  } catch (e) {
+    if (e !== 'cancel') showToast(t('share-link-err'), 'err');
+  }
+}
+
 // 共有リンクインポート確認ポップアップ（画面中央固定）
 // chInfos: [{ channel_id, title, icon_url, handle }]
 // onOk: 選択された channel_id[] を引数に呼ぶ
@@ -2776,68 +2852,8 @@ document.addEventListener('DOMContentLoaded', function() {
   const catBar = document.getElementById('mCatBar');
   catBar.hidden = false;
 
-  // 共有コードのインポート共通処理
-  async function _mImportFromShareCode(code) {
-    try {
-      const res = await fetch('/api/share/' + code);
-      if (!res.ok) { showToast(t('share-link-not-found'), 'err'); return; }
-      const data = await res.json();
-      if (!data.channels || typeof data.channels !== 'object') return;
-      let dbMap = {};
-      try {
-        const allRes = await fetch('/api/channels');
-        if (allRes.ok) dbMap = Object.fromEntries((await allRes.json()).map(c => [c.channel_id, c]));
-      } catch { /* ignore */ }
-      const channelIds = Object.keys(data.channels);
-      const chInfos = channelIds.map(id => dbMap[id] || { channel_id: id, title: data.channels[id]?.title || id, icon_url: data.channels[id]?.icon_url || '', handle: '' });
-      await new Promise((resolve, reject) => { _mShowShareImportPopup(chInfos, resolve, reject); }).then(async selectedIds => {
-        if (!selectedIds.length) return;
-        showToast(t('preset-fetching'), 'loading');
-        if (data.sidebarOrder && Array.isArray(data.sidebarOrder)) {
-          for (const item of data.sidebarOrder) {
-            if (!sidebarOrder.some(i => (i.type === item.type && (i.key === item.key || i.id === item.id)))) sidebarOrder.push(item);
-          }
-          saveSidebarOrder();
-        }
-        for (const [id, meta] of Object.entries(data.channels)) {
-          if (!selectedIds.includes(id)) continue;
-          if (dbMap[id]) channels[id] = { key: id, channelId: id, handle: dbMap[id].handle, displayName: dbMap[id].title, avatar: dbMap[id].icon_url, tags: meta.tags || channels[id]?.tags || [], addedAt: channels[id]?.addedAt || new Date().toISOString() };
-          else channels[id] = { key: id, channelId: id, handle: channels[id]?.handle || '', displayName: meta.title || channels[id]?.displayName || '', avatar: meta.icon_url || channels[id]?.avatar || '', tags: meta.tags || channels[id]?.tags || [], addedAt: channels[id]?.addedAt || new Date().toISOString() };
-        }
-        saveChannels();
-        renderChannelPanel();
-        const missingIds = selectedIds.filter(id => !dbMap[id]);
-        if (missingIds.length > 0) {
-          showToast(t('status-ch-fetching'), 'loading');
-          (async () => {
-            const _list = document.getElementById('mChList');
-            for (const id of missingIds) {
-              const card = _list?.querySelector(`.sidebar-channel-item[data-key="${id}"]`);
-              if (card) card.classList.add('m-ch-refreshing');
-              try {
-                const r = await fetch('/api/channels/' + id + '/refresh', { method: 'POST' });
-                const d = r.ok ? await r.json().catch(() => ({})) : {};
-                if (d.channel && channels[id]) {
-                  channels[id] = { ...channels[id], handle: d.channel.handle, displayName: d.channel.title, avatar: d.channel.icon_url };
-                  saveChannels();
-                  const newCard = _makeChCard(id);
-                  const cur = _list?.querySelector(`.sidebar-channel-item[data-key="${id}"]`);
-                  if (cur) cur.replaceWith(newCard);
-                }
-              } catch { /* ignore */ }
-              const fin = _list?.querySelector(`.sidebar-channel-item[data-key="${id}"]`);
-              if (fin) fin.classList.remove('m-ch-refreshing');
-            }
-            showToast(t('preset-imported'));
-          })();
-        } else {
-          showToast(t('preset-imported'));
-        }
-      });
-    } catch (e) {
-      if (e !== 'cancel') showToast(t('share-link-err'), 'err');
-    }
-  }
+  // 共有コードのインポート共通処理（モジュールスコープに移動済み）
+
 
   // 共有リンク（#s=XXXXXXXX）を検出してインポート
   (async function _checkShareLink() {
