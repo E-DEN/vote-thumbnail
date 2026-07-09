@@ -372,6 +372,8 @@ body:has(.m-bottom-nav[hidden]) .m-content {
   inset: 0;
   z-index: 9999;
   background: rgba(0,0,0,0.55);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
   display: flex;
   align-items: flex-end;
   justify-content: center;
@@ -1811,6 +1813,8 @@ body:has(.m-bottom-nav[hidden]) .m-content {
   inset: 0;
   z-index: 500;
   background: rgba(0,0,0,0.55);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
   display: flex;
   align-items: flex-end;
   justify-content: center;

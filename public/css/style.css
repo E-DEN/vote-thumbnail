@@ -767,6 +767,10 @@ header {
 /* =====================
    SHARE IMPORT DIALOG
 ===================== */
+.app-layout.modal-blur {
+  filter: blur(6px);
+  transition: filter 0.18s ease;
+}
 .share-import-backdrop {
   position: fixed;
   inset: 0;

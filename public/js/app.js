@@ -1143,8 +1143,10 @@ function _showShareImportPopup(chInfos, onOk, onCancel) {
   ftr.append(cancelBtn, okBtn);
   dialog.append(hdr, list, ftr);
   backdrop.appendChild(dialog);
+  const _blurTarget = document.querySelector('.app-layout');
+  if (_blurTarget) _blurTarget.classList.add('modal-blur');
   document.body.appendChild(backdrop);
-  const close = () => backdrop.remove();
+  const close = () => { backdrop.remove(); if (_blurTarget) _blurTarget.classList.remove('modal-blur'); };
   okBtn.addEventListener('click', e => {
     e.stopPropagation();
     close();
@@ -1152,6 +1154,8 @@ function _showShareImportPopup(chInfos, onOk, onCancel) {
   });
   cancelBtn.addEventListener('click', e => { e.stopPropagation(); close(); if (onCancel) onCancel('cancel'); });
   backdrop.addEventListener('click', e => { if (e.target === backdrop) { close(); if (onCancel) onCancel('cancel'); } });
+  const _onEsc = e => { if (e.key === 'Escape') { document.removeEventListener('keydown', _onEsc); close(); if (onCancel) onCancel('cancel'); } };
+  document.addEventListener('keydown', _onEsc);
 }
 
 function _showChDelPopup(anchorBtn, msg, onConfirm, okClass, anchorRect) {
@@ -1571,19 +1575,7 @@ function buildChannelItem(ch) {
 
   shareBtn.addEventListener('click', async e => {
     e.stopPropagation();
-    const key = ch.key;
-    try {
-      const res = await fetch('/api/share', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ channels: { [key]: { tags: ch.tags || [], title: ch.displayName || '', icon_url: ch.avatar || '' } }, sidebarOrder: [{ type: 'channel', key }] }),
-      });
-      if (!res.ok) throw new Error();
-      const { code } = await res.json();
-      const url = location.origin + location.pathname + '#s=' + code;
-      await navigator.clipboard.writeText(url).catch(() => {});
-      showToast(t('share-link-copied'));
-    } catch { showToast(t('share-link-err'), 'err'); }
+    await _shareChannelLink(ch);
   });
 
   refreshBtn.addEventListener('click', async e => {
@@ -1661,18 +1653,7 @@ function buildChannelItem(ch) {
       }},
       { icon: 'copy', label: t('m-ch-share'), title: t('m-ch-share'), onClick: async () => {
         _hideCompactTooltip(0);
-        try {
-          const res = await fetch('/api/share', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ channels: { [ch.key]: { tags: ch.tags || [] } }, sidebarOrder: [{ type: 'channel', key: ch.key }] }),
-          });
-          if (!res.ok) throw new Error();
-          const { code } = await res.json();
-          const url = location.origin + location.pathname + '#s=' + code;
-          await navigator.clipboard.writeText(url).catch(() => {});
-          showToast(t('share-link-copied'));
-        } catch { showToast(t('share-link-err'), 'err'); }
+        await _shareChannelLink(ch);
       }},
       { icon: 'x', shiftIcon: 'trash-2', label: t('ch-delete-title'), title: t('ch-delete-title'), danger: true, onClick: (btn, e) => {
         const savedRect = btn.getBoundingClientRect();
@@ -1760,24 +1741,7 @@ function buildFolderItem(folder) {
 
   folderShareBtn.addEventListener('click', async e => {
     e.stopPropagation();
-    const chPayload = {};
-    (folder.children || []).forEach(k => {
-      const c = channels[k];
-      chPayload[k] = { tags: c?.tags || [], title: c?.displayName || '', icon_url: c?.avatar || '' };
-    });
-    const orderPayload = [{ type: 'folder', id: folder.id, name: folder.name, hue: folder.color, children: folder.children || [], open: true }];
-    try {
-      const res = await fetch('/api/share', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ channels: chPayload, sidebarOrder: orderPayload }),
-      });
-      if (!res.ok) throw new Error();
-      const { code } = await res.json();
-      const url = location.origin + location.pathname + '#s=' + code;
-      await navigator.clipboard.writeText(url).catch(() => {});
-      showToast(t('share-link-copied'));
-    } catch { showToast(t('share-link-err'), 'err'); }
+    await _shareFolderLink(folder);
   });
 
   folderRenameBtn.addEventListener('click', e => { e.stopPropagation(); startRename(); });
@@ -1953,21 +1917,7 @@ function buildFolderItem(folder) {
       }},
       { icon: 'copy', label: t('folder-share'), title: t('folder-share'), onClick: async () => {
         _hideCompactTooltip(0);
-        const chPayload = {};
-        (folder.children || []).forEach(k => { chPayload[k] = { tags: channels[k]?.tags || [] }; });
-        const orderPayload = [{ type: 'folder', id: folder.id, name: folder.name, hue: folder.color, children: folder.children || [], open: true }];
-        try {
-          const res = await fetch('/api/share', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ channels: chPayload, sidebarOrder: orderPayload }),
-          });
-          if (!res.ok) throw new Error();
-          const { code } = await res.json();
-          const url = location.origin + location.pathname + '#s=' + code;
-          await navigator.clipboard.writeText(url).catch(() => {});
-          showToast(t('share-link-copied'));
-        } catch { showToast(t('share-link-err'), 'err'); }
+        await _shareFolderLink(folder);
       }},
       { icon: 'x', shiftIcon: 'trash-2', label: t('folder-delete'), title: t('folder-delete'), danger: true, onClick: (btn, e) => {
         const savedRect = btn.getBoundingClientRect();
@@ -3339,6 +3289,36 @@ function showView(view) {
 
 // --- サイドバー検索・チャンネル追加 ---
 // 共有コードのインポート共通処理（モジュールスコープ）
+
+// 共有リンク生成・コピー共通処理
+async function _postShareLink(payload) {
+  const res = await fetch('/api/share', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error();
+  const { code } = await res.json();
+  const url = location.origin + location.pathname + '#s=' + code;
+  await navigator.clipboard.writeText(url).catch(() => {});
+  showToast(t('share-link-copied'));
+}
+async function _shareChannelLink(ch) {
+  try {
+    await _postShareLink({ channels: { [ch.key]: { tags: ch.tags || [], title: ch.displayName || '', icon_url: ch.avatar || '' } }, sidebarOrder: [{ type: 'channel', key: ch.key }] });
+  } catch { showToast(t('share-link-err'), 'err'); }
+}
+async function _shareFolderLink(folder) {
+  const chPayload = {};
+  (folder.children || []).forEach(k => {
+    const c = channels[k];
+    chPayload[k] = { tags: c?.tags || [], title: c?.displayName || '', icon_url: c?.avatar || '' };
+  });
+  try {
+    await _postShareLink({ channels: chPayload, sidebarOrder: [{ type: 'folder', id: folder.id, name: folder.name, hue: folder.color, children: folder.children || [], open: true }] });
+  } catch { showToast(t('share-link-err'), 'err'); }
+}
+
 async function _importFromShareCode(code) {
   // コンパクト追加ポップアップが開いていれば先に閉じる
   const _cp = document.querySelector('.sidebar-compact-add-pop');
@@ -3373,31 +3353,49 @@ async function _importFromShareCode(code) {
     }
     saveChannels();
     renderSidebar();
-    const missingIds = selectedIds.filter(id => !dbMap[id]);
-    if (missingIds.length > 0) {
-      showToast(t('status-ch-fetching'), 'loading');
-      (async () => {
-        for (const id of missingIds) {
-          const item = document.querySelector(`.sidebar-channel-item[data-key="${id}"]`);
-          if (item) item.classList.add('compact-refreshing');
-          try {
-            const r = await fetch('/api/channels/' + id + '/refresh', { method: 'POST' });
-            const d = r.ok ? await r.json().catch(() => ({})) : {};
-            if (d.channel && channels[id]) {
-              channels[id] = { ...channels[id], handle: d.channel.handle, displayName: d.channel.title, avatar: d.channel.icon_url };
-              saveChannels();
-              const cur = document.querySelector(`.sidebar-channel-item[data-key="${id}"]`);
-              if (cur) { const n = buildChannelItem(channels[id]); cur.replaceWith(n); if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [n] }); }
-            }
-          } catch { /* ignore */ }
-          const cur2 = document.querySelector(`.sidebar-channel-item[data-key="${id}"]`);
-          if (cur2) cur2.classList.remove('compact-refreshing');
-        }
-        showToast(t('preset-imported'));
-      })();
-    } else {
-      showToast(t('preset-imported'));
-    }
+    showToast(t('status-ch-fetching'), 'loading');
+    (async () => {
+      // 選択した全チャンネルをリフレッシュ（既存・新規問わずフォルダリフレッシュと同じ挙動）
+      selectedIds.forEach(id => _refreshingKeys.add(id));
+      // 既存 DOM にも即反映（renderSidebar より後に _refreshingKeys を追加するため手動で付与）
+      document.querySelectorAll('.sidebar-folder-header').forEach(h => {
+        const folderEntry = sidebarOrder.find(i => i.type === 'folder' && i.id === h.dataset.folderId);
+        if (folderEntry?.children?.some(k => _refreshingKeys.has(k))) h.classList.add('compact-refreshing');
+      });
+      let totalVideos = 0, addedVideos = 0, updatedVideos = 0;
+      for (const id of selectedIds) {
+        const item = document.querySelector(`.sidebar-channel-item[data-key="${id}"]`);
+        const chRefBtn = item?.querySelector('.ch-action-refresh');
+        if (chRefBtn) _startRefreshSpinner(chRefBtn);
+        if (item) item.classList.add('compact-refreshing');
+        showToast(t('status-ch-refreshing', { name: channels[id]?.displayName || channels[id]?.handle || id }), 'loading');
+        try {
+          const r = await fetch('/api/channels/' + id + '/refresh', { method: 'POST', headers: getRssOnly() ? { 'X-RSS-Only': '1' } : apiKeyHeaders() });
+          const d = r.ok ? await r.json().catch(() => ({})) : {};
+          if (d.channel && channels[id]) {
+            channels[id] = { ...channels[id], handle: d.channel.handle, displayName: d.channel.title, avatar: d.channel.icon_url };
+            saveChannels();
+            const cur = document.querySelector(`.sidebar-channel-item[data-key="${id}"]`);
+            if (cur) { const n = buildChannelItem(channels[id]); cur.replaceWith(n); if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [n] }); }
+          }
+          if (d.total != null) totalVideos += d.total;
+          if (d.added != null) addedVideos += d.added;
+          if (d.updated != null) updatedVideos += d.updated;
+        } catch { /* ignore */ }
+        _refreshingKeys.delete(id);
+        if (chRefBtn) _stopRefreshSpinner(chRefBtn);
+        const cur2 = document.querySelector(`.sidebar-channel-item[data-key="${id}"]`);
+        if (cur2) cur2.classList.remove('compact-refreshing');
+        document.querySelectorAll('.sidebar-folder-header.compact-refreshing').forEach(h => {
+          const folderEntry = sidebarOrder.find(i => i.type === 'folder' && i.id === h.dataset.folderId);
+          if (!folderEntry?.children?.some(k => _refreshingKeys.has(k))) h.classList.remove('compact-refreshing');
+        });
+      }
+      const toastMsg = getRssOnly()
+        ? t('status-refresh-rss').replace('{changed}', addedVideos + updatedVideos)
+        : t('status-refresh-api').replace('{total}', totalVideos);
+      showToast(toastMsg);
+    })();
   } catch (e) {
     if (e !== 'cancel') showToast(t('share-link-err'), 'err');
   }
@@ -4300,16 +4298,19 @@ document.getElementById('sidebarSearchBtn').addEventListener('click', () => {
   }
 
   // ---- 開閉 ----
+  const _mainArea = document.querySelector('.app-layout');
   function openSettings() {
     applyTheme(_theme);
     if (typeof rebuildLangDialog === 'function') rebuildLangDialog();
     switchTab(_currentTab);
     settingsModal.hidden = false;
+    if (_mainArea) _mainArea.classList.add('modal-blur');
     if (typeof lucide !== 'undefined') lucide.createIcons();
   }
 
   function closeSettings() {
     settingsModal.hidden = true;
+    if (_mainArea) _mainArea.classList.remove('modal-blur');
   }
 
   settingsBtn.addEventListener('click', function() {
