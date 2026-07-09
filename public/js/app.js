@@ -165,6 +165,10 @@ function syncSidebarOrder() {
     (item.type === 'folder' && item.children.length === 1)
       ? { type: 'channel', key: item.children[0] } : item
   );
+  // フォルダ内にあるチャンネルのスタンドアロンエントリを除去（重複防止）
+  const inFolders = new Set();
+  sidebarOrder.forEach(item => { if (item.type === 'folder') item.children.forEach(k => inFolders.add(k)); });
+  sidebarOrder = sidebarOrder.filter(item => !(item.type === 'channel' && inFolders.has(item.key)));
   // まだ order に入っていないチャンネルを末尾に追加
   const inOrder = new Set();
   sidebarOrder.forEach(item => {
@@ -1078,6 +1082,78 @@ function _stopRefreshSpinner(btn) {
   btn.disabled = false;
 }
 
+// 共有リンクインポート確認ダイアログ（設定モーダルと同スタイル）
+// chInfos: [{ channel_id, title, icon_url, handle }]
+// onOk: 選択された channel_id[] を引数に呼ぶ
+function _showShareImportPopup(chInfos, onOk, onCancel) {
+  document.querySelectorAll('.share-import-backdrop').forEach(el => el.remove());
+  const backdrop = document.createElement('div');
+  backdrop.className = 'share-import-backdrop';
+  const dialog = document.createElement('div');
+  dialog.className = 'share-import-dialog';
+  // ヘッダー
+  const hdr = document.createElement('div');
+  hdr.className = 'share-import-hdr';
+  const title = document.createElement('span');
+  title.className = 'share-import-title';
+  title.textContent = t('share-link-import-confirm').replace('{count}', chInfos.length);
+  hdr.appendChild(title);
+  // チャンネル一覧
+  const list = document.createElement('ul');
+  list.className = 'share-import-ch-list';
+  const checkboxes = [];
+  chInfos.forEach(ch => {
+    const li = document.createElement('li');
+    li.className = 'share-import-ch-item';
+    if (ch.icon_url) {
+      const img = document.createElement('img');
+      img.src = ch.icon_url;
+      img.className = 'share-import-ch-icon';
+      img.referrerPolicy = 'no-referrer';
+      img.onerror = function() { this.style.display = 'none'; };
+      li.appendChild(img);
+    } else {
+      const ph = document.createElement('div');
+      ph.className = 'share-import-ch-icon share-import-ch-icon--empty';
+      li.appendChild(ph);
+    }
+    const name = document.createElement('span');
+    name.className = 'share-import-ch-name';
+    name.textContent = ch.title || ch.handle || ch.channel_id;
+    li.appendChild(name);
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.className = 'rs-dummy-check';
+    cb.checked = true;
+    cb.dataset.id = ch.channel_id;
+    checkboxes.push(cb);
+    li.appendChild(cb);
+    li.addEventListener('click', e => { if (e.target !== cb) cb.checked = !cb.checked; });
+    list.appendChild(li);
+  });
+  // フッター
+  const ftr = document.createElement('div');
+  ftr.className = 'share-import-ftr';
+  const okBtn = document.createElement('button');
+  okBtn.className = 'share-import-ok';
+  okBtn.textContent = t('preset-load');
+  const cancelBtn = document.createElement('button');
+  cancelBtn.className = 'share-import-cancel';
+  cancelBtn.textContent = t('cancel');
+  ftr.append(cancelBtn, okBtn);
+  dialog.append(hdr, list, ftr);
+  backdrop.appendChild(dialog);
+  document.body.appendChild(backdrop);
+  const close = () => backdrop.remove();
+  okBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    close();
+    onOk(checkboxes.filter(cb => cb.checked).map(cb => cb.dataset.id));
+  });
+  cancelBtn.addEventListener('click', e => { e.stopPropagation(); close(); if (onCancel) onCancel('cancel'); });
+  backdrop.addEventListener('click', e => { if (e.target === backdrop) { close(); if (onCancel) onCancel('cancel'); } });
+}
+
 function _showChDelPopup(anchorBtn, msg, onConfirm, okClass, anchorRect) {
   // anchorRect を事前渡しできる（コンパクトモードで tooltip hide 前に取得した rect を使う）
   const rect = anchorRect || anchorBtn.getBoundingClientRect();
@@ -1477,16 +1553,38 @@ function buildChannelItem(ch) {
   refreshBtn.title = t('ch-refresh-title');
   refreshBtn.innerHTML = '<i data-lucide="refresh-cw"></i>';
 
+  const shareBtn = document.createElement('button');
+  shareBtn.className = 'ch-action-btn ch-action-share';
+  shareBtn.title = t('share-link-copy-title');
+  shareBtn.innerHTML = '<i data-lucide="copy"></i>';
+
   const deleteBtn = document.createElement('button');
   deleteBtn.className = 'ch-action-btn ch-action-delete';
   deleteBtn.title = t('ch-delete-title');
   deleteBtn.innerHTML = '<i data-lucide="x"></i>';
 
-  actions.append(refreshBtn, deleteBtn);
+  actions.append(refreshBtn, shareBtn, deleteBtn);
   item.appendChild(actions);
-  if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [refreshBtn, deleteBtn] });
+  if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [refreshBtn, shareBtn, deleteBtn] });
 
   item.addEventListener('click', () => selectChannel(ch.key));
+
+  shareBtn.addEventListener('click', async e => {
+    e.stopPropagation();
+    const key = ch.key;
+    try {
+      const res = await fetch('/api/share', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ channels: { [key]: { tags: ch.tags || [], title: ch.displayName || '', icon_url: ch.avatar || '' } }, sidebarOrder: [{ type: 'channel', key }] }),
+      });
+      if (!res.ok) throw new Error();
+      const { code } = await res.json();
+      const url = location.origin + location.pathname + '#s=' + code;
+      await navigator.clipboard.writeText(url).catch(() => {});
+      showToast(t('share-link-copied'));
+    } catch { showToast(t('share-link-err'), 'err'); }
+  });
 
   refreshBtn.addEventListener('click', async e => {
     e.stopPropagation();
@@ -1561,6 +1659,21 @@ function buildChannelItem(ch) {
         _hideCompactTooltip(0);
         refreshBtn.dispatchEvent(new MouseEvent('click'));
       }},
+      { icon: 'copy', label: t('m-ch-share'), title: t('m-ch-share'), onClick: async () => {
+        _hideCompactTooltip(0);
+        try {
+          const res = await fetch('/api/share', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ channels: { [ch.key]: { tags: ch.tags || [] } }, sidebarOrder: [{ type: 'channel', key: ch.key }] }),
+          });
+          if (!res.ok) throw new Error();
+          const { code } = await res.json();
+          const url = location.origin + location.pathname + '#s=' + code;
+          await navigator.clipboard.writeText(url).catch(() => {});
+          showToast(t('share-link-copied'));
+        } catch { showToast(t('share-link-err'), 'err'); }
+      }},
       { icon: 'x', shiftIcon: 'trash-2', label: t('ch-delete-title'), title: t('ch-delete-title'), danger: true, onClick: (btn, e) => {
         const savedRect = btn.getBoundingClientRect();
         _hideCompactTooltip(0);
@@ -1631,14 +1744,41 @@ function buildFolderItem(folder) {
   folderRefreshBtn.title = t('folder-refresh');
   folderRefreshBtn.innerHTML = '<i data-lucide="refresh-cw"></i>';
 
+  const folderShareBtn = document.createElement('button');
+  folderShareBtn.className = 'ch-action-btn ch-action-share';
+  folderShareBtn.title = t('share-link-copy-title');
+  folderShareBtn.innerHTML = '<i data-lucide="copy"></i>';
+
   const folderDeleteBtn = document.createElement('button');
   folderDeleteBtn.className = 'ch-action-btn ch-action-delete';
   folderDeleteBtn.title = t('folder-delete');
   folderDeleteBtn.innerHTML = '<i data-lucide="x"></i>';
 
-  folderActions.append(folderRenameBtn, folderRefreshBtn, folderDeleteBtn);
+  folderActions.append(folderRenameBtn, folderRefreshBtn, folderShareBtn, folderDeleteBtn);
   header.appendChild(folderActions);
-  if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [folderRenameBtn, folderRefreshBtn, folderDeleteBtn] });
+  if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [folderRenameBtn, folderRefreshBtn, folderShareBtn, folderDeleteBtn] });
+
+  folderShareBtn.addEventListener('click', async e => {
+    e.stopPropagation();
+    const chPayload = {};
+    (folder.children || []).forEach(k => {
+      const c = channels[k];
+      chPayload[k] = { tags: c?.tags || [], title: c?.displayName || '', icon_url: c?.avatar || '' };
+    });
+    const orderPayload = [{ type: 'folder', id: folder.id, name: folder.name, hue: folder.color, children: folder.children || [], open: true }];
+    try {
+      const res = await fetch('/api/share', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ channels: chPayload, sidebarOrder: orderPayload }),
+      });
+      if (!res.ok) throw new Error();
+      const { code } = await res.json();
+      const url = location.origin + location.pathname + '#s=' + code;
+      await navigator.clipboard.writeText(url).catch(() => {});
+      showToast(t('share-link-copied'));
+    } catch { showToast(t('share-link-err'), 'err'); }
+  });
 
   folderRenameBtn.addEventListener('click', e => { e.stopPropagation(); startRename(); });
 
@@ -1810,6 +1950,24 @@ function buildFolderItem(folder) {
           const maxTop = window.innerHeight - th - 4;
           if (parseFloat(_chTooltip.style.top) > maxTop) _chTooltip.style.top = Math.max(4, maxTop) + 'px';
         });
+      }},
+      { icon: 'copy', label: t('folder-share'), title: t('folder-share'), onClick: async () => {
+        _hideCompactTooltip(0);
+        const chPayload = {};
+        (folder.children || []).forEach(k => { chPayload[k] = { tags: channels[k]?.tags || [] }; });
+        const orderPayload = [{ type: 'folder', id: folder.id, name: folder.name, hue: folder.color, children: folder.children || [], open: true }];
+        try {
+          const res = await fetch('/api/share', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ channels: chPayload, sidebarOrder: orderPayload }),
+          });
+          if (!res.ok) throw new Error();
+          const { code } = await res.json();
+          const url = location.origin + location.pathname + '#s=' + code;
+          await navigator.clipboard.writeText(url).catch(() => {});
+          showToast(t('share-link-copied'));
+        } catch { showToast(t('share-link-err'), 'err'); }
       }},
       { icon: 'x', shiftIcon: 'trash-2', label: t('folder-delete'), title: t('folder-delete'), danger: true, onClick: (btn, e) => {
         const savedRect = btn.getBoundingClientRect();
@@ -3692,6 +3850,103 @@ function init() {
     }
   });
 
+  // --- 共有リンク（#s=XXXXXXXX）を検出してインポート ---
+  (async function _checkShareLink() {
+    const m = location.hash.match(/^#s=([A-Za-z0-9]{8})$/);
+    if (!m) return;
+    const code = m[1];
+    history.replaceState(null, '', location.pathname);
+    try {
+      const res = await fetch('/api/share/' + code);
+      if (!res.ok) { showToast(t('share-link-not-found'), 'err'); return; }
+      const data = await res.json();
+      if (!data.channels || typeof data.channels !== 'object') return;
+      // DB からチャンネル詳細を先取得してポップアップに表示
+      let dbMap = {};
+      try {
+        const allRes = await fetch('/api/channels');
+        if (allRes.ok) dbMap = Object.fromEntries((await allRes.json()).map(c => [c.channel_id, c]));
+      } catch { /* ignore */ }
+      const channelIds = Object.keys(data.channels);
+      const chInfos = channelIds.map(id => dbMap[id] || {
+        channel_id: id,
+        title: data.channels[id]?.title || id,
+        icon_url: data.channels[id]?.icon_url || '',
+        handle: '',
+      });
+      const selectedIds = await new Promise((resolve, reject) => {
+        _showShareImportPopup(chInfos, resolve, reject);
+      });
+      if (!selectedIds.length) return;
+      if (data.sidebarOrder && Array.isArray(data.sidebarOrder)) {
+        for (const item of data.sidebarOrder) {
+          if (!sidebarOrder.some(i => (i.type === item.type && (i.key === item.key || i.id === item.id)))) {
+            sidebarOrder.push(item);
+          }
+        }
+        saveSidebarOrder();
+      }
+      for (const [id, meta] of Object.entries(data.channels)) {
+        if (!selectedIds.includes(id)) continue;
+        if (dbMap[id]) {
+          channels[id] = {
+            key: id, channelId: id,
+            handle: dbMap[id].handle,
+            displayName: dbMap[id].title,
+            avatar: dbMap[id].icon_url,
+            tags: meta.tags || channels[id]?.tags || [],
+            addedAt: channels[id]?.addedAt || new Date().toISOString(),
+          };
+        } else {
+          // shareデータのタイトル・アイコンを仮セット（後でバックグラウンドで補完）
+          channels[id] = {
+            key: id, channelId: id,
+            handle: channels[id]?.handle || '',
+            displayName: meta.title || channels[id]?.displayName || '',
+            avatar: meta.icon_url || channels[id]?.avatar || '',
+            tags: meta.tags || channels[id]?.tags || [],
+            addedAt: channels[id]?.addedAt || new Date().toISOString(),
+          };
+        }
+      }
+      saveChannels();
+      renderSidebar();
+      // DB未登録チャンネルをバックグラウンドで refresh（アイコン・名前を補完）
+      const missingIds = selectedIds.filter(id => !dbMap[id]);
+      if (missingIds.length > 0) {
+        showToast(t('status-ch-fetching'), 'loading');
+        (async () => {
+          for (const id of missingIds) {
+            const item = document.querySelector(`.sidebar-channel-item[data-key="${id}"]`);
+            if (item) item.classList.add('compact-refreshing');
+            try {
+              const r = await fetch('/api/channels/' + id + '/refresh', { method: 'POST' });
+              const d = r.ok ? await r.json().catch(() => ({})) : {};
+              if (d.channel && channels[id]) {
+                channels[id] = { ...channels[id], handle: d.channel.handle, displayName: d.channel.title, avatar: d.channel.icon_url };
+                saveChannels();
+                const cur = document.querySelector(`.sidebar-channel-item[data-key="${id}"]`);
+                if (cur) {
+                  const n = buildChannelItem(channels[id]);
+                  cur.replaceWith(n);
+                  // DOM 追加後に Lucide アイコンを再処理
+                  if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [n] });
+                }
+              }
+            } catch { /* ignore */ }
+            const cur2 = document.querySelector(`.sidebar-channel-item[data-key="${id}"]`);
+            if (cur2) cur2.classList.remove('compact-refreshing');
+          }
+          showToast(t('preset-imported'));
+        })();
+      } else {
+        showToast(t('preset-imported'));
+      }
+    } catch (e) {
+      if (e !== 'cancel') showToast(t('share-link-err'), 'err');
+    }
+  })();
+
   // --- URL ハッシュから初期状態を復元 ---
   (async function _restoreFromUrl() {
     const st = parseHash();
@@ -4498,6 +4753,8 @@ document.getElementById('catFilter').addEventListener('click', e => {
   const COMPACT_THRESHOLD = 100;
   const COMPACT_WIDTH = 72;
   let _lastMX = 0, _lastMY = 0;
+  // 常時マウス位置を追跡（DOM再構築後の :hover 再評価に使う）
+  document.addEventListener('mousemove', function(e) { _lastMX = e.clientX; _lastMY = e.clientY; }, { passive: true });
 
   function applyCompact(w, rerender) {
     const wasCompact = sidebar.classList.contains('sidebar--compact');
@@ -4524,9 +4781,14 @@ document.getElementById('catFilter').addEventListener('click', e => {
       // モード切替
       sidebar.classList.toggle('sidebar--compact', isNowCompact);
       renderSidebar();
-      // DOM再構築後、:hover が失われるため synthetic mousemove で強制再評価
+      // DOM再構築後: Lucide アイコンを再レンダリングして :hover も再評価
       if (!isNowCompact) {
-        document.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, cancelable: true, clientX: _lastMX, clientY: _lastMY }));
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+        document.dispatchEvent(new MouseEvent('mousemove', {
+          bubbles: true, cancelable: true,
+          clientX: _lastMX, clientY: _lastMY,
+          movementX: 1, movementY: 0,
+        }));
       }
       // addWrapの高さをワイドの検索エリア高さに合わせてコンパクトのch1位置をワイドのch1位置に一致させる
       if (addWrap) {

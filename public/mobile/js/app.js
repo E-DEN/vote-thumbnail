@@ -45,6 +45,10 @@ function syncSidebarOrder() {
     (item.type === 'folder' && item.children.length === 1)
       ? { type: 'channel', key: item.children[0] } : item
   );
+  // フォルダ内にあるチャンネルのスタンドアロンエントリを除去（重複防止）
+  const inFolders = new Set();
+  sidebarOrder.forEach(item => { if (item.type === 'folder') item.children.forEach(k => inFolders.add(k)); });
+  sidebarOrder = sidebarOrder.filter(item => !(item.type === 'channel' && inFolders.has(item.key)));
   // order 未登録チャンネルを末尾に追加
   const inOrder = new Set();
   sidebarOrder.forEach(item => {
@@ -326,7 +330,25 @@ function _openFolderMenu(item, anchorEl) {
     );
   });
 
-  menu.append(renameBtn, refreshBtn, sep1, colorBtn, colorRow, sep2, deleteBtn);
+  // 共有リンク
+  const shareSep = document.createElement('div');
+  shareSep.className = 'm-ch-card-menu-sep';
+  const shareBtn = document.createElement('button');
+  shareBtn.className = 'm-ch-card-menu-item';
+  { const _i = document.createElement('i'); _i.setAttribute('data-lucide', 'copy'); shareBtn.append(_i, t('folder-share')); }
+  shareBtn.addEventListener('click', async e => {
+    e.stopPropagation();
+    menu.remove();
+    const chPayload = {};
+    (item.children || []).forEach(k => {
+      const ch = channels[k];
+      chPayload[k] = { tags: ch?.tags || [], title: ch?.displayName || '', icon_url: ch?.avatar || '' };
+    });
+    const orderPayload = [{ type: 'folder', id: item.id, name: item.name, hue: item.hue, children: item.children || [], open: true }];
+    await _mShareAndCopy(chPayload, orderPayload);
+  });
+
+  menu.append(renameBtn, refreshBtn, shareSep, shareBtn, sep1, colorBtn, colorRow, sep2, deleteBtn);
   document.body.appendChild(menu);
   if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [menu] });
 
@@ -503,6 +525,72 @@ function closeChannelPanel() {
 })();
 
 // --- 削除確認ポップアップ (PC版 _showChDelPopup と同等) ---
+// 共有リンクインポート確認ポップアップ（画面中央固定）
+// chInfos: [{ channel_id, title, icon_url, handle }]
+// onOk: 選択された channel_id[] を引数に呼ぶ
+function _mShowShareImportPopup(chInfos, onOk, onCancel) {
+  document.querySelectorAll('.m-share-import-overlay').forEach(el => el.remove());
+  const overlay = document.createElement('div');
+  overlay.className = 'm-share-import-overlay';
+  const popup = document.createElement('div');
+  popup.className = 'm-share-import-popup';
+  const msgEl = document.createElement('p');
+  msgEl.className = 'm-share-import-msg';
+  msgEl.textContent = t('share-link-import-confirm').replace('{count}', chInfos.length);
+  // チャンネル一覧（チェックボックス付き）
+  const list = document.createElement('ul');
+  list.className = 'm-share-import-ch-list';
+  const checkboxes = [];
+  chInfos.forEach(ch => {
+    const li = document.createElement('li');
+    li.className = 'm-share-import-ch-item';
+    if (ch.icon_url) {
+      const img = document.createElement('img');
+      img.src = ch.icon_url;
+      img.className = 'm-share-import-ch-icon';
+      img.referrerPolicy = 'no-referrer';
+      img.onerror = function() { this.style.display = 'none'; };
+      li.appendChild(img);
+    } else {
+      const ph = document.createElement('div');
+      ph.className = 'm-share-import-ch-icon m-share-import-ch-icon--empty';
+      li.appendChild(ph);
+    }
+    const name = document.createElement('span');
+    name.className = 'm-share-import-ch-name';
+    name.textContent = ch.title || ch.handle || ch.channel_id;
+    li.appendChild(name);
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.className = 'm-rs-dummy-check';
+    cb.checked = true;
+    cb.dataset.id = ch.channel_id;
+    checkboxes.push(cb);
+    li.appendChild(cb);
+    li.addEventListener('click', e => { if (e.target !== cb) { cb.checked = !cb.checked; } });
+    list.appendChild(li);
+  });
+  const btnRow = document.createElement('div');
+  btnRow.className = 'm-share-import-btns';
+  const okBtn = document.createElement('button');
+  okBtn.className = 'm-share-import-ok';
+  okBtn.textContent = t('preset-load');
+  const cancelBtn = document.createElement('button');
+  cancelBtn.className = 'm-share-import-cancel';
+  cancelBtn.textContent = t('cancel');
+  btnRow.append(cancelBtn, okBtn);
+  popup.append(msgEl, list, btnRow);
+  overlay.appendChild(popup);
+  document.body.appendChild(overlay);
+  const close = () => overlay.remove();
+  okBtn.addEventListener('click', () => {
+    close();
+    onOk(checkboxes.filter(cb => cb.checked).map(cb => cb.dataset.id));
+  });
+  cancelBtn.addEventListener('click', () => { close(); if (onCancel) onCancel('cancel'); });
+  overlay.addEventListener('click', e => { if (e.target === overlay) { close(); if (onCancel) onCancel('cancel'); } });
+}
+
 function _mShowDelPopup(anchorEl, msg, onConfirm, okLabel, anchorRect, okClass) {
   const rect = anchorRect || anchorEl.getBoundingClientRect();
   document.querySelectorAll('.ch-del-popup').forEach(p => p.remove());
@@ -1235,6 +1323,32 @@ function _openChMenu(key, anchorEl) {
 function _closeChMenu() {
   document.getElementById('mChCardMenu').hidden = true;
   _chMenuTarget = null;
+}
+
+// チャンネル・フォルダの共有リンクを生成してクリップボードにコピー
+async function _mShareAndCopy(chPayload, orderPayload) {
+  try {
+    const res = await fetch('/api/share', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ channels: chPayload, sidebarOrder: orderPayload }),
+    });
+    if (!res.ok) throw new Error();
+    const { code } = await res.json();
+    const url = location.origin + location.pathname + '#s=' + code;
+    try {
+      await navigator.clipboard.writeText(url);
+    } catch {
+      const ta = document.createElement('textarea');
+      ta.value = url; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    }
+    showToast(t('share-link-copied'));
+  } catch {
+    showToast(t('share-link-err'), 'err');
+  }
 }
 
 async function _refreshMobileChannel(key) {
@@ -2065,6 +2179,16 @@ document.addEventListener('DOMContentLoaded', function() {
     _closeChMenu();
     if (key) _refreshMobileChannel(key);
   });
+  document.getElementById('mChMenuShare').addEventListener('click', async () => {
+    const key = _chMenuTarget?.key;
+    _closeChMenu();
+    if (!key) return;
+    const ch = channels[key];
+    await _mShareAndCopy(
+      { [key]: { tags: ch?.tags || [], title: ch?.displayName || '', icon_url: ch?.avatar || '' } },
+      [{ type: 'channel', key }]
+    );
+  });
   document.getElementById('mChMenuDelete').addEventListener('click', () => {
     if (!_chMenuTarget) return;
     const key  = _chMenuTarget.key;
@@ -2465,6 +2589,41 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   });
 
+  document.getElementById('mDataShareLinkBtn').addEventListener('click', async function() {
+    try {
+      const rawChannels = JSON.parse(localStorage.getItem(LS_CHANNELS) || '{}');
+      const chPayload = {};
+      for (const [id, ch] of Object.entries(rawChannels)) {
+        const entry = {};
+        if (ch.tags && ch.tags.length) entry.tags = ch.tags;
+        chPayload[id] = entry;
+      }
+      const res = await fetch('/api/share', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          channels: chPayload,
+          sidebarOrder: JSON.parse(localStorage.getItem(LS_SIDEBAR_ORDER) || 'null'),
+        }),
+      });
+      if (!res.ok) throw new Error('server error');
+      const { code } = await res.json();
+      const url = location.origin + location.pathname + '#s=' + code;
+      try {
+        await navigator.clipboard.writeText(url);
+      } catch {
+        const ta = document.createElement('textarea');
+        ta.value = url; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+      }
+      _mCodeStatusMsg(t('share-link-copied'), true);
+    } catch (e) {
+      _mCodeStatusMsg(t('share-link-err'), false);
+    }
+  });
+
   document.getElementById('mDataApplyCodeBtn').addEventListener('click', async function() {
     const inp = document.getElementById('mDataCodeInput');
     const raw = inp.value.trim();
@@ -2607,6 +2766,101 @@ document.addEventListener('DOMContentLoaded', function() {
   // サブバーを表示しコンテンツ領域を下げる
   const catBar = document.getElementById('mCatBar');
   catBar.hidden = false;
+
+  // 共有リンク（#s=XXXXXXXX）を検出してインポート
+  (async function _checkShareLink() {
+    const m = location.hash.match(/^#s=([A-Za-z0-9]{8})$/);
+    if (!m) return;
+    const code = m[1];
+    history.replaceState(null, '', location.pathname);
+    try {
+      const res = await fetch('/api/share/' + code);
+      if (!res.ok) { showToast(t('share-link-not-found'), 'err'); return; }
+      const data = await res.json();
+      if (!data.channels || typeof data.channels !== 'object') return;
+      // DB からチャンネル詳細を先取得
+      let dbMap = {};
+      try {
+        const allRes = await fetch('/api/channels');
+        if (allRes.ok) dbMap = Object.fromEntries((await allRes.json()).map(c => [c.channel_id, c]));
+      } catch { /* ignore */ }
+      const channelIds = Object.keys(data.channels);
+      const chInfos = channelIds.map(id => dbMap[id] || {
+        channel_id: id,
+        title: data.channels[id]?.title || id,
+        icon_url: data.channels[id]?.icon_url || '',
+        handle: '',
+      });
+      await new Promise((resolve, reject) => {
+        _mShowShareImportPopup(chInfos, resolve, reject);
+      }).then(async selectedIds => {
+        if (!selectedIds.length) return;
+        showToast(t('preset-fetching'), 'loading');
+        if (data.sidebarOrder && Array.isArray(data.sidebarOrder)) {
+          for (const item of data.sidebarOrder) {
+            if (!sidebarOrder.some(i => (i.type === item.type && (i.key === item.key || i.id === item.id)))) {
+              sidebarOrder.push(item);
+            }
+          }
+          saveSidebarOrder();
+        }
+        for (const [id, meta] of Object.entries(data.channels)) {
+          if (!selectedIds.includes(id)) continue;
+          if (dbMap[id]) {
+            channels[id] = {
+              key: id, channelId: id,
+              handle: dbMap[id].handle,
+              displayName: dbMap[id].title,
+              avatar: dbMap[id].icon_url,
+              tags: meta.tags || channels[id]?.tags || [],
+              addedAt: channels[id]?.addedAt || new Date().toISOString(),
+            };
+          } else {
+            channels[id] = {
+              key: id, channelId: id,
+              handle: channels[id]?.handle || '',
+              displayName: meta.title || channels[id]?.displayName || '',
+              avatar: meta.icon_url || channels[id]?.avatar || '',
+              tags: meta.tags || channels[id]?.tags || [],
+              addedAt: channels[id]?.addedAt || new Date().toISOString(),
+            };
+          }
+        }
+        saveChannels();
+        renderChannelPanel();
+        // DB未登録チャンネルをバックグラウンドで refresh（アイコン・名前を補完）
+        const missingIds = selectedIds.filter(id => !dbMap[id]);
+        if (missingIds.length > 0) {
+          showToast(t('status-ch-fetching'), 'loading');
+          (async () => {
+            const _list = document.getElementById('mChList');
+            for (const id of missingIds) {
+              const card = _list?.querySelector(`.sidebar-channel-item[data-key="${id}"]`);
+              if (card) card.classList.add('m-ch-refreshing');
+              try {
+                const r = await fetch('/api/channels/' + id + '/refresh', { method: 'POST' });
+                const d = r.ok ? await r.json().catch(() => ({})) : {};
+                if (d.channel && channels[id]) {
+                  channels[id] = { ...channels[id], handle: d.channel.handle, displayName: d.channel.title, avatar: d.channel.icon_url };
+                  saveChannels();
+                  const newCard = _makeChCard(id);
+                  const cur = _list?.querySelector(`.sidebar-channel-item[data-key="${id}"]`);
+                  if (cur) cur.replaceWith(newCard);
+                }
+              } catch { /* ignore */ }
+              const fin = _list?.querySelector(`.sidebar-channel-item[data-key="${id}"]`);
+              if (fin) fin.classList.remove('m-ch-refreshing');
+            }
+            showToast(t('preset-imported'));
+          })();
+        } else {
+          showToast(t('preset-imported'));
+        }
+      });
+    } catch (e) {
+      if (e !== 'cancel') showToast(t('share-link-err'), 'err');
+    }
+  })();
 
   // URL から初期状態を復元（ページリロード対応）、なければ前回チャンネルを使用
   (async function _restoreFromUrl() {

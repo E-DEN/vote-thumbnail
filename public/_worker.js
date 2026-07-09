@@ -452,6 +452,31 @@ async function handleApi(request, env, url, ctx) {
       return json({ ok: true });
     }
 
+    // --- POST /api/share ---
+    if (method === 'POST' && path === '/share') {
+      const body = await request.json().catch(() => null);
+      if (!body?.channels || typeof body.channels !== 'object') return err('channels は必須です');
+      const payload = JSON.stringify({ channels: body.channels, sidebarOrder: body.sidebarOrder ?? [] });
+      if (payload.length > 65536) return err('データが大きすぎます');
+      // 紛らわしい文字（0/O, 1/l/I）を除いた 8 文字コードを生成
+      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+      let code = '';
+      const rand = new Uint8Array(16);
+      crypto.getRandomValues(rand);
+      for (let i = 0; code.length < 8; i++) code += chars[rand[i] % chars.length];
+      await env.RATE_LIMIT_KV.put('share:' + code, payload, { expirationTtl: 365 * 24 * 60 * 60 }); // 1年後に自動削除
+      return json({ ok: true, code });
+    }
+
+    // --- GET /api/share/:code ---
+    const mShare = path.match(/^\/share\/([A-Za-z0-9]{8})$/);
+    if (method === 'GET' && mShare) {
+      const raw = await env.RATE_LIMIT_KV.get('share:' + mShare[1]);
+      if (!raw) return err('共有リンクが見つかりません', 404);
+      const data = JSON.parse(raw);
+      return json({ ok: true, ...data });
+    }
+
     return err('Not Found', 404);
   } catch (e) {
     console.error(e);

@@ -366,6 +366,90 @@ body:has(.m-bottom-nav[hidden]) .m-content {
 }
 .m-ch-card-menu-btn:active { color: var(--accent); background: var(--surface2); }
 .m-ch-card-menu-btn svg { width: 16px; height: 16px; }
+/* 共有リンクインポート確認ポップアップ */
+.m-share-import-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(0,0,0,0.55);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+.m-share-import-popup {
+  background: var(--surface);
+  border-radius: 16px 16px 0 0;
+  padding: 20px 18px calc(16px + env(safe-area-inset-bottom, 0px));
+  width: 100%;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.m-share-import-msg {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.4;
+  margin: 0 0 12px;
+  flex-shrink: 0;
+}
+.m-share-import-ch-list {
+  list-style: none;
+  margin: 0 0 16px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+.m-share-import-ch-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 6px;
+  border-radius: 10px;
+  cursor: pointer;
+}
+.m-share-import-ch-item:active { background: var(--surface2); }
+.m-share-import-ch-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+.m-share-import-ch-icon--empty { background: var(--surface3); }
+.m-share-import-ch-name {
+  font-size: 14px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+.m-share-import-ch-item .m-rs-dummy-check { margin-left: auto; }
+.m-share-import-ch-item:has(.m-rs-dummy-check:not(:checked)) .m-share-import-ch-name { color: var(--text-muted); }
+.m-share-import-ch-item:has(.m-rs-dummy-check:not(:checked)) .m-share-import-ch-icon { opacity: 0.4; }
+.m-share-import-btns {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  flex-shrink: 0;
+}
+.m-share-import-ok, .m-share-import-cancel {
+  font-family: inherit;
+  font-size: 14px;
+  padding: 7px 18px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.m-share-import-ok { background: var(--accent); color: #fff; border: none; }
+.m-share-import-cancel { background: none; color: var(--text-muted); border: 1px solid var(--border); }
+/* ダミーピン チェックボックストグル */
+.m-rs-dummy-label { cursor: pointer; }
 .m-ch-card-menu {
   position: fixed;
   background: var(--surface);

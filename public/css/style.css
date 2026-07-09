@@ -727,7 +727,12 @@ header {
 .ch-action-btn svg { width: 11px; height: 11px; }
 .ch-action-rename:hover  { color: #f0a040; }
 .ch-action-refresh:hover { color: var(--accent); }
+.ch-action-share:hover   { color: var(--accent); }
+.ch-action-share:active  { transform: scale(0.88); }
 .ch-action-delete:hover  { color: #f04747; }
+/* フォルダは共有ボタン込み4ボタン分の幅が必要 */
+.sidebar-folder-header:hover .ch-actions,
+.sidebar-folder-header:has(.ch-spinner) .ch-actions { max-width: 82px; }
 .sidebar-channel-item:not(:hover):has(.ch-spinner) .ch-action-delete,
 .sidebar-folder-header:not(:hover):has(.ch-spinner) .ch-action-delete,
 .sidebar-folder-header:not(:hover):has(.ch-spinner) .ch-action-rename {
@@ -759,6 +764,110 @@ header {
   pointer-events: none;
   z-index: 2;
 }
+/* =====================
+   SHARE IMPORT DIALOG
+===================== */
+.share-import-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(0,0,0,0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.share-import-dialog {
+  width: 560px;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 80px);
+  background: var(--surface);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.5);
+  display: flex;
+  flex-direction: column;
+  animation: modal-in 0.15s ease;
+}
+.share-import-hdr {
+  padding: 16px 20px 12px;
+  flex-shrink: 0;
+}
+.share-import-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+}
+.share-import-ch-list {
+  list-style: none;
+  margin: 0;
+  padding: 4px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 120px;
+}
+.share-import-ch-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.share-import-ch-item:hover { background: var(--surface2); }
+.share-import-ch-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+.share-import-ch-icon--empty { background: var(--surface3); }
+.share-import-ch-name {
+  font-size: 14px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+.share-import-ch-item .rs-dummy-check { margin-left: auto; }
+.share-import-ch-item:has(.rs-dummy-check:not(:checked)) .share-import-ch-name { color: var(--text-muted); }
+.share-import-ch-item:has(.rs-dummy-check:not(:checked)) .share-import-ch-icon { opacity: 0.4; }
+.share-import-ftr {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  padding: 12px 20px 16px;
+  flex-shrink: 0;
+  border-top: 1px solid var(--border);
+}
+.share-import-ok {
+  font-family: inherit;
+  font-size: 13px;
+  padding: 6px 20px;
+  border-radius: 6px;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  transition: opacity 0.12s;
+}
+.share-import-ok:hover { opacity: 0.88; }
+.share-import-cancel {
+  font-family: inherit;
+  font-size: 13px;
+  padding: 6px 16px;
+  border-radius: 6px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  cursor: pointer;
+  transition: opacity 0.12s;
+}
+.share-import-cancel:hover { opacity: 0.8; }
 /* 削除確認ポップアップ */
 .ch-del-popup {
   position: fixed;
