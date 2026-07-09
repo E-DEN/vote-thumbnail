@@ -1336,6 +1336,40 @@ body:has(.m-bottom-nav[hidden]) .m-content {
   transform: translateX(16px);
 }
 
+/* ダミーピン チェックボックストグル */
+.m-rs-dummy-label { cursor: pointer; }
+.m-rs-dummy-check {
+  width: 36px;
+  height: 20px;
+  appearance: none;
+  -webkit-appearance: none;
+  border-radius: 10px;
+  background: var(--text-muted);
+  opacity: 0.5;
+  position: relative;
+  cursor: pointer;
+  transition: background 0.2s, opacity 0.2s;
+  flex-shrink: 0;
+}
+.m-rs-dummy-check::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+  transition: transform 0.2s;
+}
+.m-rs-dummy-check:checked {
+  background: var(--accent);
+  opacity: 1;
+}
+.m-rs-dummy-check:checked::after {
+  transform: translateX(16px);
+}
 .m-rs-progress-wrap {
   flex: 1;
   min-width: 0;
@@ -1547,6 +1581,10 @@ body:has(.m-bottom-nav[hidden]) .m-content {
 .reactions-pin.shade-1 .pin-balloon { fill: var(--pin-c1, #f43f5e); }
 .reactions-pin.shade-2 .pin-balloon { fill: var(--pin-c2, #9f1239); }
 .reactions-pin .pin-icon { fill: rgba(255,255,255,0.9); }
+/* ダミーピン: 選択色をグレースケール化して「サンプル」表現 */
+.reactions-pin--dummy { filter: saturate(0.5) opacity(0.7); }
+/* ピンサンプルトグル OFF 時はダミーを非表示（位置を保持したまま） */
+.dummy-hidden .reactions-pin--dummy { visibility: hidden; }
 @keyframes reactionsPinDrop {
   0%   { transform: translate(-50%, calc(-100% - var(--drop-h, 55px))); animation-timing-function: cubic-bezier(0.6,0,0.9,0.6); }
   6%   { transform: translate(-50%, -100%); animation-timing-function: linear; }

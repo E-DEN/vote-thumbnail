@@ -2574,9 +2574,9 @@ async function loadReactionSeeds(videoId) {
     if (!resp.ok) return [];
     const data = await resp.json();
     _reactionsPins = data.pins  || [];
-    // 本物のピンが 2 件以上あればダミー補完しない
+    // 本物のピンが 2 件以上、またはトグル OFF ならダミー補完しない
     const _realTotal = _reactionsPins.length + (data.my_pin ? 1 : 0);
-    if (data.demo_fill && _realTotal < 2) pinFillDummy(_reactionsPins, 30);
+    if (_rsDummyEnabled && data.demo_fill && _realTotal < 2) pinFillDummy(_reactionsPins, 30);
     _reactionsKde  = reactionsComputeKde(_reactionsPins);
     // サーバーから自分のピンを復元（ローカルに未保存の場合）
     if (data.my_pin && !_reactionsMyPins[videoId]) {
@@ -2671,6 +2671,8 @@ function renderReactionsHeatmap() {
 }
 
 let REACTIONS_MAX_PINS = parseInt(localStorage.getItem(LS_MAX_PINS), 10) || 10;
+const LS_DUMMY_ENABLED = 'thumb-rs-dummy';
+let _rsDummyEnabled = localStorage.getItem(LS_DUMMY_ENABLED) !== 'false';
 
 function setSquashIntensity(v) {
   var sx = (1 + 0.24 * v).toFixed(3);
@@ -2701,10 +2703,12 @@ function _pinColorFromDensity(d) {
 function updatePinColors() {
   var pinsLayer = document.getElementById('reactionsPinsLayer');
   if (!pinsLayer) return;
-  pinsLayer.querySelectorAll('.reactions-pin:not(.reactions-pin--dummy)').forEach(function(el) {
+  // ダミーピンも含めて fill を更新（CSS filter で脱色するため）
+  pinsLayer.querySelectorAll('.reactions-pin').forEach(function(el) {
     var d = parseFloat(el.dataset.density) || 0.5;
     var shadeIdx = d >= 0.67 ? 2 : d >= 0.34 ? 1 : 0;
-    el.className = 'reactions-pin shade-' + shadeIdx;
+    var isDummy = el.classList.contains('reactions-pin--dummy');
+    el.className = 'reactions-pin shade-' + shadeIdx + (isDummy ? ' reactions-pin--dummy' : '');
     var balloon = el.querySelector('.pin-balloon');
     if (balloon) balloon.style.fill = _pinColorFromDensity(d);
   });
@@ -3803,6 +3807,19 @@ function init() {
           startReactionsLoop();
         }
       }
+    });
+  })();
+
+  // ダミーピントグル
+  (function() {
+    var btn = document.getElementById('reactionsDummyToggle');
+    if (!btn) return;
+    btn.checked = _rsDummyEnabled;
+    btn.addEventListener('change', function() {
+      _rsDummyEnabled = this.checked;
+      localStorage.setItem(LS_DUMMY_ENABLED, String(this.checked));
+      var layer = document.getElementById('reactionsPinsLayer');
+      if (layer) layer.classList.toggle('dummy-hidden', !this.checked);
     });
   })();
 

@@ -147,7 +147,7 @@ function pinMakeElement(x, y, density, skipDropAnim, pinProps, palette) {
   // → 先端は底辺より szH/30 px 上にある分を top に加算して補正
   const tipGap = szH / 30;
   const el = document.createElement('div');
-  el.className = 'reactions-pin shade-' + shadeIdx;
+  el.className = 'reactions-pin shade-' + shadeIdx + (pinProps && pinProps.dummy ? ' reactions-pin--dummy' : '');
   el.dataset.x = x;
   el.dataset.y = y;
   el.dataset.density = d.toFixed(4);

@@ -69,6 +69,9 @@ let _mRsMaxPins = parseInt(localStorage.getItem(LS_RS_MAX_PINS) || '10', 10);
 // ピン透過度
 const LS_RS_PIN_OPACITY = 'thumb-rs-pin-opacity';
 let _mRsPinOpacity = parseFloat(localStorage.getItem(LS_RS_PIN_OPACITY) || '1');
+// サンプルピン表示トグル
+const LS_RS_DUMMY = 'thumb-rs-dummy';
+let _mRsDummyEnabled = localStorage.getItem(LS_RS_DUMMY) !== 'false';
 
 // プレイリストソート状慁E
 const LS_RS_SORT     = 'thumb-rs-sort';
@@ -208,11 +211,12 @@ function mRsStartLoop(skipMyPin) {
 }
 
 // カラー更新: 既存コミュニティピンの fill をその場で書き換え（アニメーション維持）
+// ダミーピンも合わせて更新（CSS filter で脱色するため）
 function _mRsRefreshPinColors() {
   const pinsLayer = document.getElementById('mRsPinsLayer');
   if (!pinsLayer) return;
   const palette = PIN_PALETTES[_mRsPinColor] || PIN_PALETTES['#ec4899'];
-  pinsLayer.querySelectorAll('.reactions-pin:not(.reactions-pin--dummy)').forEach(el => {
+  pinsLayer.querySelectorAll('.reactions-pin').forEach(el => {
     const d = parseFloat(el.dataset.density) || 0.5;
     const balloon = el.querySelector('.pin-balloon');
     if (balloon) balloon.style.fill = pinColorFromDensity(d, palette);
@@ -411,7 +415,7 @@ async function mRsOpenMode(videoId) {
       _mRsPins = data.pins || [];
       // 本物のピンが 2 件以上あればダミー補完しない
       const _realTotal = _mRsPins.length + (data.my_pin ? 1 : 0);
-      if ((data.demo_fill || /^(localhost|127\.|192\.168\.)/.test(location.hostname)) && _realTotal < 2) _mRsFillDummyPins(_mRsPins);
+      if (_mRsDummyEnabled && (data.demo_fill || /^(localhost|127\.|192\.168\.)/.test(location.hostname)) && _realTotal < 2) _mRsFillDummyPins(_mRsPins);
       _mRsKde  = mRsComputeKde(_mRsPins);
       if (data.my_pin && !_mRsMyPins[videoId]) {
         _mRsMyPins[videoId] = { x: data.my_pin.x, y: data.my_pin.y };
@@ -435,6 +439,8 @@ async function mRsOpenMode(videoId) {
     });
   }
   if (_mRsCurrentVideoId !== videoId) return; // ロード待ち中に動画が切り替わっていたら無用
+  // ダミー表示状態をレイヤークラスに反映
+  if (pinsLayer) pinsLayer.classList.toggle('dummy-hidden', !_mRsDummyEnabled);
   _mRsCurrentTime  = 0;
   _mRsDuration     = 0;
   _mRsEmittedCount = 0;
@@ -903,7 +909,15 @@ export {
   renderReaction,
   mRsRenderPlaylist,
 };
-export { _mRsMyPins, _mRsPinColor, _mRsMaxPins, _mRsPinOpacity, _mRsTransportVisible, _mRsCurrentVideoId, _mRsUpdateSortUI };
+export { _mRsMyPins, _mRsPinColor, _mRsMaxPins, _mRsPinOpacity, _mRsTransportVisible, _mRsCurrentVideoId, _mRsUpdateSortUI, _mRsDummyEnabled, LS_RS_DUMMY };
+
+export function setDummyEnabled(v) {
+  _mRsDummyEnabled = v;
+  localStorage.setItem(LS_RS_DUMMY, String(v));
+  // ピンズレイヤーにクラスを付けるだけ—再生成なし
+  const pinsLayer = document.getElementById('mRsPinsLayer');
+  if (pinsLayer) pinsLayer.classList.toggle('dummy-hidden', !v);
+}
 
 export function resetCurrentVideo() {
   _mRsCurrentVideoId = null;

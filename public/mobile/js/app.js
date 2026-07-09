@@ -8,7 +8,7 @@ import { showToast, showToastPromise, closeToast } from '../../js/toast.js';
 import { getStoredApiKey, getRssOnly, apiKeyHeaders, channelKeyFromInput } from '../../js/channel.js';
 import { _M_SVG_EYE, _M_SVG_CLK, _M_SVG_STAR, _M_SVG_PLAY, _M_SVG_PAUSE, _M_SVG_FULLSCREEN, _M_SVG_FULLSCREEN_EXIT, _M_SVG_PIN, _mBuildMeta, _mBuildPinDot } from './ui-helpers.js';
 import { _suppressHistory, setSuppressHistory } from './shared-state.js';
-import { loadMyPins, mRsApplyPalette, mRsShowMyPin, mRsOpenMode, openVideoInReaction, renderReaction, mRsRenderPlaylist, mRsSaveCatState, _mRsMyPins, _mRsPinColor, _mRsMaxPins, _mRsPinOpacity, _mRsTransportVisible, _mRsCurrentVideoId, _mRsUpdateSortUI, initReaction, resetCurrentVideo, initReactionUI } from './reaction.js';
+import { loadMyPins, mRsApplyPalette, mRsShowMyPin, mRsOpenMode, openVideoInReaction, renderReaction, mRsRenderPlaylist, mRsSaveCatState, _mRsMyPins, _mRsPinColor, _mRsMaxPins, _mRsPinOpacity, _mRsTransportVisible, _mRsCurrentVideoId, _mRsUpdateSortUI, initReaction, resetCurrentVideo, initReactionUI, _mRsDummyEnabled, LS_RS_DUMMY, setDummyEnabled } from './reaction.js';
 
 const LS_LIST_SORT_DIR = 'thumb-sort-dir';
 const LS_VOTE_SHOW_TITLE = 'thumb-vote-show-title';
@@ -2584,6 +2584,15 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!seg) return;
     seg.querySelectorAll('.m-rs-seg-btn').forEach(btn => {
       btn.classList.toggle('active', parseInt(btn.dataset.value, 10) === _mRsMaxPins);
+    });
+  })();
+  // ダミートグルの初期状態
+  (function() {
+    const btn = document.getElementById('mRsDummyToggle');
+    if (!btn) return;
+    btn.checked = _mRsDummyEnabled;
+    btn.addEventListener('change', function() {
+      setDummyEnabled(this.checked);
     });
   })();
   const layer = document.getElementById('mRsPinsLayer');

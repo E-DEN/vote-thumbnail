@@ -3208,6 +3208,10 @@ header {
 .reactions-pin.shade-1 .pin-balloon { fill: var(--pin-c1, #f43f5e); } /* 中密度: rose-500 */
 .reactions-pin.shade-2 .pin-balloon { fill: var(--pin-c2, #9f1239); } /* 高密度: rose-900 */
 .reactions-pin .pin-icon { fill: rgba(255,255,255,0.9); }
+/* ダミーピン: 選択色をグレースケール化して「サンプル」表現 */
+.reactions-pin--dummy { filter: saturate(0.5) opacity(0.7); }
+/* ピンサンプルトグル OFF 時はダミーを非表示（位置を保持したまま） */
+.dummy-hidden .reactions-pin--dummy { visibility: hidden; }
 
 @keyframes reactionsPinDrop {
   0%   { transform: translate(-50%, calc(-100% - var(--drop-h, 55px))); animation-timing-function: cubic-bezier(0.6,0,0.9,0.6); }
@@ -3640,9 +3644,9 @@ a.rs-video-title:hover { color: var(--accent); }
   font-size: 11px;
   color: var(--text);
   font-variant-numeric: tabular-nums;
-  width: 30px;
+  min-width: 28px;
   flex-shrink: 0;
-  text-align: right;
+  text-align: left;
 }
 /* スライダー (gf input[type=range] 相当) */
 .rs-slider {
@@ -3738,6 +3742,40 @@ a.rs-video-title:hover { color: var(--accent); }
   font-size: 11px;
   color: var(--text);
   white-space: nowrap;
+}
+/* ダミーピン チェックボックストグル（PC） */
+.rs-dummy-label { cursor: pointer; }
+.rs-dummy-check {
+  width: 30px;
+  height: 17px;
+  appearance: none;
+  -webkit-appearance: none;
+  border-radius: 8.5px;
+  background: var(--text-muted);
+  opacity: 0.5;
+  position: relative;
+  cursor: pointer;
+  transition: background 0.2s, opacity 0.2s;
+  flex-shrink: 0;
+}
+.rs-dummy-check::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+  transition: transform 0.2s;
+}
+.rs-dummy-check:checked {
+  background: var(--accent);
+  opacity: 1;
+}
+.rs-dummy-check:checked::after {
+  transform: translateX(13px);
 }
 /* toolbar context: mode buttons inline */
 .rs-toolbar .rs-mode-btn {
