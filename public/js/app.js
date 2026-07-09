@@ -3338,9 +3338,83 @@ function showView(view) {
 }
 
 // --- サイドバー検索・チャンネル追加 ---
+// 共有コードのインポート共通処理（モジュールスコープ）
+async function _importFromShareCode(code) {
+  // コンパクト追加ポップアップが開いていれば先に閉じる
+  const _cp = document.querySelector('.sidebar-compact-add-pop');
+  if (_cp && !_cp.hidden) {
+    _cp.classList.remove('visible');
+    setTimeout(function() { _cp.hidden = true; }, 160);
+  }
+  try {
+    const res = await fetch('/api/share/' + code);
+    if (!res.ok) { showToast(t('share-link-not-found'), 'err'); return; }
+    const data = await res.json();
+    if (!data.channels || typeof data.channels !== 'object') return;
+    let dbMap = {};
+    try {
+      const allRes = await fetch('/api/channels');
+      if (allRes.ok) dbMap = Object.fromEntries((await allRes.json()).map(c => [c.channel_id, c]));
+    } catch { /* ignore */ }
+    const channelIds = Object.keys(data.channels);
+    const chInfos = channelIds.map(id => dbMap[id] || { channel_id: id, title: data.channels[id]?.title || id, icon_url: data.channels[id]?.icon_url || '', handle: '' });
+    const selectedIds = await new Promise((resolve, reject) => { _showShareImportPopup(chInfos, resolve, reject); });
+    if (!selectedIds.length) return;
+    if (data.sidebarOrder && Array.isArray(data.sidebarOrder)) {
+      for (const item of data.sidebarOrder) {
+        if (!sidebarOrder.some(i => (i.type === item.type && (i.key === item.key || i.id === item.id)))) sidebarOrder.push(item);
+      }
+      saveSidebarOrder();
+    }
+    for (const [id, meta] of Object.entries(data.channels)) {
+      if (!selectedIds.includes(id)) continue;
+      if (dbMap[id]) channels[id] = { key: id, channelId: id, handle: dbMap[id].handle, displayName: dbMap[id].title, avatar: dbMap[id].icon_url, tags: meta.tags || channels[id]?.tags || [], addedAt: channels[id]?.addedAt || new Date().toISOString() };
+      else channels[id] = { key: id, channelId: id, handle: channels[id]?.handle || '', displayName: meta.title || channels[id]?.displayName || '', avatar: meta.icon_url || channels[id]?.avatar || '', tags: meta.tags || channels[id]?.tags || [], addedAt: channels[id]?.addedAt || new Date().toISOString() };
+    }
+    saveChannels();
+    renderSidebar();
+    const missingIds = selectedIds.filter(id => !dbMap[id]);
+    if (missingIds.length > 0) {
+      showToast(t('status-ch-fetching'), 'loading');
+      (async () => {
+        for (const id of missingIds) {
+          const item = document.querySelector(`.sidebar-channel-item[data-key="${id}"]`);
+          if (item) item.classList.add('compact-refreshing');
+          try {
+            const r = await fetch('/api/channels/' + id + '/refresh', { method: 'POST' });
+            const d = r.ok ? await r.json().catch(() => ({})) : {};
+            if (d.channel && channels[id]) {
+              channels[id] = { ...channels[id], handle: d.channel.handle, displayName: d.channel.title, avatar: d.channel.icon_url };
+              saveChannels();
+              const cur = document.querySelector(`.sidebar-channel-item[data-key="${id}"]`);
+              if (cur) { const n = buildChannelItem(channels[id]); cur.replaceWith(n); if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [n] }); }
+            }
+          } catch { /* ignore */ }
+          const cur2 = document.querySelector(`.sidebar-channel-item[data-key="${id}"]`);
+          if (cur2) cur2.classList.remove('compact-refreshing');
+        }
+        showToast(t('preset-imported'));
+      })();
+    } else {
+      showToast(t('preset-imported'));
+    }
+  } catch (e) {
+    if (e !== 'cancel') showToast(t('share-link-err'), 'err');
+  }
+}
+
 async function addChannelFromSidebarInput() {
   const rawInput = document.getElementById('sidebarSearchInput').value.trim();
   if (!rawInput) return;
+
+  // 共有リンク（#s=XXXXXXXX または URL に含まれる場合）を優先処理
+  const shareCode = rawInput.match(/(?:[#?&]|^)s=([A-Za-z0-9]{8})(?:[^A-Za-z0-9]|$)/)?.[1];
+  if (shareCode) {
+    document.getElementById('sidebarSearchInput').value = '';
+    await _importFromShareCode(shareCode);
+    return;
+  }
+
   let raw;
   try { raw = decodeURIComponent(rawInput); } catch { raw = rawInput; }
 
@@ -3726,7 +3800,7 @@ function init() {
     inp.value = '';
     document.getElementById('sidebarSearchInput').value = val;
     await addChannelFromSidebarInput();
-    setTimeout(_closeCompactPop, 2500);
+    _closeCompactPop();
   }
 
   _compactAddBtn.addEventListener('click', function(e) {
@@ -3854,97 +3928,8 @@ function init() {
   (async function _checkShareLink() {
     const m = location.hash.match(/^#s=([A-Za-z0-9]{8})$/);
     if (!m) return;
-    const code = m[1];
     history.replaceState(null, '', location.pathname);
-    try {
-      const res = await fetch('/api/share/' + code);
-      if (!res.ok) { showToast(t('share-link-not-found'), 'err'); return; }
-      const data = await res.json();
-      if (!data.channels || typeof data.channels !== 'object') return;
-      // DB からチャンネル詳細を先取得してポップアップに表示
-      let dbMap = {};
-      try {
-        const allRes = await fetch('/api/channels');
-        if (allRes.ok) dbMap = Object.fromEntries((await allRes.json()).map(c => [c.channel_id, c]));
-      } catch { /* ignore */ }
-      const channelIds = Object.keys(data.channels);
-      const chInfos = channelIds.map(id => dbMap[id] || {
-        channel_id: id,
-        title: data.channels[id]?.title || id,
-        icon_url: data.channels[id]?.icon_url || '',
-        handle: '',
-      });
-      const selectedIds = await new Promise((resolve, reject) => {
-        _showShareImportPopup(chInfos, resolve, reject);
-      });
-      if (!selectedIds.length) return;
-      if (data.sidebarOrder && Array.isArray(data.sidebarOrder)) {
-        for (const item of data.sidebarOrder) {
-          if (!sidebarOrder.some(i => (i.type === item.type && (i.key === item.key || i.id === item.id)))) {
-            sidebarOrder.push(item);
-          }
-        }
-        saveSidebarOrder();
-      }
-      for (const [id, meta] of Object.entries(data.channels)) {
-        if (!selectedIds.includes(id)) continue;
-        if (dbMap[id]) {
-          channels[id] = {
-            key: id, channelId: id,
-            handle: dbMap[id].handle,
-            displayName: dbMap[id].title,
-            avatar: dbMap[id].icon_url,
-            tags: meta.tags || channels[id]?.tags || [],
-            addedAt: channels[id]?.addedAt || new Date().toISOString(),
-          };
-        } else {
-          // shareデータのタイトル・アイコンを仮セット（後でバックグラウンドで補完）
-          channels[id] = {
-            key: id, channelId: id,
-            handle: channels[id]?.handle || '',
-            displayName: meta.title || channels[id]?.displayName || '',
-            avatar: meta.icon_url || channels[id]?.avatar || '',
-            tags: meta.tags || channels[id]?.tags || [],
-            addedAt: channels[id]?.addedAt || new Date().toISOString(),
-          };
-        }
-      }
-      saveChannels();
-      renderSidebar();
-      // DB未登録チャンネルをバックグラウンドで refresh（アイコン・名前を補完）
-      const missingIds = selectedIds.filter(id => !dbMap[id]);
-      if (missingIds.length > 0) {
-        showToast(t('status-ch-fetching'), 'loading');
-        (async () => {
-          for (const id of missingIds) {
-            const item = document.querySelector(`.sidebar-channel-item[data-key="${id}"]`);
-            if (item) item.classList.add('compact-refreshing');
-            try {
-              const r = await fetch('/api/channels/' + id + '/refresh', { method: 'POST' });
-              const d = r.ok ? await r.json().catch(() => ({})) : {};
-              if (d.channel && channels[id]) {
-                channels[id] = { ...channels[id], handle: d.channel.handle, displayName: d.channel.title, avatar: d.channel.icon_url };
-                saveChannels();
-                const cur = document.querySelector(`.sidebar-channel-item[data-key="${id}"]`);
-                if (cur) {
-                  const n = buildChannelItem(channels[id]);
-                  cur.replaceWith(n);
-                  // DOM 追加後に Lucide アイコンを再処理
-                  if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [n] });
-                }
-              }
-            } catch { /* ignore */ }
-            const cur2 = document.querySelector(`.sidebar-channel-item[data-key="${id}"]`);
-            if (cur2) cur2.classList.remove('compact-refreshing');
-          }
-          showToast(t('preset-imported'));
-        })();
-      } else {
-        showToast(t('preset-imported'));
-      }
-    } catch (e) {
-      if (e !== 'cancel') showToast(t('share-link-err'), 'err');
-    }
+    await _importFromShareCode(m[1]);
   })();
 
   // --- URL ハッシュから初期状態を復元 ---

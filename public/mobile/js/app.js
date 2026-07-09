@@ -1404,6 +1404,15 @@ function _deleteMobileChannel(key) {
 
 // チャンネル追加
 async function addChannel(input) {
+  // 共有リンク（#s=XXXXXXXX または URL に含まれる）を優先処理
+  const shareCode = input.match(/(?:[#?&]|^)s=([A-Za-z0-9]{8})(?:[^A-Za-z0-9]|$)/)?.[1];
+  if (shareCode) {
+    const _inp = document.getElementById('mChAddInput');
+    if (_inp) { _inp.value = ''; _inp.blur(); }
+    await _mImportFromShareCode(shareCode);
+    return;
+  }
+
   let raw = input;
   try { raw = decodeURIComponent(input); } catch { raw = input; }
   const ch = channelKeyFromInput(raw);
@@ -2767,68 +2776,36 @@ document.addEventListener('DOMContentLoaded', function() {
   const catBar = document.getElementById('mCatBar');
   catBar.hidden = false;
 
-  // 共有リンク（#s=XXXXXXXX）を検出してインポート
-  (async function _checkShareLink() {
-    const m = location.hash.match(/^#s=([A-Za-z0-9]{8})$/);
-    if (!m) return;
-    const code = m[1];
-    history.replaceState(null, '', location.pathname);
+  // 共有コードのインポート共通処理
+  async function _mImportFromShareCode(code) {
     try {
       const res = await fetch('/api/share/' + code);
       if (!res.ok) { showToast(t('share-link-not-found'), 'err'); return; }
       const data = await res.json();
       if (!data.channels || typeof data.channels !== 'object') return;
-      // DB からチャンネル詳細を先取得
       let dbMap = {};
       try {
         const allRes = await fetch('/api/channels');
         if (allRes.ok) dbMap = Object.fromEntries((await allRes.json()).map(c => [c.channel_id, c]));
       } catch { /* ignore */ }
       const channelIds = Object.keys(data.channels);
-      const chInfos = channelIds.map(id => dbMap[id] || {
-        channel_id: id,
-        title: data.channels[id]?.title || id,
-        icon_url: data.channels[id]?.icon_url || '',
-        handle: '',
-      });
-      await new Promise((resolve, reject) => {
-        _mShowShareImportPopup(chInfos, resolve, reject);
-      }).then(async selectedIds => {
+      const chInfos = channelIds.map(id => dbMap[id] || { channel_id: id, title: data.channels[id]?.title || id, icon_url: data.channels[id]?.icon_url || '', handle: '' });
+      await new Promise((resolve, reject) => { _mShowShareImportPopup(chInfos, resolve, reject); }).then(async selectedIds => {
         if (!selectedIds.length) return;
         showToast(t('preset-fetching'), 'loading');
         if (data.sidebarOrder && Array.isArray(data.sidebarOrder)) {
           for (const item of data.sidebarOrder) {
-            if (!sidebarOrder.some(i => (i.type === item.type && (i.key === item.key || i.id === item.id)))) {
-              sidebarOrder.push(item);
-            }
+            if (!sidebarOrder.some(i => (i.type === item.type && (i.key === item.key || i.id === item.id)))) sidebarOrder.push(item);
           }
           saveSidebarOrder();
         }
         for (const [id, meta] of Object.entries(data.channels)) {
           if (!selectedIds.includes(id)) continue;
-          if (dbMap[id]) {
-            channels[id] = {
-              key: id, channelId: id,
-              handle: dbMap[id].handle,
-              displayName: dbMap[id].title,
-              avatar: dbMap[id].icon_url,
-              tags: meta.tags || channels[id]?.tags || [],
-              addedAt: channels[id]?.addedAt || new Date().toISOString(),
-            };
-          } else {
-            channels[id] = {
-              key: id, channelId: id,
-              handle: channels[id]?.handle || '',
-              displayName: meta.title || channels[id]?.displayName || '',
-              avatar: meta.icon_url || channels[id]?.avatar || '',
-              tags: meta.tags || channels[id]?.tags || [],
-              addedAt: channels[id]?.addedAt || new Date().toISOString(),
-            };
-          }
+          if (dbMap[id]) channels[id] = { key: id, channelId: id, handle: dbMap[id].handle, displayName: dbMap[id].title, avatar: dbMap[id].icon_url, tags: meta.tags || channels[id]?.tags || [], addedAt: channels[id]?.addedAt || new Date().toISOString() };
+          else channels[id] = { key: id, channelId: id, handle: channels[id]?.handle || '', displayName: meta.title || channels[id]?.displayName || '', avatar: meta.icon_url || channels[id]?.avatar || '', tags: meta.tags || channels[id]?.tags || [], addedAt: channels[id]?.addedAt || new Date().toISOString() };
         }
         saveChannels();
         renderChannelPanel();
-        // DB未登録チャンネルをバックグラウンドで refresh（アイコン・名前を補完）
         const missingIds = selectedIds.filter(id => !dbMap[id]);
         if (missingIds.length > 0) {
           showToast(t('status-ch-fetching'), 'loading');
@@ -2859,6 +2836,15 @@ document.addEventListener('DOMContentLoaded', function() {
       });
     } catch (e) {
       if (e !== 'cancel') showToast(t('share-link-err'), 'err');
+    }
+  }
+
+  // 共有リンク（#s=XXXXXXXX）を検出してインポート
+  (async function _checkShareLink() {
+    const m = location.hash.match(/^#s=([A-Za-z0-9]{8})$/);
+    if (!m) return;
+    history.replaceState(null, '', location.pathname);
+    await _mImportFromShareCode(m[1]);
     }
   })();
 
