@@ -301,7 +301,13 @@ export function showToast(msg, type = 'ok', opts = {}) {
   if (type === true)                    type = 'err';
   if (type === false || type == null)   type = 'ok';
 
-  _gtClearTimers(); clearTimeout(_gtCloseFailsafe); clearTimeout(_gtCollapseTimer); clearTimeout(_gtXfadeTimer); _gtXfadeTimer = null; _gtHovered = false;
+  _gtClearTimers(); clearTimeout(_gtCloseFailsafe); clearTimeout(_gtCollapseTimer);
+  // xfade タイマーがキャンセルされた場合、フェード途中で止まった要素を即座に表示状態に戻す
+  if (_gtXfadeTimer) {
+    clearTimeout(_gtXfadeTimer); _gtXfadeTimer = null;
+    if (_gtE) [_gtE.badge, _gtE.ttl, _gtE.msgEl].forEach(el => { el.style.transition = ''; el.style.opacity = ''; el.style.filter = ''; });
+  }
+  _gtXfadeTimer = null; _gtHovered = false;
   _gtCollapseTimer = null; _gtCb = null; _gtCollapsing = false;
 
   _gtInit();
