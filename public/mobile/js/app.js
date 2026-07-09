@@ -2845,7 +2845,6 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!m) return;
     history.replaceState(null, '', location.pathname);
     await _mImportFromShareCode(m[1]);
-    }
   })();
 
   // URL から初期状態を復元（ページリロード対応）、なければ前回チャンネルを使用
