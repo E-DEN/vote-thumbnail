@@ -555,46 +555,45 @@ async function _mImportFromShareCode(code) {
       }
       saveChannels();
       renderChannelPanel();
-      const missingIds = selectedIds.filter(id => !dbMap[id]);
-      if (missingIds.length > 0) {
-        showToast(t('status-ch-fetching'), 'loading');
-        (async () => {
-          const _list = document.getElementById('mChList');
-          const _pending = new Set(missingIds);
-          // missingIds を含むフォルダにスピナーを付与
-          missingIds.forEach(id => {
-            const folder = sidebarOrder.find(i => i.type === 'folder' && i.children?.includes(id));
-            if (folder) _list?.querySelector(`.sidebar-folder[data-folder-id="${folder.id}"]`)?.classList.add('m-ch-refreshing');
+      showToast(t('status-ch-fetching'), 'loading');
+      (async () => {
+        const _list = document.getElementById('mChList');
+        const _pending = new Set(selectedIds);
+        // 選択チャンネルを含むフォルダにスピナーを付与
+        selectedIds.forEach(id => {
+          const folder = sidebarOrder.find(i => i.type === 'folder' && i.children?.includes(id));
+          if (folder) _list?.querySelector(`.sidebar-folder[data-folder-id="${folder.id}"]`)?.classList.add('m-ch-refreshing');
+        });
+        let totalVideos = 0, addedVideos = 0, updatedVideos = 0;
+        for (const id of selectedIds) {
+          const card = _list?.querySelector(`.sidebar-channel-item[data-key="${id}"]`);
+          if (card) card.classList.add('m-ch-refreshing');
+          showToast(t('status-ch-refreshing', { name: channels[id]?.displayName || channels[id]?.handle || id }), 'loading');
+          try {
+            const r = await fetch('/api/channels/' + id + '/refresh', { method: 'POST' });
+            const d = r.ok ? await r.json().catch(() => ({})) : {};
+            if (d.channel && channels[id]) {
+              channels[id] = { ...channels[id], handle: d.channel.handle, displayName: d.channel.title, avatar: d.channel.icon_url };
+              saveChannels();
+              const newCard = _makeChCard(id);
+              const cur = _list?.querySelector(`.sidebar-channel-item[data-key="${id}"]`);
+              if (cur) cur.replaceWith(newCard);
+            }
+            if (d.total != null) totalVideos += d.total;
+            if (d.added != null) addedVideos += d.added;
+            if (d.updated != null) updatedVideos += d.updated;
+          } catch { /* ignore */ }
+          const fin = _list?.querySelector(`.sidebar-channel-item[data-key="${id}"]`);
+          if (fin) fin.classList.remove('m-ch-refreshing');
+          _pending.delete(id);
+          sidebarOrder.forEach(item => {
+            if (item.type === 'folder' && item.children?.includes(id) && !item.children.some(k => _pending.has(k))) {
+              _list?.querySelector(`.sidebar-folder[data-folder-id="${item.id}"]`)?.classList.remove('m-ch-refreshing');
+            }
           });
-          for (const id of missingIds) {
-            const card = _list?.querySelector(`.sidebar-channel-item[data-key="${id}"]`);
-            if (card) card.classList.add('m-ch-refreshing');
-            try {
-              const r = await fetch('/api/channels/' + id + '/refresh', { method: 'POST' });
-              const d = r.ok ? await r.json().catch(() => ({})) : {};
-              if (d.channel && channels[id]) {
-                channels[id] = { ...channels[id], handle: d.channel.handle, displayName: d.channel.title, avatar: d.channel.icon_url };
-                saveChannels();
-                const newCard = _makeChCard(id);
-                const cur = _list?.querySelector(`.sidebar-channel-item[data-key="${id}"]`);
-                if (cur) cur.replaceWith(newCard);
-              }
-            } catch { /* ignore */ }
-            const fin = _list?.querySelector(`.sidebar-channel-item[data-key="${id}"]`);
-            if (fin) fin.classList.remove('m-ch-refreshing');
-            _pending.delete(id);
-            // このチャンネルを含むフォルダの未完了が 0 になったらスピナーを外す
-            sidebarOrder.forEach(item => {
-              if (item.type === 'folder' && item.children?.includes(id) && !item.children.some(k => _pending.has(k))) {
-                _list?.querySelector(`.sidebar-folder[data-folder-id="${item.id}"]`)?.classList.remove('m-ch-refreshing');
-              }
-            });
-          }
-          showToast(t('preset-imported'));
-        })();
-      } else {
-        showToast(t('preset-imported'));
-      }
+        }
+        showToast(t('status-refresh-api').replace('{total}', totalVideos));
+      })();
     });
   } catch (e) {
     if (e !== 'cancel') showToast(t('share-link-err'), 'err');
