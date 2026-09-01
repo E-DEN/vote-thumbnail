@@ -593,6 +593,10 @@ async function _mImportFromShareCode(code) {
           });
         }
         showToast(t('status-refresh-api').replace('{total}', totalVideos));
+        // 未選択状態ならインポートした最初のチャンネルを自動表示
+        if (!state.currentChannelKey && selectedIds.length > 0) {
+          await selectChannel(selectedIds[0]);
+        }
       })();
     });
   } catch (e) {
