@@ -3190,8 +3190,8 @@ function renderReactionsPlaylist(selectedId) {
   var selectedInPool = selectedId && pool.some(function(v) { return v.id === selectedId; });
   // 未選択かつ動画がある場合は先頭を自動選択してプレイリストを再描画
   if (!selectedInPool) {
-    openReactionsMode(pool[0].id);
-    renderReactionsPlaylist(pool[0].id);
+    _isPlaylistSwitch = true;
+    openModalReactions(pool[0]);
     return;
   }
   if (rsImgWrap)   rsImgWrap.style.display   = '';
