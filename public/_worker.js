@@ -100,11 +100,7 @@ async function handleApi(request, env, url, ctx) {
         ).bind(channelId, channelId, title).run();
 
         // RSS から最新動画を即時保存
-        const { newVideoIds } = await fetchAndSaveRss(channelId, effectiveEnv);
-        if (newVideoIds.length > 0) {
-          await detectShortsCategories(newVideoIds, effectiveEnv);
-          await fetchVideoDetails(newVideoIds, effectiveEnv);
-        }
+        await initChannelVideos(channelId, effectiveEnv);
         // ハンドル・アイコンをバックグラウンドで取得
         ctx.waitUntil(fetchChannelDetails(channelId, effectiveEnv).catch(() => {}));
 
@@ -174,11 +170,7 @@ async function handleApi(request, env, url, ctx) {
       ).bind(channelId, channelHandle, title, iconUrl).run();
 
       // RSS から最新15件を即時取得 → カテゴリ判定・視聴回数取得も同期実行
-      const { newVideoIds } = await fetchAndSaveRss(channelId, effectiveEnv);
-      if (newVideoIds.length > 0) {
-        await detectShortsCategories(newVideoIds, effectiveEnv);
-        await fetchVideoDetails(newVideoIds, effectiveEnv);
-      }
+      const newVideoIds = await initChannelVideos(channelId, effectiveEnv);
       // banner_url をバックグラウンドで取得
       ctx.waitUntil(fetchChannelDetails(channelId, effectiveEnv).catch(() => {}));
 
@@ -558,6 +550,18 @@ async function fetchChannelDetails(channelId, env) {
 }
 
 // ---------------------------------------------------------------------------
+// チャンネル登録直後の RSS 取得・カテゴリ判定・詳細取得をまとめて実行する
+// ---------------------------------------------------------------------------
+async function initChannelVideos(channelId, env) {
+  const { newVideoIds } = await fetchAndSaveRss(channelId, env);
+  if (newVideoIds.length > 0) {
+    await detectShortsCategories(newVideoIds, env);
+    await fetchVideoDetails(newVideoIds, env);
+  }
+  return newVideoIds;
+}
+
+// ---------------------------------------------------------------------------
 // RSS フェッチ & DB 保存
 // ---------------------------------------------------------------------------
 async function fetchAndSaveRss(channelId, env) {
@@ -777,8 +781,7 @@ async function detectShortsCategories(videoIds, env, { updateDuration = true } =
       if (res.ok) {
         const data = await res.json();
         for (const item of (data.items ?? [])) {
-          const isLive = item.snippet?.liveBroadcastContent !== 'none' || !!item.liveStreamingDetails;
-          categoryMap.set(item.id, isLive ? 'live' : 'videos');
+          categoryMap.set(item.id, isLiveItem(item) ? 'live' : 'videos');
         }
       }
     } catch { /* サイレント失敗 */ }
@@ -796,6 +799,12 @@ async function detectShortsCategories(videoIds, env, { updateDuration = true } =
 // YouTube Data API v3 で視聴回数・再生時間を取得して DB に保存
 // YOUTUBE_API_KEY が未設定の場合は無音でスキップ
 // ---------------------------------------------------------------------------
+// lbc='none' でも liveStreamingDetails が存在すれば完了済みライブと判定する
+function isLiveItem(item) {
+  const lbc = item.snippet?.liveBroadcastContent ?? 'none';
+  return lbc === 'live' || lbc === 'upcoming' || !!item.liveStreamingDetails;
+}
+
 function parseISODuration(iso) {
   // PT1H2M3S / PT30S / PT5M などを秒に変換
   const m = (iso || '').match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
@@ -840,21 +849,13 @@ async function fetchVideoDetails(videoIds, env) {
         const description  = String(item.snippet?.description ?? '').slice(0, 5000);
         const rawTags      = item.snippet?.tags;
         const tags         = Array.isArray(rawTags) && rawTags.length > 0 ? JSON.stringify(rawTags.slice(0, 30)) : null;
-        // liveBroadcastContent でライブ判定。完了済みライブは lbc='none' でも liveStreamingDetails が残る
-        const lbc = item.snippet?.liveBroadcastContent ?? 'none';
-        const isLive = lbc === 'live' || lbc === 'upcoming' || !!item.liveStreamingDetails;
-        const scheduledAt = (lbc === 'upcoming')
+        const isLive = isLiveItem(item);
+        const scheduledAt = (isLive && item.snippet?.liveBroadcastContent === 'upcoming')
           ? (item.liveStreamingDetails?.scheduledStartTime ?? null)
           : null;
-        if (isLive) {
-          await env.DB.prepare(
-            "UPDATE videos SET title = ?, thumbnail_url = ?, published_at = ?, view_count = ?, duration = ?, description = ?, tags = ?, scheduled_at = ?, category = 'live' WHERE video_id = ?"
-          ).bind(title, thumbnailUrl, publishedAt, viewCount, duration, description, tags, scheduledAt, item.id).run();
-        } else {
-          await env.DB.prepare(
-            'UPDATE videos SET title = ?, thumbnail_url = ?, published_at = ?, view_count = ?, duration = ?, description = ?, tags = ?, scheduled_at = NULL WHERE video_id = ?'
-          ).bind(title, thumbnailUrl, publishedAt, viewCount, duration, description, tags, item.id).run();
-        }
+        await env.DB.prepare(
+          "UPDATE videos SET title = ?, thumbnail_url = ?, published_at = ?, view_count = ?, duration = ?, description = ?, tags = ?, scheduled_at = ?, category = CASE WHEN ? THEN 'live' ELSE category END WHERE video_id = ?"
+        ).bind(title, thumbnailUrl, publishedAt, viewCount, duration, description, tags, scheduledAt, isLive ? 1 : 0, item.id).run();
       }
     } catch { /* API障害時はスキップ */ }
   }
