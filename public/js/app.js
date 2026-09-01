@@ -662,6 +662,23 @@ var _LIST_PAGE_SIZE = 50;
 var _listSortedPool = [];         // ソート済み全件キャッシュ
 var _listScrollObserver = null;   // 無限スクロール用 observer
 
+var _SORT_LABELS = { views: '再生数', date: '投稿日', rating: '得票率' };
+function _updateSortUI() {
+  var label = _SORT_LABELS[_listSortOrder] || _SORT_LABELS.views;
+  var sl = document.getElementById('sortSplitLabel');
+  var sp = document.getElementById('sortPopup');
+  var sd = document.getElementById('sortSplitDir');
+  if (sl) sl.textContent = label;
+  if (sd) { sd.innerHTML = _sortDir === 'asc' ? _SVG_SORT_ASC : _SVG_SORT_DESC; sd.classList.toggle('asc', _sortDir === 'asc'); }
+  if (sp) sp.querySelectorAll('[data-sort]').forEach(function(el) { el.classList.toggle('active', el.dataset.sort === _listSortOrder); });
+  var rl = document.getElementById('rsSortLabel');
+  var rp = document.getElementById('rsSortPopup');
+  var rd = document.getElementById('rsSortDir');
+  if (rl) rl.textContent = label;
+  if (rd) { rd.innerHTML = _sortDir === 'asc' ? _SVG_SORT_ASC : _SVG_SORT_DESC; rd.classList.toggle('asc', _sortDir === 'asc'); }
+  if (rp) rp.querySelectorAll('[data-sort]').forEach(function(el) { el.classList.toggle('active', el.dataset.sort === _listSortOrder); });
+}
+
 // 行パターン: [列数, flex-grow 重みの配列]
 var _GALLERY_PATTERNS = [
   [3, [3, 2, 3]],
@@ -3500,12 +3517,29 @@ async function addChannelFromSidebarInput() {
     } else {
       _nav.appendChild(_newItem);
     }
+    _listSortOrder = 'date';
+    _updateSortUI();
     await selectChannel(ch.channel_id);
+    // チャンネル追加後: 最多カテゴリに強制切り替え
+    if (state.allVideos.length) {
+      const _ac = { videos: 0, shorts: 0, live: 0 };
+      state.allVideos.forEach(function(v) { if (_ac[v.category] !== undefined) _ac[v.category]++; });
+      state.currentCat = ['live','shorts','videos'].reduce(function(a, b) { return _ac[b] > _ac[a] ? b : a; });
+      localStorage.setItem(LS_CAT, state.currentCat);
+      document.querySelectorAll('.cat-seg-btn').forEach(function(b) { b.classList.toggle('active', b.dataset.cat === state.currentCat); });
+      renderCurrentView();
+    }
     // API キーが設定されていれば全件取得を自動実行
     if (getStoredApiKey() && !getRssOnly()) {
       try {
         const count = await importAllChannelVideos(ch.channel_id, msg => { showToast(msg, 'loading'); });
         state.allVideos = await fetchChannelVideos(ch.channel_id);
+        // 全件取得後も最多カテゴリを維持
+        const _ac2 = { videos: 0, shorts: 0, live: 0 };
+        state.allVideos.forEach(function(v) { if (_ac2[v.category] !== undefined) _ac2[v.category]++; });
+        state.currentCat = ['live','shorts','videos'].reduce(function(a, b) { return _ac2[b] > _ac2[a] ? b : a; });
+        localStorage.setItem(LS_CAT, state.currentCat);
+        document.querySelectorAll('.cat-seg-btn').forEach(function(b) { b.classList.toggle('active', b.dataset.cat === state.currentCat); });
         renderCurrentView();
         showToast(isExisting
           ? t('status-refresh-api').replace('{total}', count)
@@ -3559,7 +3593,7 @@ function init() {
     date:   { label: '投稿日', hasDir: true },
     rating: { label: '得票率', hasDir: true },
   };
-  function _updateSortUI() {
+  function _updateSortUI_local() {
     var info = SORT_INFO[_listSortOrder] || SORT_INFO.views;
     if (_sortLabel)  _sortLabel.textContent = info.label;
     var _sortDirBtn = document.getElementById('sortSplitDir');

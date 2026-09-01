@@ -469,55 +469,6 @@ async function handleApi(request, env, url, ctx) {
       return json({ ok: true, ...data });
     }
 
-    // --- POST /api/admin/recat ---
-    // 全チャンネルの動画カテゴリを playlist API 基準で再判定する管理用エンドポイント。
-    // cursor=0 から始め、レスポンスの cursor を次のリクエストに渡す。done:true で完了。
-    if (method === 'POST' && path === '/admin/recat') {
-      const secret = env.ADMIN_SECRET;
-      if (!secret || request.headers.get('Authorization') !== `Bearer ${secret}`) {
-        return new Response(null, { status: 401 });
-      }
-      if (!effectiveEnv.YOUTUBE_API_KEY) return err('YOUTUBE_API_KEY が必要です', 400);
-
-      const body = await request.json().catch(() => ({}));
-      const cursor = Math.max(0, parseInt(body?.cursor ?? 0) || 0);
-
-      const totalRow = await env.DB.prepare(
-        'SELECT COUNT(*) AS cnt FROM channels WHERE inactive = 0'
-      ).first();
-      const total = totalRow?.cnt ?? 0;
-
-      const row = await env.DB.prepare(
-        'SELECT channel_id FROM channels WHERE inactive = 0 ORDER BY channel_id LIMIT 1 OFFSET ?'
-      ).bind(cursor).first();
-
-      if (!row) return json({ ok: true, done: true, processed: cursor, total });
-
-      const channelId = row.channel_id;
-
-      // playlist API でカテゴリを正規化
-      await fetchAllVideosViaApi(channelId, effectiveEnv);
-
-      // 全動画の view_count/duration/title を更新
-      const videoRows = await env.DB.prepare(
-        'SELECT video_id FROM videos WHERE channel_id = ?'
-      ).bind(channelId).all();
-      const videoIds = videoRows.results.map(r => r.video_id);
-      if (videoIds.length > 0) {
-        await fetchVideoDetails(videoIds, effectiveEnv);
-      }
-
-      const nextCursor = cursor + 1;
-      return json({
-        ok: true,
-        done: nextCursor >= total,
-        channel_id: channelId,
-        videos: videoIds.length,
-        cursor: nextCursor,
-        total,
-      });
-    }
-
     return err('Not Found', 404);
   } catch (e) {
     console.error(e);
@@ -555,7 +506,12 @@ async function fetchChannelDetails(channelId, env) {
 async function initChannelVideos(channelId, env) {
   const { newVideoIds } = await fetchAndSaveRss(channelId, env);
   if (newVideoIds.length > 0) {
-    await detectShortsCategories(newVideoIds, env);
+    if (env.YOUTUBE_API_KEY) {
+      // APIキーあり: UULVプレイリスト判定が最も確実（完了済みライブも含む）
+      await fetchAllVideosViaApi(channelId, env);
+    } else {
+      await detectShortsCategories(newVideoIds, env);
+    }
     await fetchVideoDetails(newVideoIds, env);
   }
   return newVideoIds;
