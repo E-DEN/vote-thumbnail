@@ -306,6 +306,7 @@ async function handleApi(request, env, url, ctx) {
                title          = excluded.title,
                thumbnail_url  = excluded.thumbnail_url,
                category       = excluded.category,
+               is_hidden      = 0,
                duration       = excluded.duration,
                view_count     = excluded.view_count,
                published_at   = excluded.published_at`
@@ -323,7 +324,7 @@ async function handleApi(request, env, url, ctx) {
         if (chunk.length === 0) continue;
         const placeholders = chunk.map(() => '?').join(',');
         const result = await env.DB.prepare(
-          `UPDATE videos SET category = 'hidden' WHERE channel_id = ? AND video_id IN (${placeholders})`
+          `UPDATE videos SET is_hidden = 1 WHERE channel_id = ? AND video_id IN (${placeholders})`
         ).bind(channelId, ...chunk).run();
         upserted += result.meta?.changes ?? 0;
       }
@@ -337,8 +338,8 @@ async function handleApi(request, env, url, ctx) {
       const channelId = mVideos[1];
       const category  = url.searchParams.get('category');
       const videosSql = category
-        ? 'SELECT video_id, title, thumbnail_url, category, duration, view_count, published_at, scheduled_at, description, rating, rd, volatility, wins, battles FROM videos WHERE channel_id = ? AND category = ? AND category != \'hidden\' ORDER BY rating DESC, view_count DESC, published_at DESC'
-        : 'SELECT video_id, title, thumbnail_url, category, duration, view_count, published_at, scheduled_at, description, rating, rd, volatility, wins, battles FROM videos WHERE channel_id = ? AND category != \'hidden\' ORDER BY rating DESC, view_count DESC, published_at DESC';
+        ? 'SELECT video_id, title, thumbnail_url, category, duration, view_count, published_at, scheduled_at, description, rating, rd, volatility, wins, battles FROM videos WHERE channel_id = ? AND category = ? AND is_hidden = 0 ORDER BY rating DESC, view_count DESC, published_at DESC'
+        : 'SELECT video_id, title, thumbnail_url, category, duration, view_count, published_at, scheduled_at, description, rating, rd, volatility, wins, battles FROM videos WHERE channel_id = ? AND is_hidden = 0 ORDER BY rating DESC, view_count DESC, published_at DESC';
       const videosStmt = category
         ? env.DB.prepare(videosSql).bind(channelId, category)
         : env.DB.prepare(videosSql).bind(channelId);
@@ -654,7 +655,7 @@ async function fetchAllVideosViaApi(channelId, env) {
       const chunk = missingIds.slice(i, i + 100);
       const placeholders = chunk.map(() => '?').join(',');
       await env.DB.prepare(
-        `UPDATE videos SET category = 'hidden' WHERE channel_id = ? AND video_id IN (${placeholders}) AND category != 'hidden'`
+        `UPDATE videos SET is_hidden = 1 WHERE channel_id = ? AND video_id IN (${placeholders}) AND is_hidden = 0`
       ).bind(channelId, ...chunk).run();
     }
   }
@@ -697,7 +698,7 @@ async function fetchAllVideosViaApi(channelId, env) {
     const chunk = toUpdateCategory.slice(i, i + INSERT_BATCH);
     await env.DB.batch(chunk.map(({ videoId, category }) =>
       env.DB.prepare(
-        "UPDATE videos SET category = ? WHERE video_id = ? AND category != 'hidden'"
+        "UPDATE videos SET category = ? WHERE video_id = ? AND is_hidden = 0"
       ).bind(category, videoId)
     ));
   }
@@ -824,7 +825,7 @@ async function fetchVideoDetails(videoIds, env, { hideMissing = false } = {}) {
         if (missingIds.length > 0) {
           const placeholders = missingIds.map(() => '?').join(',');
           await env.DB.prepare(
-            `UPDATE videos SET category = 'hidden' WHERE video_id IN (${placeholders})`
+            `UPDATE videos SET is_hidden = 1 WHERE video_id IN (${placeholders})`
           ).bind(...missingIds).run();
         }
       }

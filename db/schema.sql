@@ -26,7 +26,8 @@ CREATE TABLE IF NOT EXISTS videos (
   channel_id    TEXT    NOT NULL REFERENCES channels(channel_id),
   title         TEXT    NOT NULL DEFAULT '',
   thumbnail_url TEXT    NOT NULL DEFAULT '',
-  category      TEXT    NOT NULL DEFAULT 'videos', -- 'videos' | 'shorts' | 'live' | 'hidden'
+  category      TEXT    NOT NULL DEFAULT 'videos', -- 'videos' | 'shorts' | 'live'
+  is_hidden     INTEGER NOT NULL DEFAULT 0,         -- 1: 削除・非公開などで非表示
   duration      INTEGER NOT NULL DEFAULT 0,         -- 秒
   view_count    INTEGER NOT NULL DEFAULT 0,
   description   TEXT,                           -- 概要欄 (NULL=未取得, ''=説明なし)

@@ -109,3 +109,9 @@
 - 新規ファイルは **UTF-8 BOM なし・CRLF・末尾改行あり**。エディタのファイル作成ツールは BOM を付けることがあるので、コミット前に先頭バイトと末尾を確認する。
 - `window.xxx = xxx` で公開している関数（例: `openModalReactions`）は `depth-gallery.js` 等から参照されている。抽出時は `window` 公開を維持する。
 - PC/Mobile で同名関数（`selectChannel` `renderList` `applyTheme`）が別実装なので、共通化する際は名前衝突に注意。
+
+## 動画の非表示状態
+
+- 動画の分類（`videos` / `shorts` / `live`）と非表示状態（`is_hidden`）は別カラムで管理する。
+- 削除・非公開動画はカテゴリを保持したまま `is_hidden = 1` とし、動画 API の返却対象から除外する。
+- `db/migrate-hidden.sql` は既存の `category = 'hidden'` を `is_hidden` へ移行する専用 migration。過去の `db/migrate.sql` は再実行しない。
