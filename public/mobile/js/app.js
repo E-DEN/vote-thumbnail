@@ -10,6 +10,7 @@ import { _M_SVG_EYE, _M_SVG_CLK, _M_SVG_STAR, _M_SVG_PLAY, _M_SVG_PAUSE, _M_SVG_
 import { _suppressHistory, setSuppressHistory } from './shared-state.js';
 import { loadMyPins, mRsApplyPalette, mRsShowMyPin, mRsOpenMode, openVideoInReaction, renderReaction, mRsRenderPlaylist, mRsSaveCatState, _mRsMyPins, _mRsPinColor, _mRsMaxPins, _mRsPinOpacity, _mRsTransportVisible, _mRsCurrentVideoId, _mRsUpdateSortUI, initReaction, resetCurrentVideo, initReactionUI, _mRsDummyEnabled, LS_RS_DUMMY, setDummyEnabled } from './reaction.js';
 import { sidebarOrder, replaceSidebarOrder, loadSidebarOrder, saveSidebarOrder, syncSidebarOrder } from '../../js/sidebar-order.js';
+import { buildMobileHash as buildHash, parseMobileHash as parseHash } from '../../js/router.js';
 
 const LS_LIST_SORT_DIR = 'thumb-sort-dir';
 const LS_VOTE_SHOW_TITLE = 'thumb-vote-show-title';
@@ -23,26 +24,6 @@ const channels   = state.channels;
 // モバイル固有状態
 let currentTab      = 'list';
 
-// --- URL ハッシュ管理（PC版と同様） ---
-function buildHash(channelKey, tab, vid) {
-  if (!channelKey) return location.pathname;
-  const p = new URLSearchParams();
-  p.set('ch', channelKey);
-  p.set('tab', tab || 'list');
-  if (vid) p.set('vid', vid);
-  return '#' + p.toString();
-}
-
-function parseHash() {
-  const hash = location.hash.slice(1);
-  if (!hash) return { channelKey: null, tab: null, vid: null };
-  try {
-    const p = new URLSearchParams(hash);
-    return { channelKey: p.get('ch') || null, tab: p.get('tab') || null, vid: p.get('vid') || null };
-  } catch {
-    return { channelKey: null, tab: null, vid: null };
-  }
-}
 let _currentVotePair = null;
 
 // 無限スクロール

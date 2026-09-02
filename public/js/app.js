@@ -6,6 +6,7 @@ import { showToast, showToastPromise, closeToast } from './toast.js';
 import { getStoredApiKey, getRssOnly, apiKeyHeaders } from './channel.js';
 import { importAllChannelVideos } from './youtube-api.js';
 import { sidebarOrder, replaceSidebarOrder, loadSidebarOrder, saveSidebarOrder, syncSidebarOrder } from './sidebar-order.js';
+import { currentView, CAT_VIEWS, configureRouter, buildHash, parseHash, renderCurrentView, showView } from './router.js';
 
 // ratingData と channels はオブジェクトのエイリアス（参照が同一なので変更は state に反映される）
 const ratingData = state.ratingData;
@@ -26,7 +27,6 @@ function markApiKeyError() {
   if (badge) badge.hidden = false;
 }
 
-let currentView = 'welcome';
 let _prevView = 'list';
 let _pollTimer = null;
 let _chTooltip = null;
@@ -2458,9 +2458,6 @@ async function selectChannel(key) {
   }
 }
 
-// --- 画面切り替え ---
-const SCREENS = ['welcome', 'vote', 'list', 'ranking', 'reaction'];
-
 // --- サムネモーダル ---
 // --- ReactionPin ---
 function reactionsClamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
@@ -3031,70 +3028,14 @@ document.getElementById('modalReactionsBtn').addEventListener('click', function(
 });
 
 const TAB_IDS  = {};
-const CAT_VIEWS = ['vote', 'list', 'ranking'];
-
-function buildHash(channelKey, view, vid) {
-  if (!channelKey || view === 'welcome') return location.pathname;
-  const p = new URLSearchParams();
-  p.set('ch', channelKey);
-  p.set('view', view || 'list');
-  if (vid) p.set('vid', vid);
-  return '#' + p.toString();
-}
-
-function parseHash() {
-  const hash = location.hash.slice(1);
-  if (!hash) return { channelKey: null, view: 'welcome', vid: null, cat: null };
-  try {
-    const p = new URLSearchParams(hash);
-    return {
-      channelKey: p.get('ch') || null,
-      view: p.get('view') || 'list',
-      vid: p.get('vid') || null,
-      cat: p.get('cat') || null,
-    };
-  } catch {
-    return { channelKey: null, view: 'welcome', vid: null, cat: null };
-  }
-}
-
-function renderCurrentView() {
-  if (currentView === 'vote') renderVote();
-  else if (currentView === 'list') renderList();
-  else if (currentView === 'ranking') renderRanking();
-  else if (currentView === 'reaction') renderReactionsPlaylist(_reactionsCurrentVideoId);
-}
-
-function showView(view) {
-  const _viewBeforeSwitch = currentView;
-  currentView = view;
-  if (CAT_VIEWS.includes(view)) localStorage.setItem(LS_VIEW, view);
-  SCREENS.forEach(s => {
-    const el = document.getElementById(s + 'Screen');
-    if (!el) return;
-    if (s === view) {
-      el.style.removeProperty('display');
-    } else {
-      el.style.display = 'none';
-    }
-  });
-  document.querySelectorAll('.ch-tab').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.view === view);
-  });
-  if (!_suppressHistory) {
-    const vid = view === 'reaction' ? _reactionsCurrentVideoId : null;
-    const hash = buildHash(state.currentChannelKey, view, vid);
-    const curSt = history.state;
-    const isDuplicate = curSt &&
-      curSt.channelKey === state.currentChannelKey &&
-      curSt.view === view &&
-      curSt.vid === (vid || null);
-    if (!isDuplicate) {
-      history.pushState({ channelKey: state.currentChannelKey, view, vid: vid || null }, '', hash);
-    }
-  }
-  renderCurrentView();
-}
+configureRouter({
+  renderVote,
+  renderList,
+  renderRanking,
+  renderReactionsPlaylist,
+  getReactionsCurrentVideoId: () => _reactionsCurrentVideoId,
+  isHistorySuppressed: () => _suppressHistory,
+});
 
 // --- サイドバー検索・チャンネル追加 ---
 // 共有コードのインポート共通処理（モジュールスコープ）
