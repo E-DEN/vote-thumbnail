@@ -1,13 +1,13 @@
 # VT コードベース地図（リファクタリング用）
 
-> Agent 向け: `public/js/app.js`（2,606 行）を全読みせず、まずこのファイルで位置を特定し、必要な範囲だけ `read_file` すること。
+> Agent 向け: `public/js/app.js`（2,612 行）を全読みせず、まずこのファイルで位置を特定し、必要な範囲だけ `read_file` すること。
 > 行番号は 2026-09-02 時点。抽出が進むごとに更新する。
 
 ## ファイル一覧
 
 | パス | 行数 | 役割 | 状態 |
 | --- | --- | --- | --- |
-| `public/js/app.js` | 2,606 | PC ビュー全部 | **分割対象** |
+| `public/js/app.js` | 2,612 | PC ビュー全部 | **分割対象** |
 | `public/js/youtube-api.js` | 164 | YouTube API クライアント・全動画 import | Phase 1 抽出済み |
 | `public/js/sidebar-order.js` | 57 | サイドバー順序 LS・正規化 | Phase 1 抽出済み・共通 |
 | `public/js/router.js` | 106 | ハッシュ管理・PC 画面切替 | Phase 1 抽出済み・共通 |
@@ -18,9 +18,9 @@
 | `public/js/ranking-view.js` | 156 | PC ランキング一覧・depth 表示 | Phase 1 抽出済み |
 | `public/js/vote-view.js` | 216 | PC 投票カード・ペースゲージ・クリック委譲 | Phase 1 抽出済み |
 | `public/js/sidebar-drag.js` | 583 | PC サイドバー D&D | Phase 1 抽出済み |
-| `public/js/sidebar.js` | 1,058 | PC サイドバー描画・操作 | Phase 1 抽出済み |
+| `public/js/sidebar.js` | 1,060 | PC サイドバー描画・操作 | Phase 1 抽出済み |
 | `public/js/video-meta.js` | 88 | PC メタHTML・レート順位マップ・概要欄 | Phase 1 抽出済み |
-| `public/js/channel-add.js` | 231 | PC チャンネル追加・ウェルカムフォーム・URLデコードペースト | Phase 1 抽出済み |
+| `public/js/channel-add.js` | 232 | PC チャンネル追加・ウェルカムフォーム・URLデコードペースト | Phase 1 抽出済み |
 | `public/js/state.js` | 49 | LS キー・`state` オブジェクト・カラーパレット | 共通 |
 | `public/js/storage.js` | 70 | channels/videos の LS 保存、API→フロント変換、`filteredVideos` | 共通 |
 | `public/js/channel.js` | 48 | APIキー・RSS Only 取得、`channelKeyFromInput` | 共通 |
@@ -30,7 +30,7 @@
 | `public/js/i18n.js` / `lang.js` | 585 / 244 | 翻訳 | 共通 |
 | `public/js/toast.js` | 405 | トースト | 共通 |
 | `public/js/depth-gallery.js` | 658 | ランキング depth 表示（three.js 系） | PC 専用 |
-| `public/mobile/js/app.js` | 2,836 | モバイル ビュー（reaction 以外） | 分割候補 |
+| `public/mobile/js/app.js` | 2,858 | モバイル ビュー（reaction 以外） | 分割候補 |
 | `public/mobile/js/reaction.js` | 1,320 | モバイル ReactionPin タブ | |
 | `public/mobile/js/ui-helpers.js` | 31 | SVG 定数・メタ構築 | |
 | `public/mobile/js/shared-state.js` | 5 | `_suppressHistory` | |
@@ -40,36 +40,36 @@
 
 | 行 | セクション | 主な関数 | 抽出先案 |
 | --- | --- | --- | --- |
-| 71–157 | ReactionPin グローバル / 投票適用 | `applyPinPalette` `reactionsComputeKde` `applyVote` `_pollRefresh` `loadRating` | `reactions-view.js` / `vote.js` |
-| 159–184 | チャンネル動画ロード / 空状態 | `loadChannelVideos`（未使用・削除候補） `_renderEmptyCat` | `channel-view.js` |
+| 73–159 | ReactionPin グローバル / 投票適用 | `applyPinPalette` `reactionsComputeKde` `applyVote` `_pollRefresh` `loadRating` | `reactions-view.js` / `vote.js` |
+| 161–186 | チャンネル動画ロード / 空状態 | `loadChannelVideos`（未使用・削除候補） `_renderEmptyCat` | `channel-view.js` |
 | 抽出済み | 投票ビュー | `configureVoteView` `updatePaceGauge` `renderVote` | `vote-view.js`（`_renderEmptyCat` と `applyVote` を注入） |
 | 抽出済み | メタ・概要欄ヘルパー | `_rebuildRatingRankMap` `openVideoDesc` `closeVideoDesc` `_buildVideoMeta` `_buildPinDot` `_buildReactionsVideoMeta` | `video-meta.js`（`_reactionsMyPins` `_reactionsPinColor` の getter を注入） |
 | 抽出済み | サイドバー描画 | `initSidebarUi` `buildChannelItem` `renderSidebar` ほか | `sidebar.js` |
-| 191–247 | チャンネル選択 | `selectChannel` | `app.js` に残す（コア） |
-| 250–817 | ReactionPin PC ビュー | `loadMyPins` `loadReactionSeeds` `postReaction` `renderReactionsHeatmap` `startReactionsLoop` `showMyReactionsPin` `openReactionsMode` `openModalReactions` `renderReactionsPlaylist` `openThumbModal` | **`reactions-view.js`**（判断保留） |
-| 818–865 | list / ranking / vote / router / sidebar / share / channel-add 設定 | `configureListView` `configureRankingView` `configureVoteView` `configureRouter` `configureSidebar` `configureShare` `configureChannelAdd` | 各モジュール初期化 |
+| 193–264 | チャンネル選択 | `selectChannel`（`_channelSelectionId` で連続切替の競合を防ぐ） | `app.js` に残す（コア） |
+| 266–823 | ReactionPin PC ビュー | `loadMyPins` `loadReactionSeeds` `postReaction` `renderReactionsHeatmap` `startReactionsLoop` `showMyReactionsPin` `openReactionsMode` `openModalReactions` `renderReactionsPlaylist` `openThumbModal` | **`reactions-view.js`**（判断保留） |
+| 824–871 | list / ranking / vote / router / sidebar / share / channel-add 設定 | `configureListView` `configureRankingView` `configureVoteView` `configureRouter` `configureSidebar` `configureShare` `configureChannelAdd` | 各モジュール初期化 |
 | 抽出済み | チャンネル追加 | `addChannelFromSidebarInput` `applyUrlDecodePaste` `initChannelAdd` | `channel-add.js`（`selectChannel` を注入） |
-| 867–872 | テーマ設定 | `configureTheme` | `theme.js` 初期化 |
-| 873–1513 | `init()` 本体（約 640 行） | イベント配線の塊 | 各モジュールの `initXxx()` に分配 |
-| 1515 | チャンネル追加イベント配線 | `initChannelAdd()` | `channel-add.js` 初期化 |
-| 1517–1524 | 設定モジュール初期化 | `initSettings` | `settings.js` 初期化 |
-| 1525–1594 | タブ / カテゴリフィルタ / チュートリアル | | `router.js` / `vote-view.js` |
-| 1595–end | サイドバーリサイズ | | `sidebar.js` |
+| 873–878 | テーマ設定 | `configureTheme` | `theme.js` 初期化 |
+| 880–1519 | `init()` 本体（約 640 行） | イベント配線の塊 | 各モジュールの `initXxx()` に分配 |
+| 1521 | チャンネル追加イベント配線 | `initChannelAdd()` | `channel-add.js` 初期化 |
+| 1523–1529 | 設定モジュール初期化 | `initSettings` | `settings.js` 初期化 |
+| 1531–1600 | タブ / カテゴリフィルタ / チュートリアル | | `router.js` / `vote-view.js` |
+| 1601–end | サイドバーリサイズ | | `sidebar.js` |
 
 ## `public/mobile/js/app.js` セクション別マップ
 
 | 行 | セクション | PC 対応物 |
 | --- | --- | --- | --- |
-| 36–107 | `selectChannel` `syncChannelMeta` | PC 257 |
-| 108–468 | チャンネルパネル（`_makeChCard` `_makeFolderEl` `renderChannelPanel`） | PC sidebar.js 相当 |
-| 469–690 | 共有インポート / 削除ポップアップ / フォルダ名ダイアログ | PC `_importFromShareCode` `_showShareImportPopup` `_showChDelPopup` |
-| 691–1324 | D&D | PC `initSidebarDrag` |
-| 1325–1517 | チャンネルメニュー・共有・リフレッシュ・削除・追加 | PC `share.js` / 3051–3198 |
-| 1518–1584 | タブ切替 / 空状態 | PC `showView` |
-| 1585–1897 | 一覧 / 投票 / ランキング | PC 各 view |
-| 1898–2000 | 概要シート | PC `openVideoDesc` |
-| 2001–2078 | テーマ設定 / 設定モーダル | PC `configureTheme` / 設定モーダル |
-| 2079–end | 初期化 | PC `init()` |
+| 37–113 | `selectChannel`（`_channelSelectionId` ガードあり） `syncChannelMeta` | PC `selectChannel`（193–） |
+| 114–474 | チャンネルパネル（`_makeChCard` `_makeFolderEl` `renderChannelPanel`） | PC sidebar.js 相当 |
+| 475–693 | 共有インポート / 削除ポップアップ / フォルダ名ダイアログ | PC `share.js` `importFromShareCode` / sidebar.js `_showShareImportPopup` `_showChDelPopup` |
+| 694–1323 | D&D | PC `sidebar-drag.js` |
+| 1324–1521 | チャンネルメニュー・共有・リフレッシュ・削除・追加 | PC `share.js` / `channel-add.js` |
+| 1522–1588 | タブ切替 / 空状態 | PC `showView` |
+| 1589–1904 | 一覧 / 投票 / ランキング | PC 各 view |
+| 1905–2009 | 概要シート | PC `video-meta.js` `openVideoDesc` |
+| 2010–2082 | 設定モーダル | PC `settings.js` |
+| 2083–end | 初期化（共有リンク検出 → URL 復元の直列実行、`pageshow` での BFCache 再同期を含む） | PC `init()` |
 
 ## PC ↔ Mobile 重複ロジック（共通化候補・優先度順）
 
@@ -83,7 +83,7 @@
 | 6 | チャンネル追加（入力解析 → POST → channels 更新 → 初回 import） | `channel-add.js` | `addChannel` | PC 抽出済み。Mobile 共通化は Phase 2 |
 | 7 | `applyTheme` | `theme.js` | `theme.js` | **共通化済み** |
 | 8 | ReactionPin 共通（KDE・クラスタ・パレット・ピン DOM） | `reactionsComputeKde` 等 | `mRsComputeKde` 等 | 既に `reactions-utils.js` があるので薄いラッパーを削除 |
-| 9 | `loadMyPins` / `loadReactionSeeds` / `postReaction` | 325–366 | reaction.js 46 | API 呼び出しは `reactions-api.js` へ |
+| 9 | `loadMyPins` / `loadReactionSeeds` / `postReaction` | 266–305 | reaction.js 46 | API 呼び出しは `reactions-api.js` へ |
 | 10 | 削除確認ポップアップ | `_showChDelPopup` | `_mShowDelPopup` | UI 差異あり。共通化しない（規約だけ揃える） |
 
 **あえて共通化しないもの**: D&D 実装（PC マウス / Mobile タッチで挙動が別物）、サイドバー vs チャンネルパネルの DOM 構築、ランキング depth 表示。
@@ -111,7 +111,8 @@
 
 - `reactions-view.js` は先頭のReaction状態群と後半のTransport IIFE・設定イベントが同じ可変状態を双方向更新する。単純移動では大量のsetterが必要なため、高級モデルで状態境界を設計してから抽出する。
   - 既知の潜在バグ（抽出前から存在）: `startReactionsLoop` から Transport IIFE 内の `_communityLimit` を参照している（フォールバック経路のため実質到達不能）。画像クリックハンドラから IIFE 内の `_mutedAll` に代入しており、`REACTIONS_MAX_PINS === 0` でピンを立てると ReferenceError になる。抽出時に状態境界と合わせて解消する。
-- `init()`（873–1513）は DOM イベント配線の塊。モジュール抽出時は該当部分を `initXxx()` としてモジュール側に移し、`init()` から呼ぶ。
+- `init()`（880–1519）は DOM イベント配線の塊。モジュール抽出時は該当部分を `initXxx()` としてモジュール側に移し、`init()` から呼ぶ。
+- `lucide.createIcons()` に `nodes` オプションは存在しない（`root` が正）。DOM 未追加の要素には必ず `createIcons({ root: el })` を使う。既定の `document` 走査では切り離し要素のアイコンが変換されず、サイドバー末尾のアクションボタンが空になる。
 - 新規ファイルは **UTF-8 BOM なし・CRLF・末尾改行あり**。エディタのファイル作成ツールは BOM を付けることがあるので、コミット前に先頭バイトと末尾を確認する。
 - `window.xxx = xxx` で公開している関数（例: `openModalReactions`）は `depth-gallery.js` 等から参照されている。抽出時は `window` 公開を維持する。
 - PC/Mobile で同名関数（`selectChannel` `renderList` `applyTheme`）が別実装なので、共通化する際は名前衝突に注意。
