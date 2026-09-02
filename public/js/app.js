@@ -1,7 +1,7 @@
 import { state, LS_VIDEOS, LS_RATING, LS_CAT, LS_VOTE_PAIR, LS_SORT, LS_HEATMAP_VISIBLE, WASHOKU_PALETTE } from './state.js';
-import { G2_SETTLED_RD, loadRating as loadRatingCore, applyVoteLocal, syncVoteToServer, getVotePair, setVotePair, pickPair, _playedPairs, _pairKey, getRating, getRd, getWins, getBattles } from './rating.js';
+import { G2_SETTLED_RD, loadRating as loadRatingCore, applyVoteLocal, syncVoteToServer, getVotePair, setVotePair, pickPair, _playedPairs, _pairKey, getRating } from './rating.js';
 import { loadChannels, saveChannels, loadVideosForChannel, saveVideosForChannel, fetchChannelVideos, filteredVideos } from './storage.js';
-import { formatViews, formatRelTime, formatViewsShort, descToHtml } from './format.js';
+import { formatRelTime, formatViewsShort, descToHtml } from './format.js';
 import { showToast, showToastPromise, closeToast } from './toast.js';
 import { getStoredApiKey, getRssOnly, apiKeyHeaders } from './channel.js';
 import { importAllChannelVideos } from './youtube-api.js';
@@ -26,6 +26,15 @@ import {
   _SVG_SORT_DESC,
   _SVG_SORT_ASC,
 } from './list-view.js';
+import {
+  configureRankingView,
+  renderRanking,
+  _renderRankingDepth,
+  getTopRankedVideo,
+  getRankMode,
+  setRankMode,
+  setDepthScrollSaved,
+} from './ranking-view.js';
 
 // ratingData と channels はオブジェクトのエイリアス（参照が同一なので変更は state に反映される）
 const ratingData = state.ratingData;
@@ -447,124 +456,6 @@ function _buildReactionsVideoMeta(v) {
   items.push('<span class="gallery-meta-item">' + _SVG_STAR + Math.round(rating) + rankStr + '</span>');
   var metaHtml = '<div class="rs-meta-row">' + items.join('') + '</div>';
   return metaHtml;
-}
-
-// --- 一覧 ---
-var _rankMode = localStorage.getItem('thumb-rank-mode') || 'list'; // 'list' | 'depth'
-
-const RANK_MAX = 30;
-
-function renderRankingItems(sorted, maxRating, minRating, range, from, to) {
-  const list = document.getElementById('rankList');
-  sorted.slice(from, to).forEach((v, i) => {
-    const idx = from + i;
-    const rating = getRating(v.id);
-    const rd     = getRd(v.id);
-    const wins = getWins(v.id);
-    const battles = getBattles(v.id);
-    const wr = battles > 0 ? Math.round(wins / battles * 100) : 0;
-    const barPct = Math.round((rating - minRating) / range * 100);
-    const lowRd = rd > 150;
-    const videoUrl = v.url ?? `https://www.youtube.com/watch?v=${v.id}`;
-    const rankNum = idx < 3 ? idx + 1 : idx + 1;
-    const views = v.viewCount ? formatViews(v.viewCount) : '';
-    const date  = v.publishedAt ? formatRelTime(v.publishedAt) : '';
-    const viewDate = [views, date].filter(Boolean).join(' · ');
-    const metaHtml = _buildVideoMeta(v) + _buildPinDot(v);
-    const item = document.createElement('div');
-    item.className = `rank-item${idx < 3 ? ` rank-${idx+1}` : ''}`;
-    item.innerHTML = `
-      <div class="rank-num-col">
-        <div class="rank-num">${rankNum}</div>
-      </div>
-      <div class="rank-thumb-wrap">
-        <img src="${v.thumb}" alt="" loading="lazy" class="${rd > 200 ? 'rd-high' : rd > 100 ? 'rd-mid' : 'rd-low'}" onerror="this.src='https://i.ytimg.com/vi/${v.id}/hqdefault.jpg'">
-      </div>
-      <div class="rank-meta">
-        <div class="rank-title">${v.title}</div>
-        <div class="rank-stats">
-          <span>${t('rank-wins-fmt', { w: wins, b: battles })}${battles > 0 ? t('rank-winrate-fmt', { r: wr }) : ''}</span>
-        </div>
-        ${metaHtml ? `<div class="rank-stats gallery-meta rank-meta-gallery">${metaHtml}</div>` : ''}
-        <div class="rank-bar-bg"><div class="rank-bar-fill" style="width:${barPct}%"></div></div>
-      </div>
-    `;
-    item.style.cursor = 'pointer';
-    item.addEventListener('click', () => openModalReactions(v));
-    list.appendChild(item);
-  });
-}
-
-function renderRanking() {
-  const _rs = document.getElementById('rankingScreen');
-  // ボタン状態をモードに同期
-  const _rlb = document.getElementById('rankModeListBtn');
-  const _rdb = document.getElementById('rankModeDepthBtn');
-  if (_rlb) _rlb.classList.toggle('active', _rankMode === 'list');
-  if (_rdb) _rdb.classList.toggle('active', _rankMode === 'depth');
-  if (_rankMode === 'depth') {
-    if (_rs) _rs.classList.add('depth-mode');
-    _renderRankingDepth();
-    return;
-  }
-  if (typeof destroyDepthGallery === 'function') destroyDepthGallery();
-  if (_rs) _rs.classList.remove('depth-mode');
-  _rebuildRatingRankMap();
-  const pool = filteredVideos();
-  const sorted = [...pool].sort((a, b) => getRating(b.id) - getRating(a.id));
-  const maxRating = sorted.length ? getRating(sorted[0].id) : 1500;
-  const minRating = sorted.length ? getRating(sorted[sorted.length - 1].id) : 1500;
-  const range = maxRating - minRating || 1;
-
-  const list = document.getElementById('rankList');
-  list.innerHTML = '';
-  const _rankHeader = document.querySelector('.ranking-header');
-
-  if (pool.length === 0) {
-    if (_rankHeader) _rankHeader.style.display = 'none';
-    _renderEmptyCat(list);
-    return;
-  }
-  if (_rankHeader) _rankHeader.style.display = '';
-
-  renderRankingItems(sorted, maxRating, minRating, range, 0, Math.min(RANK_MAX, sorted.length));
-}
-
-// ランキング画面のデプスギャラリーモード
-var _depthScrollSaved = 0;
-var _rankDepthOrder = localStorage.getItem('thumb-rank-depth-order') || 'desc';
-function _renderRankingDepth() {
-  if (typeof initDepthGallery !== 'function') return;
-  var pool = filteredVideos().slice().sort(function(a, b) { return getRating(b.id) - getRating(a.id); });
-  var limited = pool.slice(0, Math.min(RANK_MAX, pool.length));
-  if (!limited.length) return;
-  // 表示順（asc = 1位が手前）
-  var ordered = (_rankDepthOrder === 'asc') ? limited.slice().reverse() : limited;
-  // 統計情報を付加した拡張オブジェクトを渡す
-  const withStats = ordered.map(function(v, i) {
-    var rank = (_rankDepthOrder === 'asc') ? (ordered.length - i) : (i + 1);
-    var wins    = getWins(v.id);
-    var battles = getBattles(v.id);
-    var rating  = Math.round(getRating(v.id));
-    var wr      = battles > 0 ? Math.round(wins / battles * 100) : null;
-    return Object.assign({}, v, { _rank: rank, _wins: wins, _battles: battles, _rating: rating, _wr: wr });
-  });
-  const ch = channels[state.currentChannelKey];
-  const channelTitle = ch ? (ch.name || ch.title || '') : '';
-  const rankingScreen = document.getElementById('rankingScreen');
-  initDepthGallery(withStats, channelTitle, rankingScreen, _depthScrollSaved);
-  _depthScrollSaved = 0;
-  // ラベルモードは follow 固定
-  if (typeof window.setDepthLabelMode === 'function') window.setDepthLabelMode('follow');
-}
-
-// --- 最高レート動画ヘルパー ---
-function getTopRankedVideo(key) {
-  const videos = loadVideosForChannel(key);
-  if (!videos?.length) return null;
-  const active = videos.filter(v => v.category !== 'shorts');
-  if (!active.length) return null;
-  return active.reduce((best, v) => getRating(v.id) >= getRating(best.id) ? v : best, active[0]);
 }
 
 // --- サイドバー ---
@@ -2633,7 +2524,7 @@ function openModalReactions(v) {
   if (currentView !== 'reaction') _prevView = currentView;
   // デプスギャラリーからの遷移時はスクロール位置を保存
   if (currentView === 'ranking' && typeof window.getDepthGalleryScroll === 'function') {
-    _depthScrollSaved = window.getDepthGalleryScroll();
+    setDepthScrollSaved(window.getDepthGalleryScroll());
   }
   var img = document.getElementById('reactionsImg');
   img.onload = function() {
@@ -2761,6 +2652,16 @@ configureListView({
   buildPinDot: _buildPinDot,
   openModalReactions,
   getI18nDicts: () => _I18N_DICTS,
+  destroyDepthGallery: typeof destroyDepthGallery === 'function' ? destroyDepthGallery : null,
+});
+
+configureRankingView({
+  rebuildRatingRankMap: _rebuildRatingRankMap,
+  renderEmptyCat: _renderEmptyCat,
+  buildVideoMeta: _buildVideoMeta,
+  buildPinDot: _buildPinDot,
+  openModalReactions,
+  initDepthGallery: typeof initDepthGallery === 'function' ? initDepthGallery : null,
   destroyDepthGallery: typeof destroyDepthGallery === 'function' ? destroyDepthGallery : null,
 });
 
@@ -3086,14 +2987,14 @@ function init() {
   var _rankDepthControls = document.getElementById('rankDepthControls');
 
   function _syncRankDepthControls() {
-    var isDepth = _rankMode === 'depth';
+    var isDepth = getRankMode() === 'depth';
     if (_rankDepthControls) _rankDepthControls.style.display = isDepth ? 'flex' : 'none';
   }
   _syncRankDepthControls();
 
   if (_rankListBtn) {
     _rankListBtn.addEventListener('click', function() {
-      _rankMode = 'list';
+      setRankMode('list');
       localStorage.setItem('thumb-rank-mode', 'list');
       _rankListBtn.classList.add('active');
       _rankDepthBtn.classList.remove('active');
@@ -3105,7 +3006,7 @@ function init() {
   }
   if (_rankDepthBtn) {
     _rankDepthBtn.addEventListener('click', function() {
-      _rankMode = 'depth';
+      setRankMode('depth');
       localStorage.setItem('thumb-rank-mode', 'depth');
       _rankDepthBtn.classList.add('active');
       _rankListBtn.classList.remove('active');
