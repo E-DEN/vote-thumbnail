@@ -1,7 +1,7 @@
 import { state, LS_VIDEOS, LS_RATING, LS_CAT, LS_VOTE_PAIR, LS_SORT, LS_HEATMAP_VISIBLE, WASHOKU_PALETTE } from './state.js';
 import { G2_SETTLED_RD, loadRating as loadRatingCore, applyVoteLocal, syncVoteToServer, getVotePair, setVotePair, pickPair, _playedPairs, _pairKey, getRating, getRd, getWins, getBattles } from './rating.js';
 import { loadChannels, saveChannels, loadVideosForChannel, saveVideosForChannel, fetchChannelVideos, filteredVideos } from './storage.js';
-import { formatViews, formatRelTime, formatViewsShort, formatDuration, descToHtml } from './format.js';
+import { formatViews, formatRelTime, formatViewsShort, descToHtml } from './format.js';
 import { showToast, showToastPromise, closeToast } from './toast.js';
 import { getStoredApiKey, getRssOnly, apiKeyHeaders } from './channel.js';
 import { importAllChannelVideos } from './youtube-api.js';
@@ -10,6 +10,22 @@ import { currentView, CAT_VIEWS, configureRouter, buildHash, parseHash, renderCu
 import { currentTheme, configureTheme, applyTheme } from './theme.js';
 import { configureShare, shareChannelLink as _shareChannelLink, shareFolderLink as _shareFolderLink, importFromShareCode as _importFromShareCode } from './share.js';
 import { initSettings, markApiKeyError } from './settings.js';
+import {
+  configureListView,
+  renderList,
+  _buildSortedPool,
+  _updateSortUI,
+  _normalizeSortBtnWidths,
+  getListMode,
+  setListMode,
+  getListSortOrder,
+  setListSortOrder,
+  getSortDir,
+  setSortDir,
+  toggleSortDir,
+  _SVG_SORT_DESC,
+  _SVG_SORT_ASC,
+} from './list-view.js';
 
 // ratingData と channels はオブジェクトのエイリアス（参照が同一なので変更は state に反映される）
 const ratingData = state.ratingData;
@@ -434,291 +450,8 @@ function _buildReactionsVideoMeta(v) {
 }
 
 // --- 一覧 ---
-var _listMode = localStorage.getItem('thumb-list-mode') || 'grid';
 var _rankMode = localStorage.getItem('thumb-rank-mode') || 'list'; // 'list' | 'depth'
-var _shortsObserver = null;
-var _galleryObserver = null;
-var _listSortOrder = localStorage.getItem(LS_SORT) || 'rating';  // 'date' | 'views' | 'rating' | 'random'
-var _sortDir = localStorage.getItem('thumb-sort-dir') || 'desc'; // 'asc' | 'desc'
-var _SVG_SORT_DESC = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 16 4 4 4-4"/><path d="M7 20V4"/><path d="M11 4h10"/><path d="M11 8h7"/><path d="M11 12h4"/></svg>';
-var _SVG_SORT_ASC  = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/><path d="M11 12h4"/><path d="M11 16h7"/><path d="M11 20h10"/></svg>';
-var _listPage = 0;                // 読み込み済みページ数
-var _LIST_PAGE_SIZE = 50;
-var _listSortedPool = [];         // ソート済み全件キャッシュ
-var _listScrollObserver = null;   // 無限スクロール用 observer
 
-var _SORT_LABELS = { views: '再生数', date: '投稿日', rating: '得票率' };
-function _updateSortUI() {
-  var label = _SORT_LABELS[_listSortOrder] || _SORT_LABELS.views;
-  var sl = document.getElementById('sortSplitLabel');
-  var sp = document.getElementById('sortPopup');
-  var sd = document.getElementById('sortSplitDir');
-  if (sl) sl.textContent = label;
-  if (sd) { sd.innerHTML = _sortDir === 'asc' ? _SVG_SORT_ASC : _SVG_SORT_DESC; sd.classList.toggle('asc', _sortDir === 'asc'); }
-  if (sp) sp.querySelectorAll('[data-sort]').forEach(function(el) { el.classList.toggle('active', el.dataset.sort === _listSortOrder); });
-  var rl = document.getElementById('rsSortLabel');
-  var rp = document.getElementById('rsSortPopup');
-  var rd = document.getElementById('rsSortDir');
-  if (rl) rl.textContent = label;
-  if (rd) { rd.innerHTML = _sortDir === 'asc' ? _SVG_SORT_ASC : _SVG_SORT_DESC; rd.classList.toggle('asc', _sortDir === 'asc'); }
-  if (rp) rp.querySelectorAll('[data-sort]').forEach(function(el) { el.classList.toggle('active', el.dataset.sort === _listSortOrder); });
-}
-
-// 行パターン: [列数, flex-grow 重みの配列]
-var _GALLERY_PATTERNS = [
-  [3, [3, 2, 3]],
-  [4, [2, 3, 2, 3]],
-  [3, [2, 4, 2]],
-  [4, [3, 2, 3, 2]],
-];
-
-function renderList() {
-  _rebuildRatingRankMap();
-  const _listViewBar = document.getElementById('listViewBar');
-  // depth以外のモードに切り替わったときはdepthを破棄
-  if (typeof destroyDepthGallery === 'function') destroyDepthGallery();
-  if (_listMode === 'grid') { _renderGrid(); return; }
-  // ギャラリーモード
-  var grid = document.getElementById('listGrid');
-  grid.innerHTML = '';
-  grid.classList.remove('mode-grid', 'mode-shorts');
-
-  // ソート済みプール構築
-  _listPage = 0;
-  _listSortedPool = _buildSortedPool();
-  if (_listSortedPool.length === 0) {
-    if (_listViewBar) _listViewBar.style.display = 'none';
-    _renderEmptyCat(grid);
-    return;
-  }
-  if (_listViewBar) _listViewBar.style.display = '';
-  // 無限スクロール observer リセット
-  if (_listScrollObserver) { _listScrollObserver.disconnect(); }
-  _listScrollObserver = new IntersectionObserver(function(entries) {
-    if (entries[0].isIntersecting) { _appendGalleryPage(); }
-  }, { rootMargin: '200px' });
-  var sentinel = document.getElementById('shortsSentinel');
-  if (sentinel) { _listScrollObserver.observe(sentinel); }
-
-  // ギャラリーアニメーション observer（カテゴリ共通）
-  if (_galleryObserver) { _galleryObserver.disconnect(); }
-  var _scrollRoot = document.getElementById('listScrollBody');
-  _galleryObserver = new IntersectionObserver(function(entries) {
-    entries.forEach(function(e) {
-      if (e.intersectionRatio >= 0.15) {
-        e.target.classList.add('inbound');
-      } else {
-        e.target.classList.remove('inbound');
-      }
-    });
-  }, { root: _scrollRoot, threshold: [0, 0.15] });
-
-  if (state.currentCat === 'shorts') {
-    grid.classList.add('mode-shorts');
-  } else {
-    grid.classList.remove('mode-shorts');
-  }
-  // 初回ロード
-  _appendGalleryPage();
-}
-
-// 全カテゴリ共通: ソート済み全件プールを構築する
-function _buildSortedPool() {
-  var pool = filteredVideos().slice();
-  var asc = (_sortDir === 'asc');
-  if (_listSortOrder === 'date') {
-    pool.sort(function(a, b) {
-      var cmp = (b.publishedAt || '') < (a.publishedAt || '') ? -1 : 1;
-      return asc ? -cmp : cmp;
-    });
-  } else if (_listSortOrder === 'views') {
-    pool.sort(function(a, b) {
-      var cmp = (b.viewCount || 0) - (a.viewCount || 0);
-      return asc ? -cmp : cmp;
-    });
-  } else if (_listSortOrder === 'rating') {
-    pool.sort(function(a, b) {
-      var cmp = getRating(b.id) - getRating(a.id);
-      return asc ? -cmp : cmp;
-    });
-  }
-  return pool;
-}
-
-// 全カテゴリ共通: 次ページ分のセルをグリッドに追記する
-function _appendGalleryPage() {
-  var grid = document.getElementById('listGrid');
-  if (!grid) return;
-  var start = _listPage * _LIST_PAGE_SIZE;
-  if (start >= _listSortedPool.length) return;
-  var slice = _listSortedPool.slice(start, start + _LIST_PAGE_SIZE);
-  _listPage++;
-  if (state.currentCat === 'shorts') {
-    // ショート: waterfall セル
-    slice.forEach(function(v) {
-      var cell = document.createElement('div');
-      cell.className = 'gallery-cell--short';
-      var _meta = _buildVideoMeta(v) + _buildPinDot(v);
-      cell.innerHTML =
-        '<div class="short-crop">' +
-          '<img src="' + v.thumb + '" alt="" loading="lazy"' +
-          ' onerror="this.src=\'https://i.ytimg.com/vi/' + v.id + '/hqdefault.jpg\'"' +
-          ' referrerpolicy="no-referrer">' +
-        '</div>' +
-        '<div class="gallery-overlay">' +
-          '<div class="gallery-title">' + v.title + '</div>' +
-          (_meta ? '<div class="gallery-meta">' + _meta + '</div>' : '') +
-        '</div>';
-      cell.addEventListener('click', (function(vid) {
-        return function() { openModalReactions(vid); };
-      }(v)));
-      grid.appendChild(cell);
-      if (_galleryObserver) { _galleryObserver.observe(cell); }
-    });
-  } else {
-    // 通常: galleryレイアウト（行パターン）
-    var pat = Math.floor(start / _LIST_PAGE_SIZE) % _GALLERY_PATTERNS.length;
-    var i = 0;
-    while (i < slice.length) {
-      var conf    = _GALLERY_PATTERNS[pat % _GALLERY_PATTERNS.length];
-      var count   = conf[0];
-      var weights = conf[1];
-      var row     = document.createElement('div');
-      row.className = 'gallery-row';
-      slice.slice(i, i + count).forEach(function(v, j) {
-        var cell = document.createElement('div');
-        cell.className  = 'gallery-cell';
-        cell.style.flexGrow  = weights[j] || 1;
-        cell.style.flexBasis = (weights[j] || 1) * 80 + 'px';
-        cell.innerHTML =
-          '<div class="gallery-img-wrap">' +
-            '<img src="' + v.thumb + '" alt="" loading="lazy"' +
-            ' onerror="this.src=\'https://i.ytimg.com/vi/' + v.id + '/hqdefault.jpg\'"' +
-            ' referrerpolicy="no-referrer">' +
-            '<div class="gallery-overlay">' +
-              '<div class="gallery-title">' + v.title + '</div>' +
-              (function(){ var m = _buildVideoMeta(v) + _buildPinDot(v); return m ? '<div class="gallery-meta">' + m + '</div>' : ''; }()) +
-            '</div>' +
-          '</div>';
-        cell.addEventListener('click', (function(vid) {
-          return function() { openModalReactions(vid); };
-        }(v)));
-        row.appendChild(cell);
-      });
-      grid.appendChild(row);
-      if (_galleryObserver) { _galleryObserver.observe(row); }
-      i += Math.min(count, slice.length - i);
-      pat++;
-    }
-  }
-}
-
-// ソートボタン・タブボタン: 全登録言語で計測し最大幅を min-width に設定する
-var _sortBtnMaxWidths = {};
-var _tabBtnMaxWidths  = {};
-function _normalizeSortBtnWidths() {
-  var codes = Object.keys(_I18N_DICTS);
-
-  function _measureGroup(btns, maxMap, keyAttr, i18nAttr) {
-    // 元の状態を一括保存
-    var origTxts = btns.map(function(b) { return b.textContent; });
-    var origMins = btns.map(function(b) { return b.style.minWidth; });
-    codes.forEach(function(code) {
-      var dict = _I18N_DICTS[code] || {};
-      // 一括書き込み
-      btns.forEach(function(b, i) {
-        b.style.minWidth = '';
-        b.textContent    = dict[b.dataset[i18nAttr]] || origTxts[i];
-      });
-      // 一括読み取り（強制リフローをここ1回にまとめる）
-      btns.forEach(function(b) {
-        var key = b.dataset[keyAttr];
-        var w = b.offsetWidth;
-        if (!maxMap[key] || w > maxMap[key]) { maxMap[key] = w; }
-      });
-      // 一括復元
-      btns.forEach(function(b, i) {
-        b.textContent    = origTxts[i];
-        b.style.minWidth = origMins[i];
-      });
-    });
-    // maxWidth を一括適用
-    btns.forEach(function(b) {
-      var key = b.dataset[keyAttr];
-      if (maxMap[key]) { b.style.minWidth = maxMap[key] + 'px'; }
-    });
-  }
-
-  _measureGroup(
-    Array.from(document.querySelectorAll('.ch-tab[data-i18n]')),
-    _tabBtnMaxWidths, 'view', 'i18n'
-  );
-  // スキップボタン（単独） -- 削除済み
-  // var skipBtn = document.getElementById('skipBtn');
-  // if (skipBtn && skipBtn.dataset.i18n) { _measureGroup([skipBtn], {}, 'id', 'i18n'); }
-}
-
-// グリッドモード（カード一覧）
-function _renderGrid() {
-  var grid = document.getElementById('listGrid');
-  grid.innerHTML = '';
-  grid.classList.remove('mode-shorts');
-  grid.classList.add('mode-grid');
-  grid.classList.toggle('mode-grid-shorts', state.currentCat === 'shorts');
-  // ソート済みプール構築
-  _listPage = 0;
-  _listSortedPool = _buildSortedPool();
-  if (_listSortedPool.length === 0) {
-    const bar = document.getElementById('listViewBar');
-    if (bar) bar.style.display = 'none';
-    _renderEmptyCat(grid);
-    return;
-  }
-  const bar = document.getElementById('listViewBar');
-  if (bar) bar.style.display = '';
-  // 無限スクロール observer リセット
-  if (_listScrollObserver) { _listScrollObserver.disconnect(); }
-  _listScrollObserver = new IntersectionObserver(function(entries) {
-    if (entries[0].isIntersecting) { _appendGridPage(); }
-  }, { rootMargin: '200px' });
-  var sentinel = document.getElementById('shortsSentinel');
-  if (sentinel) { _listScrollObserver.observe(sentinel); }
-  _appendGridPage();
-}
-
-function _appendGridPage() {
-  var grid = document.getElementById('listGrid');
-  if (!grid) return;
-  var start = _listPage * _LIST_PAGE_SIZE;
-  if (start >= _listSortedPool.length) return;
-  var slice = _listSortedPool.slice(start, start + _LIST_PAGE_SIZE);
-  _listPage++;
-  slice.forEach(function(v) {
-    var durHtml = v.duration
-      ? '<span class="list-duration">' + formatDuration(v.duration) + '</span>'
-      : '';
-    var metaHtml = _buildVideoMeta(v) + _buildPinDot(v);
-    var card = document.createElement('div');
-    card.className = 'list-card' + (v.category === 'shorts' ? ' list-card--short' : '');
-    card.innerHTML =
-      '<div class="list-thumb-wrap">' +
-        '<img src="' + v.thumb + '" alt="" loading="lazy"' +
-        ' onerror="this.src=\'https://i.ytimg.com/vi/' + v.id + '/hqdefault.jpg\'"' +
-        ' referrerpolicy="no-referrer">' +
-        durHtml +
-      '</div>' +
-      '<div class="list-info">' +
-        '<div class="list-info-text">' +
-          '<div class="list-info-title" title="' + v.title.replace(/"/g, '&quot;') + '">' + v.title + '</div>' +
-          (metaHtml ? '<div class="list-info-meta gallery-meta">' + metaHtml + '</div>' : '') +
-        '</div>' +
-      '</div>';
-    card.addEventListener('click', (function(vid) {
-      return function() { openModalReactions(vid); };
-    }(v)));
-    grid.appendChild(card);
-  });
-}
 const RANK_MAX = 30;
 
 function renderRankingItems(sorted, maxRating, minRating, range, from, to) {
@@ -3021,6 +2754,16 @@ document.getElementById('modalReactionsBtn').addEventListener('click', function(
 });
 
 const TAB_IDS  = {};
+configureListView({
+  rebuildRatingRankMap: _rebuildRatingRankMap,
+  renderEmptyCat: _renderEmptyCat,
+  buildVideoMeta: _buildVideoMeta,
+  buildPinDot: _buildPinDot,
+  openModalReactions,
+  getI18nDicts: () => _I18N_DICTS,
+  destroyDepthGallery: typeof destroyDepthGallery === 'function' ? destroyDepthGallery : null,
+});
+
 configureRouter({
   renderVote,
   renderList,
@@ -3139,7 +2882,7 @@ async function addChannelFromSidebarInput() {
     } else {
       _nav.appendChild(_newItem);
     }
-    _listSortOrder = 'date';
+    setListSortOrder('date');
     _updateSortUI();
     await selectChannel(ch.channel_id);
     // チャンネル追加後: 最多カテゴリに強制切り替え
@@ -3208,16 +2951,16 @@ function init() {
     rating: { label: '得票率', hasDir: true },
   };
   function _updateSortUI_local() {
-    var info = SORT_INFO[_listSortOrder] || SORT_INFO.views;
+    var info = SORT_INFO[getListSortOrder()] || SORT_INFO.views;
     if (_sortLabel)  _sortLabel.textContent = info.label;
     var _sortDirBtn = document.getElementById('sortSplitDir');
     if (_sortDirBtn) {
-      _sortDirBtn.innerHTML = _sortDir === 'asc' ? _SVG_SORT_ASC : _SVG_SORT_DESC;
-      _sortDirBtn.classList.toggle('asc', _sortDir === 'asc');
+      _sortDirBtn.innerHTML = getSortDir() === 'asc' ? _SVG_SORT_ASC : _SVG_SORT_DESC;
+      _sortDirBtn.classList.toggle('asc', getSortDir() === 'asc');
     }
     if (_sortPopup) {
       _sortPopup.querySelectorAll('[data-sort]').forEach(function(el) {
-        el.classList.toggle('active', el.dataset.sort === _listSortOrder);
+        el.classList.toggle('active', el.dataset.sort === getListSortOrder());
       });
     }
     var _rsLabel   = document.getElementById('rsSortLabel');
@@ -3225,12 +2968,12 @@ function init() {
     var _rsDirBtn  = document.getElementById('rsSortDir');
     if (_rsLabel) _rsLabel.textContent = info.label;
     if (_rsDirBtn) {
-      _rsDirBtn.innerHTML = _sortDir === 'asc' ? _SVG_SORT_ASC : _SVG_SORT_DESC;
-      _rsDirBtn.classList.toggle('asc', _sortDir === 'asc');
+      _rsDirBtn.innerHTML = getSortDir() === 'asc' ? _SVG_SORT_ASC : _SVG_SORT_DESC;
+      _rsDirBtn.classList.toggle('asc', getSortDir() === 'asc');
     }
     if (_rsPopup) {
       _rsPopup.querySelectorAll('[data-sort]').forEach(function(el) {
-        el.classList.toggle('active', el.dataset.sort === _listSortOrder);
+        el.classList.toggle('active', el.dataset.sort === getListSortOrder());
       });
     }
   }
@@ -3241,8 +2984,8 @@ function init() {
   var _sortDirBtnEl = document.getElementById('sortSplitDir');
   if (_sortDirBtnEl) {
     _sortDirBtnEl.addEventListener('click', function() {
-      _sortDir = _sortDir === 'desc' ? 'asc' : 'desc';
-      localStorage.setItem('thumb-sort-dir', _sortDir);
+      toggleSortDir();
+      localStorage.setItem('thumb-sort-dir', getSortDir());
       _updateSortUI();
       _triggerSortRender();
     });
@@ -3257,10 +3000,10 @@ function init() {
     _sortPopup.addEventListener('click', function(e) {
       var item = e.target.closest('[data-sort]');
       if (!item) return;
-      _listSortOrder = item.dataset.sort;
-      _sortDir = 'desc';
-      localStorage.setItem(LS_SORT, _listSortOrder);
-      localStorage.setItem('thumb-sort-dir', _sortDir);
+      setListSortOrder(item.dataset.sort);
+      setSortDir('desc');
+      localStorage.setItem(LS_SORT, getListSortOrder());
+      localStorage.setItem('thumb-sort-dir', getSortDir());
       _sortPopup.classList.remove('open');
       _updateSortUI();
       _triggerSortRender();
@@ -3292,10 +3035,10 @@ function init() {
     _rsSortPopup.addEventListener('click', function(e) {
       var item = e.target.closest('[data-sort]');
       if (!item) return;
-      _listSortOrder = item.dataset.sort;
-      _sortDir = 'desc';
-      localStorage.setItem(LS_SORT, _listSortOrder);
-      localStorage.setItem('thumb-sort-dir', _sortDir);
+      setListSortOrder(item.dataset.sort);
+      setSortDir('desc');
+      localStorage.setItem(LS_SORT, getListSortOrder());
+      localStorage.setItem('thumb-sort-dir', getSortDir());
       _rsSortPopup.classList.remove('open');
       _updateSortUI();
       _triggerSortRender();
@@ -3304,8 +3047,8 @@ function init() {
   var _rsSortDirEl = document.getElementById('rsSortDir');
   if (_rsSortDirEl) {
     _rsSortDirEl.addEventListener('click', function() {
-      _sortDir = _sortDir === 'desc' ? 'asc' : 'desc';
-      localStorage.setItem('thumb-sort-dir', _sortDir);
+      toggleSortDir();
+      localStorage.setItem('thumb-sort-dir', getSortDir());
       _updateSortUI();
       _triggerSortRender();
     });
@@ -3314,23 +3057,23 @@ function init() {
   var _galBtn  = document.getElementById('listModeGalleryBtn');
   var _gridBtn = document.getElementById('listModeGridBtn');
   // depth は list から撤去済み
-  if (_listMode === 'depth') {
-    _listMode = 'gallery';
+  if (getListMode() === 'depth') {
+    setListMode('gallery');
     localStorage.setItem('thumb-list-mode', 'gallery');
   }
-  if (_listMode === 'grid') {
+  if (getListMode() === 'grid') {
     _galBtn.classList.remove('active');
     _gridBtn.classList.add('active');
   }
   _galBtn.addEventListener('click', function() {
-    _listMode = 'gallery';
+    setListMode('gallery');
     localStorage.setItem('thumb-list-mode', 'gallery');
     _galBtn.classList.add('active');
     _gridBtn.classList.remove('active');
     renderList();
   });
   _gridBtn.addEventListener('click', function() {
-    _listMode = 'grid';
+    setListMode('grid');
     localStorage.setItem('thumb-list-mode', 'grid');
     _gridBtn.classList.add('active');
     _galBtn.classList.remove('active');
