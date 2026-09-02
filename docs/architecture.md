@@ -1,18 +1,19 @@
 ﻿# VT コードベース地図（リファクタリング用）
 
-> Agent 向け: `public/js/app.js`（5,402 行）を全読みせず、まずこのファイルで位置を特定し、必要な範囲だけ `read_file` すること。
+> Agent 向け: `public/js/app.js`（5,010 行）を全読みせず、まずこのファイルで位置を特定し、必要な範囲だけ `read_file` すること。
 > 行番号は 2026-09-02 時点。抽出が進むごとに更新する。
 
 ## ファイル一覧
 
 | パス | 行数 | 役割 | 状態 |
 | --- | --- | --- | --- |
-| `public/js/app.js` | 5,402 | PC ビュー全部 | **分割対象** |
+| `public/js/app.js` | 5,010 | PC ビュー全部 | **分割対象** |
 | `public/js/youtube-api.js` | 164 | YouTube API クライアント・全動画 import | Phase 1 抽出済み |
 | `public/js/sidebar-order.js` | 57 | サイドバー順序 LS・正規化 | Phase 1 抽出済み・共通 |
 | `public/js/router.js` | 106 | ハッシュ管理・PC 画面切替 | Phase 1 抽出済み・共通 |
 | `public/js/theme.js` | 24 | テーマ保存・DOM 反映 | Phase 1 抽出済み・共通 |
 | `public/js/share.js` | 136 | PC 共有リンク生成・インポート | Phase 1 抽出済み |
+| `public/js/settings.js` | 414 | PC 設定モーダル・データ入出力 | Phase 1 抽出済み |
 | `public/js/state.js` | 49 | LS キー・`state` オブジェクト・カラーパレット | 共通 |
 | `public/js/storage.js` | 70 | channels/videos の LS 保存、API→フロント変換、`filteredVideos` | 共通 |
 | `public/js/channel.js` | 48 | APIキー・RSS Only 取得、`channelKeyFromInput` | 共通 |
@@ -32,25 +33,24 @@
 
 | 行 | セクション | 主な関数 | 抽出先案 |
 | --- | --- | --- | --- |
-| 21–46 | APIキーエラー | `markApiKeyError` | `channel.js` |
-| 47–135 | ReactionPin グローバル / 投票適用 | `applyPinPalette` `reactionsComputeKde` `applyVote` `_pollRefresh` `loadRating` | `reactions-view.js` / `vote.js` |
-| 138–165 | チャンネル動画ロード / 空状態 | `loadChannelVideos` `_renderEmptyCat` | `channel-view.js` |
-| 166–377 | 投票ビュー | `updatePaceGauge` `renderVote` | **`vote-view.js`** |
-| 378–444 | メタ・概要欄ヘルパー | `_rebuildRatingRankMap` `openVideoDesc` `closeVideoDesc` `_buildVideoMeta` `_buildPinDot` `_buildReactionsVideoMeta` | `video-meta.js` |
-| 445–732 | 一覧ビュー | `_updateSortUI` `renderList` `_buildSortedPool` `_appendGalleryPage` `_normalizeSortBtnWidths` `_renderGrid` `_appendGridPage` | **`list-view.js`** |
-| 733–845 | ランキングビュー | `renderRankingItems` `renderRanking` `_renderRankingDepth` `getTopRankedVideo` | **`ranking-view.js`** |
-| 846–1832 | サイドバー描画 | `_showShareImportPopup` `_showChDelPopup` `deleteChannel` `deleteFolder*` `_showCompactTooltip` `_showFolderColorPop` `_showCompactRename` `buildChannelItem` `buildFolderItem` `renderSidebar` | **`sidebar.js`**（約 1,000 行） |
-| 1833–2404 | サイドバー D&D | `initSidebarDrag` | **`sidebar-drag.js`**（約 570 行） |
-| 2405–2462 | チャンネル選択 | `selectChannel` | `app.js` に残す（コア） |
-| 2464–3037 | ReactionPin PC ビュー | `loadMyPins` `loadReactionSeeds` `postReaction` `renderReactionsHeatmap` `startReactionsLoop` `showMyReactionsPin` `openReactionsMode` `openModalReactions` `renderReactionsPlaylist` `openThumbModal` | **`reactions-view.js`**（約 570 行） |
-| 3042–3050 | 共有モジュール設定 | `configureShare` | `share.js` 初期化 |
-| 3051–3198 | チャンネル追加 | `addChannelFromSidebarInput` | `channel-add.js` |
-| 3199–3205 | テーマ設定 | `configureTheme` | `theme.js` 初期化 |
-| 3206–3867 | `init()` 本体（660 行） | イベント配線の塊 | 各モジュールの `initXxx()` に分配 |
-| 3868–3929 | URL デコードペースト / サイドバーイベント / ウェルカム | | `sidebar.js` / `channel-add.js` |
-| 3930–4320 | 設定モーダル（390 行） | | **`settings.js`** |
-| 4321–4390 | タブ / カテゴリフィルタ / チュートリアル | | `router.js` / `vote-view.js` |
-| 4391–end | サイドバーリサイズ | | `sidebar.js` |
+| 39–128 | ReactionPin グローバル / 投票適用 | `applyPinPalette` `reactionsComputeKde` `applyVote` `_pollRefresh` `loadRating` | `reactions-view.js` / `vote.js` |
+| 129–156 | チャンネル動画ロード / 空状態 | `loadChannelVideos` `_renderEmptyCat` | `channel-view.js` |
+| 157–368 | 投票ビュー | `updatePaceGauge` `renderVote` | **`vote-view.js`** |
+| 369–435 | メタ・概要欄ヘルパー | `_rebuildRatingRankMap` `openVideoDesc` `closeVideoDesc` `_buildVideoMeta` `_buildPinDot` `_buildReactionsVideoMeta` | `video-meta.js` |
+| 436–723 | 一覧ビュー | `_updateSortUI` `renderList` `_buildSortedPool` `_appendGalleryPage` `_normalizeSortBtnWidths` `_renderGrid` `_appendGridPage` | **`list-view.js`** |
+| 724–836 | ランキングビュー | `renderRankingItems` `renderRanking` `_renderRankingDepth` `getTopRankedVideo` | **`ranking-view.js`** |
+| 837–1823 | サイドバー描画 | `_showShareImportPopup` `_showChDelPopup` `deleteChannel` `deleteFolder*` `_showCompactTooltip` `_showFolderColorPop` `_showCompactRename` `buildChannelItem` `buildFolderItem` `renderSidebar` | **`sidebar.js`**（約 1,000 行） |
+| 1824–2395 | サイドバー D&D | `initSidebarDrag` | **`sidebar-drag.js`**（約 570 行） |
+| 2396–2453 | チャンネル選択 | `selectChannel` | `app.js` に残す（コア） |
+| 2454–3018 | ReactionPin PC ビュー | `loadMyPins` `loadReactionSeeds` `postReaction` `renderReactionsHeatmap` `startReactionsLoop` `showMyReactionsPin` `openReactionsMode` `openModalReactions` `renderReactionsPlaylist` `openThumbModal` | **`reactions-view.js`**（約 570 行） |
+| 3023–3041 | router / share 設定 | `configureRouter` `configureShare` | 各モジュール初期化 |
+| 3042–3189 | チャンネル追加 | `addChannelFromSidebarInput` | `channel-add.js` |
+| 3190–3196 | テーマ設定 | `configureTheme` | `theme.js` 初期化 |
+| 3197–3858 | `init()` 本体（660 行） | イベント配線の塊 | 各モジュールの `initXxx()` に分配 |
+| 3859–3920 | URL デコードペースト / サイドバーイベント / ウェルカム | | `sidebar.js` / `channel-add.js` |
+| 3921–3928 | 設定モジュール初期化 | `initSettings` | `settings.js` 初期化 |
+| 3929–3998 | タブ / カテゴリフィルタ / チュートリアル | | `router.js` / `vote-view.js` |
+| 3999–end | サイドバーリサイズ | | `sidebar.js` |
 
 ## `public/mobile/js/app.js` セクション別マップ
 
@@ -91,7 +91,7 @@
 ## リファクタリング手順（トークン節約前提）
 
 - **Phase 1（機械的分割・低コストモデル可）**: 上表「抽出先案」の太字モジュールを 1 つずつ切り出す。**1 モジュール = 1 コミット**。関数本体は移動のみ、ロジック変更禁止。`import/export` を足して `eslint` が通ることを確認。
-  - 推奨順: ~~`youtube-api.js`~~ → ~~`sidebar-order.js`~~ → ~~`router.js`~~ → ~~`theme.js`~~ → ~~`share.js`~~ → `settings.js` → `list-view.js` → `ranking-view.js` → `vote-view.js` → `reactions-view.js` → `sidebar-drag.js` → `sidebar.js`
+  - 推奨順: ~~`youtube-api.js`~~ → ~~`sidebar-order.js`~~ → ~~`router.js`~~ → ~~`theme.js`~~ → ~~`share.js`~~ → ~~`settings.js`~~ → `list-view.js` → `ranking-view.js` → `vote-view.js` → `reactions-view.js` → `sidebar-drag.js` → `sidebar.js`
   - 各コミット後の確認: `npx eslint public/js` + ブラウザで該当画面を 1 回開く
 - **Phase 2（判断あり・通常モデル）**: 重複表 #1〜#9 を共通化。Mobile 側も同時に差し替える。
 - **Phase 3**: 規約を `CONTRIBUTING.md` に追記、`.github/copilot-instructions.md` に Agent ルール（この地図を先に読む・1 モジュール 1 コミット・コミットは指示があるまでしない 等）を記載。
@@ -99,6 +99,6 @@
 
 ## 作業時の注意
 
-- `init()`（3206–3867）は DOM イベント配線の塊。モジュール抽出時は該当部分を `initXxx()` としてモジュール側に移し、`init()` から呼ぶ。
+- `init()`（3197–3858）は DOM イベント配線の塊。モジュール抽出時は該当部分を `initXxx()` としてモジュール側に移し、`init()` から呼ぶ。
 - `window.xxx = xxx` で公開している関数（例: `openModalReactions`）は `depth-gallery.js` 等から参照されている。抽出時は `window` 公開を維持する。
 - PC/Mobile で同名関数（`selectChannel` `renderList` `applyTheme`）が別実装なので、共通化する際は名前衝突に注意。
