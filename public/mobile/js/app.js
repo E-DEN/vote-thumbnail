@@ -1425,6 +1425,7 @@ function _deleteMobileChannel(key) {
 
 // チャンネル追加
 async function addChannel(input) {
+  if (typeof input !== 'string' || !input.trim()) return;
   // 共有リンク（#s=XXXXXXXX または URL に含まれる）を優先処理
   const shareCode = input.match(/(?:[#?&]|^)s=([A-Za-z0-9]{8})(?:[^A-Za-z0-9]|$)/)?.[1];
   if (shareCode) {

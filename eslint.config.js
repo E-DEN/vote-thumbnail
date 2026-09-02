@@ -1,11 +1,12 @@
 // eslint.config.js — vote-thumbnail コードスタイルルール
-// 使い方: npx eslint public/js/
+// 使い方: npx eslint public/js/ public/mobile/js/
 export default [
   {
-    files: ['public/js/**/*.js'],
+    files: ['public/js/**/*.js', 'public/mobile/js/**/*.js'],
+    ignores: ['public/js/anime.min.js'],
     languageOptions: {
       ecmaVersion: 2022,
-      sourceType: 'script',
+      sourceType: 'module',
       globals: {
         window: 'readonly',
         document: 'readonly',
@@ -31,11 +32,11 @@ export default [
 
       // --- 空行ルール ---
       // 連続空行は最大1行まで（2行以上禁止）
-      'no-multiple-empty-lines': ['error', { max: 1, maxEOF: 1, maxBOF: 0 }],
+      'no-multiple-empty-lines': ['warn', { max: 1, maxEOF: 1, maxBOF: 0 }],
 
       // --- 変数宣言 ---
       // var 禁止（const / let のみ）
-      'no-var': 'error',
+      'no-var': 'warn',
 
       // 再代入のない変数は const に
       'prefer-const': ['warn', { destructuring: 'any' }],

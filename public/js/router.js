@@ -1,4 +1,4 @@
-﻿import { state } from './state.js';
+import { state } from './state.js';
 
 const LS_VIEW = 'thumb-view';
 const SCREENS = ['welcome', 'vote', 'list', 'ranking', 'reaction'];

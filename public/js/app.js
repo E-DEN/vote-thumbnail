@@ -1,16 +1,12 @@
 import { state, LS_VIDEOS, LS_RATING, LS_CAT, LS_VOTE_PAIR, LS_SORT, LS_HEATMAP_VISIBLE } from './state.js';
-import { G2_SETTLED_RD, loadRating as loadRatingCore, applyVoteLocal, syncVoteToServer, getRating } from './rating.js';
+import { G2_SETTLED_RD, loadRating as loadRatingCore, applyVoteLocal, syncVoteToServer } from './rating.js';
 import { loadChannels, saveChannels, loadVideosForChannel, saveVideosForChannel, fetchChannelVideos, filteredVideos } from './storage.js';
-import { formatRelTime, formatViewsShort, descToHtml } from './format.js';
-import { showToast, showToastPromise, closeToast } from './toast.js';
-import { getStoredApiKey, getRssOnly, apiKeyHeaders } from './channel.js';
-import { importAllChannelVideos } from './youtube-api.js';
-import { sidebarOrder, loadSidebarOrder, saveSidebarOrder } from './sidebar-order.js';
+import { loadSidebarOrder } from './sidebar-order.js';
 import { configureSidebarDrag, initSidebarDrag } from './sidebar-drag.js';
 import { currentView, CAT_VIEWS, configureRouter, buildHash, parseHash, renderCurrentView, showView } from './router.js';
 import { currentTheme, configureTheme, applyTheme } from './theme.js';
 import { configureShare, importFromShareCode as _importFromShareCode } from './share.js';
-import { initSettings, markApiKeyError } from './settings.js';
+import { initSettings } from './settings.js';
 import {
   configureSidebar,
   initSidebarUi,
@@ -50,6 +46,16 @@ import {
   setDepthScrollSaved,
 } from './ranking-view.js';
 import { configureVoteView, renderVote, updatePaceGauge } from './vote-view.js';
+import { configureChannelAdd, initChannelAdd, addChannelFromSidebarInput, applyUrlDecodePaste } from './channel-add.js';
+import {
+  configureVideoMeta,
+  _rebuildRatingRankMap,
+  openVideoDesc,
+  closeVideoDesc,
+  _buildVideoMeta,
+  _buildPinDot,
+  _buildReactionsVideoMeta,
+} from './video-meta.js';
 
 // ratingData と channels はオブジェクトのエイリアス（参照が同一なので変更は state に反映される）
 const ratingData = state.ratingData;
@@ -99,7 +105,6 @@ let _reactionsPinColor   = localStorage.getItem('react-pin-color')  || '#ec4899'
 const LS_RS_PIN_OPACITY  = 'thumb-rs-pin-opacity';
 let _reactionsPinOpacity = parseFloat(localStorage.getItem(LS_RS_PIN_OPACITY) || '1');
 
-
 function applyPinPalette() {
   const wrap = document.getElementById('reactionsImgWrap');
   if (!wrap) return;
@@ -126,7 +131,6 @@ function reactionsSampleFromKde() {
   }
   return _reactionsPins[lo];
 }
-
 
 function applyVote(winnerId, loserId) {
   applyVoteLocal(winnerId, loserId);
@@ -167,7 +171,6 @@ function loadChannelVideos(key) {
   return true;
 }
 
-
 // カテゴリに動画が0件のとき共通の空状態UIを指定コンテナに描画する
 function _renderEmptyCat(container, text) {
   container.innerHTML =
@@ -180,78 +183,10 @@ function _renderEmptyCat(container, text) {
     '</div>';
 }
 
-// ギャラリーオーバーレイ用: 再生数・投稿日・レーティングのメタHTML
-var _SVG_EYE  = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
-var _SVG_CLK  = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>';
-var _SVG_STAR = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>';
-var _SVG_PIN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z"/><circle cx="12" cy="10" r="3"/></svg>';
-var _ratingRankMap = {};
-function _rebuildRatingRankMap() {
-  var pool = filteredVideos().slice().sort(function(a, b) { return getRating(b.id) - getRating(a.id); });
-  _ratingRankMap = {};
-  pool.forEach(function(v, i) { _ratingRankMap[v.id] = i + 1; });
-}
-// --- 概要欄ユーティリティ ---
-function _descToHtml(text) { return descToHtml(text); }
-
-function openVideoDesc(v) {
-  var descEl = document.getElementById('rsDescText');
-  if (!descEl) return;
-  if (v.description === null || v.description === undefined || v.description === '') {
-    descEl.textContent = '';
-    return;
-  }
-  descEl.innerHTML = _descToHtml(v.description);
-}
-
-function closeVideoDesc() {
-  var descEl = document.getElementById('rsDescText');
-  if (descEl) descEl.textContent = '';
-}
-
-function _buildVideoMeta(v) {
-  var items = [];
-  if (v.viewCount) {
-    items.push('<span class="gallery-meta-item">' + _SVG_EYE + formatViewsShort(v.viewCount) + '</span>');
-  }
-  if (v.scheduledAt) {
-    items.push('<span class="gallery-meta-item">' + _SVG_CLK + formatRelTime(v.scheduledAt) + '</span>');
-  } else if (v.publishedAt) {
-    items.push('<span class="gallery-meta-item">' + _SVG_CLK + formatRelTime(v.publishedAt) + '</span>');
-  }
-  var rating = getRating(v.id);
-  var rank = _ratingRankMap[v.id];
-  var rankStr = rank ? '<span class="gallery-meta-rank">(#' + rank + ')</span>' : '';
-  items.push('<span class="gallery-meta-item">' + _SVG_STAR + Math.round(rating) + rankStr + '</span>');
-  return items.join('');
-}
-function _buildPinDot(v) {
-  var hasPinned = !!_reactionsMyPins[v.id];
-  if (!hasPinned) return '';
-  var dot = '<span class="gallery-meta-pin-dot" style="background:' + (_reactionsPinColor || '#ec4899') + '"></span>';
-  return '<span class="gallery-meta-item">' + _SVG_PIN + dot + '</span>';
-}
-function _buildReactionsVideoMeta(v) {
-  var items = [];
-  if (v.viewCount) {
-    items.push('<span class="gallery-meta-item">' + _SVG_EYE + v.viewCount.toLocaleString() + '</span>');
-  }
-  if (v.scheduledAt) {
-    var sd = new Date(v.scheduledAt);
-    var sdStr = sd.getFullYear() + '/' + String(sd.getMonth()+1).padStart(2,'0') + '/' + String(sd.getDate()).padStart(2,'0');
-    items.push('<span class="gallery-meta-item">' + _SVG_CLK + sdStr + ' ' + t('fmt-live-scheduled') + '</span>');
-  } else if (v.publishedAt) {
-    var d = new Date(v.publishedAt);
-    var dateStr = d.getFullYear() + '/' + String(d.getMonth()+1).padStart(2,'0') + '/' + String(d.getDate()).padStart(2,'0');
-    items.push('<span class="gallery-meta-item">' + _SVG_CLK + dateStr + '</span>');
-  }
-  var rating = getRating(v.id);
-  var rank = _ratingRankMap[v.id];
-  var rankStr = rank ? '<span class="gallery-meta-rank">(#' + rank + ')</span>' : '';
-  items.push('<span class="gallery-meta-item">' + _SVG_STAR + Math.round(rating) + rankStr + '</span>');
-  var metaHtml = '<div class="rs-meta-row">' + items.join('') + '</div>';
-  return metaHtml;
-}
+configureVideoMeta({
+  getMyPins: () => _reactionsMyPins,
+  getPinColor: () => _reactionsPinColor,
+});
 
 // --- チャンネル選択 ---
 async function selectChannel(key) {
@@ -926,153 +861,8 @@ configureShare({
   refreshingKeys,
 });
 
-// --- サイドバー検索・チャンネル追加 ---
-async function addChannelFromSidebarInput() {
-  const rawInput = document.getElementById('sidebarSearchInput').value.trim();
-  if (!rawInput) return;
-
-  // 共有リンク（#s=XXXXXXXX または URL に含まれる場合）を優先処理
-  const shareCode = rawInput.match(/(?:[#?&]|^)s=([A-Za-z0-9]{8})(?:[^A-Za-z0-9]|$)/)?.[1];
-  if (shareCode) {
-    document.getElementById('sidebarSearchInput').value = '';
-    await _importFromShareCode(shareCode);
-    return;
-  }
-
-  let raw;
-  try { raw = decodeURIComponent(rawInput); } catch { raw = rawInput; }
-
-  const statusEl  = document.getElementById('sidebarSearchStatus');
-  const searchBtn = document.getElementById('sidebarSearchBtn');
-
-  // @handle を正規化 (URL入力にも対応)
-  const handleMatch = raw.match(/@([^\s/?#&]+)/);
-  // channel/UCxxx 形式の URL を抽出
-  const channelIdMatch = !handleMatch && raw.match(/youtube\.com\/channel\/(UC[\w-]{22})/);
-  // 動画 URL から video ID を抽出（watch はクエリ順不同に対応）
-  const videoIdMatch = !handleMatch && !channelIdMatch && raw.match(
-    /(?:youtu\.be\/|youtube(?:-nocookie)?\.com\/(?:shorts\/|live\/|embed\/|v\/)|youtube(?:-nocookie)?\.com\/watch\?(?:[^#\s]*?&)?v=)([A-Za-z0-9_-]{11})/
-  );
-  // @なし・URLなし → 単純文字列をハンドルとして扱う
-  const plainHandle = !handleMatch && !channelIdMatch && !videoIdMatch && /^[^\s/?#&]+$/.test(raw)
-    ? '@' + raw : null;
-
-  if (!handleMatch && !channelIdMatch && !videoIdMatch && !plainHandle) {
-    statusEl.textContent = t('status-invalid-url');
-    return;
-  }
-
-  const postBody = handleMatch
-    ? { handle: '@' + handleMatch[1] }
-    : channelIdMatch
-      ? { channelId: channelIdMatch[1] }
-    : plainHandle
-      ? { handle: plainHandle }
-      : { videoId: videoIdMatch[1] };
-
-  // 既登録チェック: 存在すればリフレッシュボタンと同じ挙動にする
-  if (postBody.handle) {
-    const existing = Object.values(channels).find(ch => ch.handle === postBody.handle);
-    if (existing) {
-      document.getElementById('sidebarSearchInput').value = '';
-      statusEl.textContent = '';
-      const _existingEl = document.querySelector(`.sidebar-channel-item[data-key="${existing.key}"]`);
-      const _existingRefBtn = _existingEl && _existingEl.querySelector('.ch-action-refresh');
-      if (_existingRefBtn) {
-        _existingRefBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-      }
-      return;
-    }
-  }
-
-  searchBtn.disabled = true;
-  showToast(t('status-ch-fetching'), 'loading');
-
-  try {
-    const res = await fetch('/api/channels', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...(getRssOnly() ? { 'X-RSS-Only': '1' } : apiKeyHeaders()) },
-      body: JSON.stringify(postBody),
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      showToast(t('status-error', { msg: data.error ?? res.status }), 'err');
-      return;
-    }
-    const ch = data.channel;
-    const isExisting = !!channels[ch.channel_id];
-    // channels に保存 (既存の tags/addedAt を維持)
-    channels[ch.channel_id] = {
-      key:         ch.channel_id,
-      channelId:   ch.channel_id,
-      handle:      ch.handle,
-      displayName: ch.title,
-      avatar:      ch.icon_url,
-      tags:        channels[ch.channel_id]?.tags    ?? [],
-      addedAt:     channels[ch.channel_id]?.addedAt ?? new Date().toISOString(),
-    };
-    saveChannels();
-    if (!sidebarOrder.some(i => (i.type === 'channel' && i.key === ch.channel_id) || (i.type === 'folder' && i.children.includes(ch.channel_id)))) {
-      sidebarOrder.push({ type: 'channel', key: ch.channel_id });
-      saveSidebarOrder();
-    }
-    document.getElementById('sidebarSearchInput').value = '';
-    // nav.innerHTML='' による全破棄を避け、既存アイテムは置き換え・新規は追加（ホバー状態保持）
-    const _nav = document.getElementById('sidebarNav');
-    const _newItem = buildChannelItem(channels[ch.channel_id]);
-    const _existingItem = _nav.querySelector(`.sidebar-channel-item[data-key="${ch.channel_id}"]`);
-    if (_existingItem) {
-      _existingItem.replaceWith(_newItem);
-    } else {
-      _nav.appendChild(_newItem);
-    }
-    setListSortOrder('date');
-    _updateSortUI();
-    await selectChannel(ch.channel_id);
-    // チャンネル追加後: 最多カテゴリに強制切り替え
-    if (state.allVideos.length) {
-      const _ac = { videos: 0, shorts: 0, live: 0 };
-      state.allVideos.forEach(function(v) { if (_ac[v.category] !== undefined) _ac[v.category]++; });
-      state.currentCat = ['live','shorts','videos'].reduce(function(a, b) { return _ac[b] > _ac[a] ? b : a; });
-      localStorage.setItem(LS_CAT, state.currentCat);
-      document.querySelectorAll('.cat-seg-btn').forEach(function(b) { b.classList.toggle('active', b.dataset.cat === state.currentCat); });
-      renderCurrentView();
-    }
-    // API キーが設定されていれば全件取得を自動実行
-    if (getStoredApiKey() && !getRssOnly()) {
-      try {
-        const count = await importAllChannelVideos(ch.channel_id, msg => { showToast(msg, 'loading'); });
-        state.allVideos = await fetchChannelVideos(ch.channel_id);
-        // 全件取得後も最多カテゴリを維持
-        const _ac2 = { videos: 0, shorts: 0, live: 0 };
-        state.allVideos.forEach(function(v) { if (_ac2[v.category] !== undefined) _ac2[v.category]++; });
-        state.currentCat = ['live','shorts','videos'].reduce(function(a, b) { return _ac2[b] > _ac2[a] ? b : a; });
-        localStorage.setItem(LS_CAT, state.currentCat);
-        document.querySelectorAll('.cat-seg-btn').forEach(function(b) { b.classList.toggle('active', b.dataset.cat === state.currentCat); });
-        renderCurrentView();
-        showToast(isExisting
-          ? t('status-refresh-api').replace('{total}', count)
-          : t('ch-import-done', { count }));
-      } catch (importErr) {
-        if (importErr.code === 'API_KEY_INVALID') {
-          markApiKeyError();
-          showToast(t('apikey-err-details'), 'err');
-        } else {
-          showToast(importErr.message, 'err');
-        }
-      }
-    } else {
-      // RSS Only または API キーなしの場合は loading トーストを成功表示に切り替える
-      showToast(isExisting
-        ? t('status-refresh-rss').replace('{changed}', 0)
-        : t('status-ch-added', { name: ch.title || postBody.handle || ch.channel_id }));
-    }
-  } catch (e) {
-    showToast(t('status-error', { msg: e.message }), 'err');
-  } finally {
-    searchBtn.disabled = false;
-  }
-}
+// --- チャンネル追加 ---
+configureChannelAdd({ selectChannel });
 
 configureTheme({
   darkButtonId: 'settingsThemeDark',
@@ -1722,67 +1512,7 @@ function init() {
   });
 }
 
-// --- URL デコードペースト（全チャンネルURL入力欄共通） ---
-function applyUrlDecodePaste(el) {
-  el.addEventListener('paste', e => {
-    const text = (e.clipboardData || window.clipboardData).getData('text');
-    let decoded;
-    try { decoded = decodeURIComponent(text); } catch { decoded = text; }
-    if (decoded !== text) {
-      e.preventDefault();
-      const start = el.selectionStart, end = el.selectionEnd;
-      el.value = el.value.slice(0, start) + decoded + el.value.slice(end);
-      el.selectionStart = el.selectionEnd = start + decoded.length;
-    }
-  });
-}
-applyUrlDecodePaste(document.getElementById('sidebarSearchInput'));
-applyUrlDecodePaste(document.getElementById('welcomeHandleInput'));
-
-// --- サイドバーイベント ---
-document.getElementById('sidebarSearchInput').addEventListener('keydown', e => {
-  if (e.key === 'Enter') addChannelFromSidebarInput();
-});
-document.getElementById('sidebarSearchBtn').addEventListener('click', () => {
-  addChannelFromSidebarInput();
-});
-
-// --- ウェルカムフォーム ---
-(function() {
-  const handleInput    = document.getElementById('welcomeHandleInput');
-  const addBtn         = document.getElementById('welcomeAddBtn');
-  const clearBtn       = document.getElementById('welcomeClearBtn');
-  const statusEl       = document.getElementById('welcomeAddStatus');
-
-  handleInput.addEventListener('input', () => {
-    clearBtn.hidden = handleInput.value.length === 0;
-  });
-  clearBtn.addEventListener('click', () => {
-    handleInput.value = '';
-    clearBtn.hidden = true;
-    statusEl.textContent = '';
-    handleInput.focus();
-  });
-
-  async function submitWelcomeAdd() {
-    const raw = handleInput.value.trim();
-    if (!raw) return;
-    document.getElementById('sidebarSearchInput').value = raw;
-    statusEl.textContent = '';
-    addBtn.disabled = true;
-    await addChannelFromSidebarInput();
-    addBtn.disabled = false;
-    handleInput.value = '';
-    clearBtn.hidden = true;
-    // サイドバーステータスをウェルカムにも反映
-    const sidebarStatus = document.getElementById('sidebarSearchStatus');
-    statusEl.textContent = sidebarStatus.textContent;
-    sidebarStatus.textContent = '';
-  }
-
-  addBtn.addEventListener('click', submitWelcomeAdd);
-  handleInput.addEventListener('keydown', e => { if (e.key === 'Enter') submitWelcomeAdd(); });
-}());
+initChannelAdd();
 
 // --- 設定モーダル ---
 initSettings({

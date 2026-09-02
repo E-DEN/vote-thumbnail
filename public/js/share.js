@@ -1,4 +1,4 @@
-﻿import { state } from './state.js';
+import { state } from './state.js';
 import { saveChannels } from './storage.js';
 import { showToast } from './toast.js';
 import { getRssOnly, apiKeyHeaders } from './channel.js';

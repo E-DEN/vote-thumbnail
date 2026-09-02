@@ -1,4 +1,4 @@
-﻿import { state, LS_SORT } from './state.js';
+import { state, LS_SORT } from './state.js';
 import { filteredVideos } from './storage.js';
 import { formatDuration } from './format.js';
 import { getRating } from './rating.js';

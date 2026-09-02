@@ -1,4 +1,4 @@
-﻿import { state } from './state.js';
+import { state } from './state.js';
 import { filteredVideos, loadVideosForChannel } from './storage.js';
 import { formatViews, formatRelTime } from './format.js';
 import { getRating, getRd, getWins, getBattles } from './rating.js';

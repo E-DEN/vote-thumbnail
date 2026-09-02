@@ -1,4 +1,4 @@
-﻿import { getStoredApiKey } from './channel.js';
+import { getStoredApiKey } from './channel.js';
 
 const BASE = 'https://www.googleapis.com/youtube/v3';
 
@@ -81,6 +81,7 @@ export async function getAllVideoIds(apiKey, playlistId, onProgress) {
 }
 
 export function parseDurationSec(iso) {
+  if (typeof iso !== 'string') return 0;
   const m = iso.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
   if (!m) return 0;
   return (parseInt(m[1] ?? 0) * 3600) + (parseInt(m[2] ?? 0) * 60) + parseInt(m[3] ?? 0);
@@ -93,7 +94,7 @@ export async function getVideoDetails(apiKey, videoIds, onProgress) {
     const params = new URLSearchParams({ part: 'snippet,contentDetails,liveStreamingDetails,statistics', id: batch.join(','), key: apiKey });
     const data = await apiFetch(`${BASE}/videos?${params}`);
     for (const v of data.items ?? []) {
-      const dur = parseDurationSec(v.contentDetails.duration);
+      const dur = parseDurationSec(v.contentDetails?.duration);
       const isLive = !!v.liveStreamingDetails;
       const isShort = !isLive && dur <= 180;
       const category = isLive ? 'live' : isShort ? 'shorts' : 'videos';

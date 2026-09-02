@@ -1,4 +1,4 @@
-﻿import { state, LS_SIDEBAR_ORDER } from './state.js';
+import { state, LS_SIDEBAR_ORDER } from './state.js';
 
 const channels = state.channels;
 

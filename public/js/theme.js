@@ -1,4 +1,4 @@
-﻿const THEME_KEY = 'thumb-theme';
+const THEME_KEY = 'thumb-theme';
 
 let _darkButtonId;
 let _lightButtonId;

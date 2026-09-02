@@ -20,6 +20,7 @@ export function apiKeyHeaders() {
  * 返り値: { type: 'handle'|'id'|'videoId', value: string } または null
  */
 export function channelKeyFromInput(input) {
+  if (typeof input !== 'string') return null;
   let trimmed;
   try { trimmed = decodeURIComponent(input.trim()); } catch { trimmed = input.trim(); }
 
