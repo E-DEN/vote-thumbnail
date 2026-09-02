@@ -249,7 +249,7 @@ async function handleApi(request, env, url, ctx) {
       // (大量 subrequest が必要なためレスポンスをブロックしない)
       ctx.waitUntil((async () => {
         if (apiAllVideoIds.length > 0) {
-          await fetchVideoDetails(apiAllVideoIds, effectiveEnv).catch(e => console.error('[bg fetchVideoDetails]', e));
+          await fetchVideoDetails(apiAllVideoIds, effectiveEnv, { hideMissing: true }).catch(e => console.error('[bg fetchVideoDetails]', e));
         }
         // APIキーなし時のみ duration<=180 の動画を URL 判定で再確認
         // (APIキーあり時は fetchAllVideosViaApi のプレイリスト判定が正となるため不要)
@@ -787,7 +787,7 @@ async function validateApiKey(env) {
   return { ok: true };
 }
 
-async function fetchVideoDetails(videoIds, env) {
+async function fetchVideoDetails(videoIds, env, { hideMissing = false } = {}) {
   if (!env.YOUTUBE_API_KEY || videoIds.length === 0) return { ok: true };
   // Data API は最大50件/リクエスト
   const CHUNK = 50;
@@ -801,6 +801,16 @@ async function fetchVideoDetails(videoIds, env) {
         continue;
       }
       const data = await res.json();
+      const returnedIds = new Set((data.items ?? []).map(item => item.id));
+      if (hideMissing) {
+        const missingIds = chunk.filter(videoId => !returnedIds.has(videoId));
+        if (missingIds.length > 0) {
+          const placeholders = missingIds.map(() => '?').join(',');
+          await env.DB.prepare(
+            `UPDATE videos SET category = 'hidden' WHERE video_id IN (${placeholders})`
+          ).bind(...missingIds).run();
+        }
+      }
       for (const item of (data.items ?? [])) {
         const viewCount    = parseInt(item.statistics?.viewCount ?? 0);
         const duration     = parseISODuration(item.contentDetails?.duration);
