@@ -2790,15 +2790,17 @@ document.addEventListener('DOMContentLoaded', function() {
 
 
   // 共有リンク（#s=XXXXXXXX）を検出してインポート
-  (async function _checkShareLink() {
+  async function _checkShareLink() {
     const m = location.hash.match(/^#s=([A-Za-z0-9]{8})$/);
-    if (!m) return;
+    if (!m) return false;
     history.replaceState(null, '', location.pathname);
     await _mImportFromShareCode(m[1]);
-  })();
+    return true;
+  }
 
   // URL から初期状態を復元（ページリロード対応）、なければ前回チャンネルを使用
   (async function _restoreFromUrl() {
+    if (await _checkShareLink()) return;
     const st = parseHash();
     setSuppressHistory(true);
     try {
