@@ -642,6 +642,23 @@ async function fetchAllVideosViaApi(channelId, env) {
     return { ok: true, videoIds: [] };
   }
 
+  // 正常取得できた uploads に存在しない既存動画は、削除・非公開のため非表示にする
+  if (allResult.ok) {
+    const existingRows = await env.DB.prepare(
+      'SELECT video_id FROM videos WHERE channel_id = ?'
+    ).bind(channelId).all();
+    const missingIds = existingRows.results
+      .map(row => row.video_id)
+      .filter(videoId => !allIds.has(videoId));
+    for (let i = 0; i < missingIds.length; i += 100) {
+      const chunk = missingIds.slice(i, i + 100);
+      const placeholders = chunk.map(() => '?').join(',');
+      await env.DB.prepare(
+        `UPDATE videos SET category = 'hidden' WHERE channel_id = ? AND video_id IN (${placeholders}) AND category != 'hidden'`
+      ).bind(channelId, ...chunk).run();
+    }
+  }
+
   const allItems = [...allIds].map(videoId => ({
     videoId,
     category: liveIds.has(videoId) ? 'live' : shortsIds.has(videoId) ? 'shorts' : 'videos',
@@ -674,13 +691,13 @@ async function fetchAllVideosViaApi(channelId, env) {
   }
 
   // 既存動画のカテゴリを正規化
-  // 1. UUSH/UULV 登録済み → shorts/live に昇格 (videos → shorts/live)
-  const toUpdateCategory = allItems.filter(i => existingIds.has(i.videoId) && i.category !== 'videos');
+  // 1. UUSH/UULV の所属を既存動画にも反映 (誤分類を含めて正規化)
+  const toUpdateCategory = allItems.filter(i => existingIds.has(i.videoId));
   for (let i = 0; i < toUpdateCategory.length; i += INSERT_BATCH) {
     const chunk = toUpdateCategory.slice(i, i + INSERT_BATCH);
     await env.DB.batch(chunk.map(({ videoId, category }) =>
       env.DB.prepare(
-        "UPDATE videos SET category = ? WHERE video_id = ? AND category = 'videos'"
+        "UPDATE videos SET category = ? WHERE video_id = ? AND category != 'hidden'"
       ).bind(category, videoId)
     ));
   }
