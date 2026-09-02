@@ -283,7 +283,8 @@ async function handleApi(request, env, url, ctx) {
       const channelId = mBatch[1];
       const body = await request.json().catch(() => null);
       const videos = Array.isArray(body?.videos) ? body.videos : [];
-      if (videos.length === 0) return json({ ok: true, upserted: 0 });
+      const hiddenVideoIds = Array.isArray(body?.hiddenVideoIds) ? body.hiddenVideoIds : [];
+      if (videos.length === 0 && hiddenVideoIds.length === 0) return json({ ok: true, upserted: 0 });
 
       const CHUNK = 50;
       let upserted = 0;
@@ -315,6 +316,17 @@ async function handleApi(request, env, url, ctx) {
           upserted += stmts.length;
         }
       }
+      for (let i = 0; i < hiddenVideoIds.length; i += CHUNK) {
+        const chunk = hiddenVideoIds.slice(i, i + CHUNK)
+          .map(id => String(id || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 11))
+          .filter(id => id.length === 11);
+        if (chunk.length === 0) continue;
+        const placeholders = chunk.map(() => '?').join(',');
+        const result = await env.DB.prepare(
+          `UPDATE videos SET category = 'hidden' WHERE channel_id = ? AND video_id IN (${placeholders})`
+        ).bind(channelId, ...chunk).run();
+        upserted += result.meta?.changes ?? 0;
+      }
       return json({ ok: true, upserted });
     }
 
@@ -325,8 +337,8 @@ async function handleApi(request, env, url, ctx) {
       const channelId = mVideos[1];
       const category  = url.searchParams.get('category');
       const videosSql = category
-        ? 'SELECT video_id, title, thumbnail_url, category, duration, view_count, published_at, scheduled_at, description, rating, rd, volatility, wins, battles FROM videos WHERE channel_id = ? AND category = ? ORDER BY rating DESC, view_count DESC, published_at DESC'
-        : 'SELECT video_id, title, thumbnail_url, category, duration, view_count, published_at, scheduled_at, description, rating, rd, volatility, wins, battles FROM videos WHERE channel_id = ? ORDER BY rating DESC, view_count DESC, published_at DESC';
+        ? 'SELECT video_id, title, thumbnail_url, category, duration, view_count, published_at, scheduled_at, description, rating, rd, volatility, wins, battles FROM videos WHERE channel_id = ? AND category = ? AND category != \'hidden\' ORDER BY rating DESC, view_count DESC, published_at DESC'
+        : 'SELECT video_id, title, thumbnail_url, category, duration, view_count, published_at, scheduled_at, description, rating, rd, volatility, wins, battles FROM videos WHERE channel_id = ? AND category != \'hidden\' ORDER BY rating DESC, view_count DESC, published_at DESC';
       const videosStmt = category
         ? env.DB.prepare(videosSql).bind(channelId, category)
         : env.DB.prepare(videosSql).bind(channelId);

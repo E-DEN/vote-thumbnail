@@ -96,7 +96,7 @@ export async function getVideoDetails(apiKey, videoIds, onProgress) {
     for (const v of data.items ?? []) {
       const dur = parseDurationSec(v.contentDetails?.duration);
       const isLive = !!v.liveStreamingDetails;
-      const isShort = !isLive && dur <= 180;
+      const isShort = !isLive && dur > 0 && dur <= 180;
       const category = isLive ? 'live' : isShort ? 'shorts' : 'videos';
       const thumbs = v.snippet.thumbnails;
       const thumb = thumbs.maxres?.url ?? thumbs.standard?.url ?? thumbs.high?.url ?? thumbs.medium?.url ?? '';
@@ -142,6 +142,8 @@ export async function importAllChannelVideos(channelId, onStatus) {
   const videos = await getVideoDetails(apiKey, videoIds, (done, total) => {
     onStatus('動画情報を取得中 (' + done + ' / ' + total + ' 件)...');
   });
+  const availableIds = new Set(videos.map(v => v.id));
+  const hiddenVideoIds = videoIds.filter(id => !availableIds.has(id));
 
   // プレイリスト所属で分類を上書き (duration 判定より正確)
   for (const v of videos) {
@@ -160,6 +162,14 @@ export async function importAllChannelVideos(channelId, onStatus) {
       body: JSON.stringify({ videos: chunk }),
     });
     if (!res.ok) throw new Error('保存エラー: ' + res.status);
+  }
+  if (hiddenVideoIds.length > 0) {
+    const res = await fetch('/api/channels/' + channelId + '/videos/batch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ hiddenVideoIds }),
+    });
+    if (!res.ok) throw new Error('非表示動画の保存エラー: ' + res.status);
   }
   return videos.length;
 }
