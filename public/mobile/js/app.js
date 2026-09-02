@@ -9,6 +9,7 @@ import { getStoredApiKey, getRssOnly, apiKeyHeaders, channelKeyFromInput } from 
 import { _M_SVG_EYE, _M_SVG_CLK, _M_SVG_STAR, _M_SVG_PLAY, _M_SVG_PAUSE, _M_SVG_FULLSCREEN, _M_SVG_FULLSCREEN_EXIT, _M_SVG_PIN, _mBuildMeta, _mBuildPinDot } from './ui-helpers.js';
 import { _suppressHistory, setSuppressHistory } from './shared-state.js';
 import { loadMyPins, mRsApplyPalette, mRsShowMyPin, mRsOpenMode, openVideoInReaction, renderReaction, mRsRenderPlaylist, mRsSaveCatState, _mRsMyPins, _mRsPinColor, _mRsMaxPins, _mRsPinOpacity, _mRsTransportVisible, _mRsCurrentVideoId, _mRsUpdateSortUI, initReaction, resetCurrentVideo, initReactionUI, _mRsDummyEnabled, LS_RS_DUMMY, setDummyEnabled } from './reaction.js';
+import { sidebarOrder, replaceSidebarOrder, loadSidebarOrder, saveSidebarOrder, syncSidebarOrder } from '../../js/sidebar-order.js';
 
 const LS_LIST_SORT_DIR = 'thumb-sort-dir';
 const LS_VOTE_SHOW_TITLE = 'thumb-vote-show-title';
@@ -18,47 +19,6 @@ let _voteShowTitle = localStorage.getItem(LS_VOTE_SHOW_TITLE) === 'true';
 // オブジェクトエイリアス（参照が同一なので変更は state に反映される）
 const ratingData = state.ratingData;
 const channels   = state.channels;
-
-// --- サイドバー順序管理 ---
-let sidebarOrder = [];
-
-function loadSidebarOrder() {
-  const raw = localStorage.getItem(LS_SIDEBAR_ORDER);
-  sidebarOrder = raw ? JSON.parse(raw) : [];
-}
-function saveSidebarOrder() {
-  try { localStorage.setItem(LS_SIDEBAR_ORDER, JSON.stringify(sidebarOrder)); } catch {}
-}
-
-function syncSidebarOrder() {
-  const known = new Set(Object.keys(channels));
-  sidebarOrder = sidebarOrder.filter(item => {
-    if (item.type === 'channel') return known.has(item.key);
-    if (item.type === 'folder') {
-      item.children = item.children.filter(k => known.has(k));
-      return item.children.length > 0;
-    }
-    return false;
-  });
-  // 子が1件のフォルダを解除
-  sidebarOrder = sidebarOrder.map(item =>
-    (item.type === 'folder' && item.children.length === 1)
-      ? { type: 'channel', key: item.children[0] } : item
-  );
-  // フォルダ内にあるチャンネルのスタンドアロンエントリを除去（重複防止）
-  const inFolders = new Set();
-  sidebarOrder.forEach(item => { if (item.type === 'folder') item.children.forEach(k => inFolders.add(k)); });
-  sidebarOrder = sidebarOrder.filter(item => !(item.type === 'channel' && inFolders.has(item.key)));
-  // order 未登録チャンネルを末尾に追加
-  const inOrder = new Set();
-  sidebarOrder.forEach(item => {
-    if (item.type === 'channel') inOrder.add(item.key);
-    else if (item.type === 'folder') item.children.forEach(k => inOrder.add(k));
-  });
-  Object.keys(channels).forEach(k => {
-    if (!inOrder.has(k)) sidebarOrder.push({ type: 'channel', key: k });
-  });
-}
 
 // モバイル固有状態
 let currentTab      = 'list';
@@ -912,11 +872,11 @@ function _mMergeIntoNewFolder(srcEl, targetEl, name) {
   const newFolder = { type: 'folder', id: fid, name, hue, children: [targetKey, srcKey], open: true };
   // targetIdx に folder を挿入、srcIdx を削除
   sidebarOrder.splice(Math.min(srcIdx, targetIdx), 0, newFolder);
-  sidebarOrder = sidebarOrder.filter((it, i) => {
+  replaceSidebarOrder(sidebarOrder.filter((it, i) => {
     if (i === Math.min(srcIdx, targetIdx)) return true; // 新フォルダ
     if (it.type === 'channel' && (it.key === srcKey || it.key === targetKey)) return false;
     return true;
-  });
+  }));
   // フォルダ children からも src/target を除去（フォルダ内からドラッグした場合に対応）
   sidebarOrder.forEach(it => {
     if (it.type === 'folder' && it.id !== fid) {
@@ -924,7 +884,7 @@ function _mMergeIntoNewFolder(srcEl, targetEl, name) {
     }
   });
   // 空になったフォルダを除去
-  sidebarOrder = sidebarOrder.filter(it => it.type !== 'folder' || it.children.length > 0);
+  replaceSidebarOrder(sidebarOrder.filter(it => it.type !== 'folder' || it.children.length > 0));
   // インデックスがずれているので再フィルタ
   const seen = new Set();
   const deduped = [];
@@ -932,7 +892,7 @@ function _mMergeIntoNewFolder(srcEl, targetEl, name) {
     const uid = it.type === 'folder' ? it.id : it.key;
     if (!seen.has(uid)) { seen.add(uid); deduped.push(it); }
   }
-  sidebarOrder = deduped;
+  replaceSidebarOrder(deduped);
   saveSidebarOrder();
   renderChannelPanel();
 }
@@ -952,11 +912,11 @@ function _mCleanEmptyFolders() {
     }
   }
   if (changed) {
-    sidebarOrder = sidebarOrder.map(it =>
+    replaceSidebarOrder(sidebarOrder.map(it =>
       (it.type === 'folder' && it.children.length === 1)
         ? { type: 'channel', key: it.children[0] } : it
-    );
-    sidebarOrder = sidebarOrder.filter(it => it.type !== 'folder' || it.children.length > 0);
+    ));
+    replaceSidebarOrder(sidebarOrder.filter(it => it.type !== 'folder' || it.children.length > 0));
     saveSidebarOrder();
   }
 }
@@ -973,7 +933,7 @@ function _mFindOrderIdx(key) {
 function _mAddToFolder(srcEl, fid) {
   const srcKey = srcEl.dataset.key;
   // src を既存 order から除去
-  sidebarOrder = sidebarOrder.filter(it => !(it.type === 'channel' && it.key === srcKey));
+  replaceSidebarOrder(sidebarOrder.filter(it => !(it.type === 'channel' && it.key === srcKey)));
   sidebarOrder.forEach(it => {
     if (it.type === 'folder' && it.id !== fid) {
       it.children = it.children.filter(k => k !== srcKey);
@@ -1001,7 +961,7 @@ function _mSaveSidebarOrderFromDOM() {
       newOrder.push({ type: 'folder', id: fid, name: fname, hue, children, open });
     }
   }
-  sidebarOrder = newOrder;
+  replaceSidebarOrder(newOrder);
   saveSidebarOrder();
 }
 
@@ -2595,7 +2555,7 @@ document.addEventListener('DOMContentLoaded', function() {
         Object.assign(channels, parsed.channels);
         saveChannels();
         if (parsed.sidebarOrder && Array.isArray(parsed.sidebarOrder)) {
-          sidebarOrder = parsed.sidebarOrder;
+          replaceSidebarOrder(parsed.sidebarOrder);
           saveSidebarOrder();
         }
         renderChannelPanel();
@@ -2721,7 +2681,7 @@ document.addEventListener('DOMContentLoaded', function() {
       if (!parsed || typeof parsed.channels !== 'object') throw new Error('invalid data');
       // フォルダ構成を先に復元
       if (parsed.sidebarOrder && Array.isArray(parsed.sidebarOrder)) {
-        sidebarOrder = parsed.sidebarOrder;
+        replaceSidebarOrder(parsed.sidebarOrder);
         saveSidebarOrder();
       }
       const importIds = Object.keys(parsed.channels);

@@ -5,6 +5,7 @@ import { formatViews, formatRelTime, formatViewsShort, formatDuration, descToHtm
 import { showToast, showToastPromise, closeToast } from './toast.js';
 import { getStoredApiKey, getRssOnly, apiKeyHeaders } from './channel.js';
 import { importAllChannelVideos } from './youtube-api.js';
+import { sidebarOrder, replaceSidebarOrder, loadSidebarOrder, saveSidebarOrder, syncSidebarOrder } from './sidebar-order.js';
 
 // ratingData と channels はオブジェクトのエイリアス（参照が同一なので変更は state に反映される）
 const ratingData = state.ratingData;
@@ -28,7 +29,6 @@ function markApiKeyError() {
 let currentView = 'welcome';
 let _prevView = 'list';
 let _pollTimer = null;
-let sidebarOrder = [];
 let _chTooltip = null;
 let _chTooltipNameEl = null;
 let _chTooltipActionsEl = null;
@@ -131,52 +131,6 @@ async function _pollRefresh() {
 function loadRating() {
   loadRatingCore();
   document.getElementById('voteCount').textContent = state.voteTotal;
-}
-
-// --- チャンネルストレージ ---
-function channelKeyFromUrl(url) {
-  const m = url.match(/@([\w.-]+)/);
-  if (m) return m[1].toLowerCase();
-  const mi = url.match(/UC([\w-]+)/);
-  if (mi) return 'UC' + mi[1];
-  return url.replace(/[^a-z0-9]/gi, '').toLowerCase().slice(0, 20) || 'channel';
-}
-function loadSidebarOrder() {
-  const raw = localStorage.getItem(LS_SIDEBAR_ORDER);
-  sidebarOrder = raw ? JSON.parse(raw) : [];
-}
-function saveSidebarOrder() {
-  try { localStorage.setItem(LS_SIDEBAR_ORDER, JSON.stringify(sidebarOrder)); } catch {}
-}
-function syncSidebarOrder() {
-  const known = new Set(Object.keys(channels));
-  // 削除済みチャンネルのエントリを除去
-  sidebarOrder = sidebarOrder.filter(item => {
-    if (item.type === 'channel') return known.has(item.key);
-    if (item.type === 'folder') {
-      item.children = item.children.filter(k => known.has(k));
-      return item.children.length > 0;
-    }
-    return false;
-  });
-  // 子が1件のフォルダを解除してチャンネル直置きに変換
-  sidebarOrder = sidebarOrder.map(item =>
-    (item.type === 'folder' && item.children.length === 1)
-      ? { type: 'channel', key: item.children[0] } : item
-  );
-  // フォルダ内にあるチャンネルのスタンドアロンエントリを除去（重複防止）
-  const inFolders = new Set();
-  sidebarOrder.forEach(item => { if (item.type === 'folder') item.children.forEach(k => inFolders.add(k)); });
-  sidebarOrder = sidebarOrder.filter(item => !(item.type === 'channel' && inFolders.has(item.key)));
-  // まだ order に入っていないチャンネルを末尾に追加
-  const inOrder = new Set();
-  sidebarOrder.forEach(item => {
-    if (item.type === 'channel') inOrder.add(item.key);
-    else if (item.type === 'folder') item.children.forEach(k => inOrder.add(k));
-  });
-  Object.keys(channels).forEach(k => {
-    if (!inOrder.has(k)) sidebarOrder.push({ type: 'channel', key: k });
-  });
 }
 
 // --- チャンネルデータをアプリにロード ---
@@ -1063,19 +1017,19 @@ function deleteChannel(key) {
   delete channels[key];
   saveChannels();
   // sidebarOrder から対象チャンネルを除去
-  sidebarOrder = sidebarOrder.filter(item => {
+  replaceSidebarOrder(sidebarOrder.filter(item => {
     if (item.type === 'channel') return item.key !== key;
     if (item.type === 'folder') {
       item.children = item.children.filter(k => k !== key);
       return item.children.length > 0;
     }
     return true;
-  });
+  }));
   // 子が1件のフォルダを解除してチャンネル直置きに変換
-  sidebarOrder = sidebarOrder.map(item =>
+  replaceSidebarOrder(sidebarOrder.map(item =>
     (item.type === 'folder' && item.children.length === 1)
       ? { type: 'channel', key: item.children[0] } : item
-  );
+  ));
   saveSidebarOrder();
   if (state.currentChannelKey === key) {
     state.currentChannelKey = null;
@@ -2294,11 +2248,11 @@ function initSidebarDrag() {
       } else {
         sidebarOrder.push({ type: 'channel', key: srcKey });
       }
-      sidebarOrder = sidebarOrder.map(item =>
+      replaceSidebarOrder(sidebarOrder.map(item =>
         (item.type === 'folder' && item.children.length === 1)
           ? { type: 'channel', key: item.children[0] } : item
-      );
-      sidebarOrder = sidebarOrder.filter(item => item.type !== 'folder' || item.children.length > 0);
+      ));
+      replaceSidebarOrder(sidebarOrder.filter(item => item.type !== 'folder' || item.children.length > 0));
     } else if (_dragType === 'folder') {
       const fi = sidebarOrder.findIndex(i => i.type === 'folder' && i.id === _srcFolderId);
       if (fi < 0) return;
