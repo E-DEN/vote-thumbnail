@@ -68,6 +68,7 @@ const LS_PINS_VISIBLE = 'thumb-pins-visible';
 
 let _prevView = 'list';
 let _pollTimer = null;
+let _channelSelectionId = 0;
 // --- ReactionPin グローバル状態 ---
 var _reactionsSessionId = (function() {
   let id = localStorage.getItem('thumb-session-id');
@@ -192,6 +193,7 @@ configureVideoMeta({
 async function selectChannel(key) {
   const ch = channels[key];
   if (!ch) return;
+  const selectionId = ++_channelSelectionId;
   state.currentChannelKey = key;
   _reactionsCurrentVideoId = null;
   _catVideoState = {};  // チャンネルをまたいだ動画状態は無効化
@@ -221,8 +223,11 @@ async function selectChannel(key) {
   document.getElementById('catFilter').style.display = '';
 
   try {
-    state.allVideos = await fetchChannelVideos(key);
+    const videos = await fetchChannelVideos(key);
+    if (selectionId !== _channelSelectionId || state.currentChannelKey !== key) return;
+    state.allVideos = videos;
     await loadMyPins();
+    if (selectionId !== _channelSelectionId || state.currentChannelKey !== key) return;
     const counts = { videos: 0, shorts: 0, live: 0 };
     state.allVideos.forEach(v => { if (counts[v.category] !== undefined) counts[v.category]++; });
     // state.currentCat を維持。ただし現在のカテゴリに動画が 0 件なら有効なカテゴリに切り替え
@@ -239,6 +244,7 @@ async function selectChannel(key) {
     showView(keepView);
   } catch (e) {
     console.error('[selectChannel] FETCH ERROR:', e);
+    if (selectionId !== _channelSelectionId || state.currentChannelKey !== key) return;
     state.allVideos = [];
     const savedView = localStorage.getItem(LS_VIEW) || 'list';
     const keepView = CAT_VIEWS.includes(currentView) ? currentView : savedView;

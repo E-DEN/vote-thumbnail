@@ -237,7 +237,9 @@ async function handleApi(request, env, url, ctx) {
       // APIキーなし時のみ URL リダイレクト判定を使う
       if (toDetect.length > 0) {
         if (!effectiveEnv.YOUTUBE_API_KEY) await detectShortsCategories(toDetect, effectiveEnv);
-        const detailResult = await fetchVideoDetails(toDetect, effectiveEnv);
+        const detailResult = await fetchVideoDetails(toDetect, effectiveEnv, {
+          updateCategory: !effectiveEnv.YOUTUBE_API_KEY,
+        });
         if (detailResult?.apiKeyError) return json({ ok: true, added, rssStatus, apiKeyError: true });
       } else if (clientApiKey) {
         const validResult = await validateApiKey(effectiveEnv);
@@ -249,7 +251,10 @@ async function handleApi(request, env, url, ctx) {
       // (大量 subrequest が必要なためレスポンスをブロックしない)
       ctx.waitUntil((async () => {
         if (apiAllVideoIds.length > 0) {
-          await fetchVideoDetails(apiAllVideoIds, effectiveEnv, { hideMissing: true }).catch(e => console.error('[bg fetchVideoDetails]', e));
+          await fetchVideoDetails(apiAllVideoIds, effectiveEnv, {
+            hideMissing: true,
+            updateCategory: false,
+          }).catch(e => console.error('[bg fetchVideoDetails]', e));
         }
         // APIキーなし時のみ duration<=180 の動画を URL 判定で再確認
         // (APIキーあり時は fetchAllVideosViaApi のプレイリスト判定が正となるため不要)
@@ -805,7 +810,7 @@ async function validateApiKey(env) {
   return { ok: true };
 }
 
-async function fetchVideoDetails(videoIds, env, { hideMissing = false } = {}) {
+async function fetchVideoDetails(videoIds, env, { hideMissing = false, updateCategory = true } = {}) {
   if (!env.YOUTUBE_API_KEY || videoIds.length === 0) return { ok: true };
   // Data API は最大50件/リクエスト
   const CHUNK = 50;
@@ -849,9 +854,11 @@ async function fetchVideoDetails(videoIds, env, { hideMissing = false } = {}) {
         const scheduledAt = (isLive && item.snippet?.liveBroadcastContent === 'upcoming')
           ? (item.liveStreamingDetails?.scheduledStartTime ?? null)
           : null;
+        const categorySql = updateCategory ? ", category = CASE WHEN ? THEN 'live' ELSE category END" : '';
+        const categoryParams = updateCategory ? [isLive ? 1 : 0] : [];
         await env.DB.prepare(
-          "UPDATE videos SET title = ?, thumbnail_url = ?, published_at = ?, view_count = ?, duration = ?, description = ?, tags = ?, scheduled_at = ?, category = CASE WHEN ? THEN 'live' ELSE category END WHERE video_id = ?"
-        ).bind(title, thumbnailUrl, publishedAt, viewCount, duration, description, tags, scheduledAt, isLive ? 1 : 0, item.id).run();
+          `UPDATE videos SET title = ?, thumbnail_url = ?, published_at = ?, view_count = ?, duration = ?, description = ?, tags = ?, scheduled_at = ?${categorySql} WHERE video_id = ?`
+        ).bind(title, thumbnailUrl, publishedAt, viewCount, duration, description, tags, scheduledAt, ...categoryParams, item.id).run();
       }
     } catch { /* API障害時はスキップ */ }
   }

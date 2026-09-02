@@ -24,6 +24,7 @@ const channels   = state.channels;
 
 // モバイル固有状態
 let currentTab      = 'list';
+let _channelSelectionId = 0;
 
 let _currentVotePair = null;
 
@@ -37,6 +38,7 @@ let _listObserver   = null;
 async function selectChannel(key) {
   const ch = channels[key];
   if (!ch) return;
+  const selectionId = ++_channelSelectionId;
   state.currentChannelKey = key;
   resetCurrentVideo();
   localStorage.setItem('m-last-channel', key);
@@ -58,7 +60,9 @@ async function selectChannel(key) {
   renderCurrentTab();
 
   try {
-    state.allVideos = await fetchChannelVideos(key);
+    const videos = await fetchChannelVideos(key);
+    if (selectionId !== _channelSelectionId || state.currentChannelKey !== key) return;
+    state.allVideos = videos;
     saveVideosForChannel(key, state.allVideos);
   } catch {
     // オフライン時: キャッシュ (or []) が既に state.allVideos にセット済み
@@ -79,7 +83,9 @@ async function selectChannel(key) {
   });
 
   // アクティブなタブを再描画
+  if (selectionId !== _channelSelectionId || state.currentChannelKey !== key) return;
   await loadMyPins();
+  if (selectionId !== _channelSelectionId || state.currentChannelKey !== key) return;
   renderCurrentTab();
 
   // サーバーからチャンネルメタを更新（バックグラウンド）
@@ -2833,4 +2839,20 @@ document.addEventListener('DOMContentLoaded', function() {
       setSuppressHistory(false);
     }
   })();
+
+  // iOS Chrome の BFCache 復元後は DOM の表示状態を再同期する
+  window.addEventListener('pageshow', async function(e) {
+    if (!e.persisted) return;
+    const st = parseHash();
+    if (st.channelKey && channels[st.channelKey] && st.channelKey !== state.currentChannelKey) {
+      setSuppressHistory(true);
+      try {
+        await selectChannel(st.channelKey);
+      } finally {
+        setSuppressHistory(false);
+      }
+    }
+    if (st.tab && st.tab !== currentTab) switchTab(st.tab);
+    renderCurrentTab();
+  });
 });
