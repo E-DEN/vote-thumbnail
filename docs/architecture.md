@@ -90,7 +90,13 @@
 
 ## 非対称点（設計判断が必要）
 
-- **全動画 import の実行場所**: PC はクライアント側 `youtube-api.js` の `importAllChannelVideos`（YouTube API 直叩き → `/videos/batch`）、Mobile はサーバー側 `/refresh` に委譲。`_worker.js` に `fetchAllVideosViaApi` があるため **PC も `/refresh` に寄せてクライアント側 YouTube API クライアントを削除できる**可能性が高い。Phase 2 で検討。
+- **全動画 import の実行場所**: PC の全件 import はクライアント側 `youtube-api.js`、Mobile と管理用 `db/full-refresh.mjs` はサーバー側 `/refresh` に委譲する。全件更新は Worker の判定ロジックに統一する。
+
+### 管理者用全チャンネル更新
+
+- `db/full-refresh.mjs` は D1 の `channels` から `inactive = 0` のチャンネルを取得し、各チャンネルの `/api/channels/:id/refresh` を順番に呼ぶ。
+- SQL は生成しない。カテゴリ判定、削除・非公開動画の `is_hidden` 更新、動画メタデータ更新は Worker に任せる。
+- 実行: `node db/full-refresh.mjs`。待ち時間は `REFRESH_INTERVAL_MS` で変更できる。
 
 ## リファクタリング手順（トークン節約前提）
 

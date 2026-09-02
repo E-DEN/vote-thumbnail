@@ -30,7 +30,7 @@ dist/
 out/
 
 # Temporary / scratch files
-temp/
+temp/*
 
 # SQLite database files
 db/*.db
