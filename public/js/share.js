@@ -110,7 +110,7 @@ export async function importFromShareCode(code) {
             channels[id] = { ...channels[id], handle: d.channel.handle, displayName: d.channel.title, avatar: d.channel.icon_url };
             saveChannels();
             const cur = document.querySelector(`.sidebar-channel-item[data-key="${id}"]`);
-            if (cur) { const n = _buildChannelItem(channels[id]); cur.replaceWith(n); if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [n] }); }
+            if (cur) { const n = _buildChannelItem(channels[id]); cur.replaceWith(n); if (typeof lucide !== 'undefined') lucide.createIcons({ root: n }); }
           }
           if (d.total != null) totalVideos += d.total;
           if (d.added != null) addedVideos += d.added;

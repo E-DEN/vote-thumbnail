@@ -386,7 +386,7 @@ export function initSettings({
                 const cur = _nav.querySelector(`.sidebar-channel-item[data-key="${id}"]`);
                 if (cur) cur.replaceWith(newItem);
                 else _nav.appendChild(newItem);
-                if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [newItem] });
+                if (typeof lucide !== 'undefined') lucide.createIcons({ root: newItem });
                 updateFolderPreview(id);
               }
             } catch { /* ignore */ }

@@ -298,7 +298,7 @@ function _openFolderMenu(item, anchorEl) {
 
   menu.append(renameBtn, refreshBtn, shareSep, shareBtn, sep1, colorBtn, colorRow, sep2, deleteBtn);
   document.body.appendChild(menu);
-  if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [menu] });
+  if (typeof lucide !== 'undefined') lucide.createIcons({ root: menu });
 
   const r = anchorEl.getBoundingClientRect();
   const mw = menu.offsetWidth || 160;
@@ -1330,7 +1330,7 @@ function _openChMenu(key, anchorEl) {
   const menu = document.getElementById('mChCardMenu');
   menu.hidden = false;
   if (!_chMenuIconsCreated) {
-    if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [menu] });
+    if (typeof lucide !== 'undefined') lucide.createIcons({ root: menu });
     _chMenuIconsCreated = true;
   }
   const r = anchorEl.getBoundingClientRect();

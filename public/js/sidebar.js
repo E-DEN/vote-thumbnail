@@ -55,7 +55,7 @@ document.addEventListener('keyup', e => {
 function _setChDelBtnIcon(btn, icon) {
   if (!btn) return;
   btn.innerHTML = `<i data-lucide="${icon}"></i>`;
-  if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [btn] });
+  if (typeof lucide !== 'undefined') lucide.createIcons({ root: btn });
 }
 
 // コンパクトツールチップボタンのアイコンだけ差し替える
@@ -67,7 +67,7 @@ function _setTooltipBtnIcon(btn, icon) {
   const i = document.createElement('i');
   i.setAttribute('data-lucide', icon);
   btn.insertBefore(i, btn.firstChild);
-  if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [btn] });
+  if (typeof lucide !== 'undefined') lucide.createIcons({ root: btn });
 }
 
 function _startRefreshSpinner(btn) {
@@ -312,7 +312,7 @@ function _showCompactTooltip(anchorRect, name, buttons) {
   gearBtn.innerHTML = '<i data-lucide="settings"></i>';
   _chTooltipNameEl.appendChild(nameSpan);
   _chTooltipNameEl.appendChild(gearBtn);
-  if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [gearBtn] });
+  if (typeof lucide !== 'undefined') lucide.createIcons({ root: gearBtn });
   // アクションボタン: 非表示で構築、歯車クリックで表示
   _chTooltipActionsEl.style.display = 'none';
   _chTooltipActionsEl.style.visibility = '';
@@ -342,7 +342,7 @@ function _showCompactTooltip(anchorRect, name, buttons) {
     btn.addEventListener('click', function(e) { e.stopPropagation(); if (!_chTooltipLocked) b.onClick(btn, e); });
     _chTooltipActionsEl.appendChild(btn);
   });
-  if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: Array.from(_chTooltipActionsEl.querySelectorAll('[data-lucide]')) });
+  if (typeof lucide !== 'undefined') lucide.createIcons({ root: _chTooltipActionsEl });
   gearBtn.addEventListener('click', function(e) {
     e.stopPropagation();
     _chTooltipActionsEl.style.display = '';
@@ -457,7 +457,7 @@ function _showCompactRename(anchorBtn, currentName, onCommit) {
   submit.innerHTML = '<i data-lucide="check"></i>';
   pop.append(inp, submit);
   document.body.appendChild(pop);
-  if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [submit] });
+  if (typeof lucide !== 'undefined') lucide.createIcons({ root: submit });
   const rect = anchorBtn.getBoundingClientRect();
   pop.style.top  = (rect.top + rect.height / 2 - pop.offsetHeight / 2) + 'px';
   pop.style.left = (rect.right + 8) + 'px';
@@ -503,7 +503,7 @@ function _startTooltipInlineRename(currentName, onCommit) {
   _chTooltipNameEl.appendChild(inp);
   _chTooltipNameEl.appendChild(confirmBtn);
   if (typeof lucide !== 'undefined') {
-    lucide.createIcons({ nodes: [confirmBtn] });
+    lucide.createIcons({ root: confirmBtn });
     const checkSvg = confirmBtn.querySelector('svg');
     if (checkSvg) { checkSvg.setAttribute('width', '13'); checkSvg.setAttribute('height', '13'); }
   }
@@ -565,7 +565,8 @@ function buildChannelItem(ch) {
 
   actions.append(refreshBtn, shareBtn, deleteBtn);
   item.appendChild(actions);
-  if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [refreshBtn, shareBtn, deleteBtn] });
+  // item はまだ DOM に未追加なので root を明示する（既定の document では変換されない）
+  if (typeof lucide !== 'undefined') lucide.createIcons({ root: item });
 
   item.addEventListener('click', () => selectChannel(ch.key));
 
@@ -732,7 +733,8 @@ function buildFolderItem(folder) {
 
   folderActions.append(folderRenameBtn, folderRefreshBtn, folderShareBtn, folderDeleteBtn);
   header.appendChild(folderActions);
-  if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [folderRenameBtn, folderRefreshBtn, folderShareBtn, folderDeleteBtn] });
+  // header はまだ DOM に未追加なので root を明示する（既定の document では変換されない）
+  if (typeof lucide !== 'undefined') lucide.createIcons({ root: header });
 
   folderShareBtn.addEventListener('click', async e => {
     e.stopPropagation();
