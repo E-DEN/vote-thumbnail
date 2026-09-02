@@ -7,6 +7,7 @@ import { getStoredApiKey, getRssOnly, apiKeyHeaders } from './channel.js';
 import { importAllChannelVideos } from './youtube-api.js';
 import { sidebarOrder, replaceSidebarOrder, loadSidebarOrder, saveSidebarOrder, syncSidebarOrder } from './sidebar-order.js';
 import { currentView, CAT_VIEWS, configureRouter, buildHash, parseHash, renderCurrentView, showView } from './router.js';
+import { currentTheme, configureTheme, applyTheme } from './theme.js';
 
 // ratingData と channels はオブジェクトのエイリアス（参照が同一なので変更は state に反映される）
 const ratingData = state.ratingData;
@@ -3298,19 +3299,11 @@ async function addChannelFromSidebarInput() {
   }
 }
 
-// --- テーマ ---
-var _theme = localStorage.getItem('thumb-theme') || 'dark';
-
-function applyTheme(theme) {
-  _theme = theme;
-  localStorage.setItem('thumb-theme', theme);
-  document.documentElement.dataset.theme = theme;
-  const darkBtn  = document.getElementById('settingsThemeDark');
-  const lightBtn = document.getElementById('settingsThemeLight');
-  if (darkBtn)  darkBtn.classList.toggle('active', theme === 'dark');
-  if (lightBtn) lightBtn.classList.toggle('active', theme === 'light');
-  if (typeof lucide !== 'undefined') lucide.createIcons();
-}
+configureTheme({
+  darkButtonId: 'settingsThemeDark',
+  lightButtonId: 'settingsThemeLight',
+  refreshIcons: true,
+});
 
 // --- 初期化 ---
 function init() {
@@ -3585,7 +3578,7 @@ function init() {
     }
   });
 
-  applyTheme(_theme);
+  applyTheme(currentTheme);
   applyLang(_lang);
   _normalizeSortBtnWidths();
   if (typeof lucide !== 'undefined') lucide.createIcons();
@@ -4067,7 +4060,7 @@ document.getElementById('sidebarSearchBtn').addEventListener('click', () => {
   // ---- 開閉 ----
   const _mainArea = document.querySelector('.app-layout');
   function openSettings() {
-    applyTheme(_theme);
+    applyTheme(currentTheme);
     if (typeof rebuildLangDialog === 'function') rebuildLangDialog();
     switchTab(_currentTab);
     settingsModal.hidden = false;

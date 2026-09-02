@@ -11,6 +11,7 @@ import { _suppressHistory, setSuppressHistory } from './shared-state.js';
 import { loadMyPins, mRsApplyPalette, mRsShowMyPin, mRsOpenMode, openVideoInReaction, renderReaction, mRsRenderPlaylist, mRsSaveCatState, _mRsMyPins, _mRsPinColor, _mRsMaxPins, _mRsPinOpacity, _mRsTransportVisible, _mRsCurrentVideoId, _mRsUpdateSortUI, initReaction, resetCurrentVideo, initReactionUI, _mRsDummyEnabled, LS_RS_DUMMY, setDummyEnabled } from './reaction.js';
 import { sidebarOrder, replaceSidebarOrder, loadSidebarOrder, saveSidebarOrder, syncSidebarOrder } from '../../js/sidebar-order.js';
 import { buildMobileHash as buildHash, parseMobileHash as parseHash } from '../../js/router.js';
+import { currentTheme, configureTheme, applyTheme } from '../../js/theme.js';
 
 const LS_LIST_SORT_DIR = 'thumb-sort-dir';
 const LS_VOTE_SHOW_TITLE = 'thumb-vote-show-title';
@@ -1997,18 +1998,10 @@ function mCloseVideoMenu() {
   }
 }
 
-// --- テーマ切り替え ---
-const THEME_KEY = 'thumb-theme';
-
-function applyTheme(theme) {
-  document.documentElement.dataset.theme = theme;
-  localStorage.setItem(THEME_KEY, theme);
-  // 設定モーダル内のテーマボタンのアクティブ状態を更新
-  const darkBtn  = document.getElementById('mSettingsThemeDark');
-  const lightBtn = document.getElementById('mSettingsThemeLight');
-  if (darkBtn)  darkBtn.classList.toggle('active',  theme === 'dark');
-  if (lightBtn) lightBtn.classList.toggle('active', theme === 'light');
-}
+configureTheme({
+  darkButtonId: 'mSettingsThemeDark',
+  lightButtonId: 'mSettingsThemeLight',
+});
 
 // --- 設定モーダル ---
 
@@ -2132,8 +2125,7 @@ document.addEventListener('DOMContentLoaded', function() {
   });
 
   // テーマ・言語を localStorage から復元
-  const savedTheme = localStorage.getItem(THEME_KEY) || 'dark';
-  applyTheme(savedTheme);
+  applyTheme(currentTheme);
 
   if (typeof applyLang === 'function') {
     const savedLang = localStorage.getItem('thumb-lang') || 'ja';
